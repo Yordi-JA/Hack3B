@@ -1,35 +1,42 @@
-"""Orquestador multiagente. Dueño: Carlos.
+"""Orquestador multiagente con LangGraph. Dueño: Julián (antes Carlos).
 
 Punto de entrada único para la UI: `analizar_expediente(rutas, ctx)`.
 
-Arquitectura: LangChain puro (sin LangGraph). El flujo es lineal con un único
-paralelismo en los agentes por tipo:
+Grafo (ver `diagrama()`):
 
-    ingesta (secuencial, ya hace sus propias llamadas) ─┐
-                                                        │
-    ┌───────────────────────────────────────────────────┘
-    │
-    ├─► escritura.analizar()   ┐
-    ├─► predial.analizar()     │  en paralelo con
-    ├─► alineamiento.analizar()│  ThreadPoolExecutor(max_workers=5)
-    └─► uso_suelo.analizar()   ┘
-                                │
-    cruce.validar_cruzado()  ◄──┘  (secuencial, necesita todos)
-    dictamen.dictaminar()       (secuencial)
+    START -> ingesta -> agente x N (uno por documento, en paralelo) -> consolidar -> cruce -> auditor
+                                                                                     ^         |
+                                                                                     +---------+  si el auditor descartó
+                                                                                               |  datos que se cruzan
+                                                                                               v
+                                                                                           dictamen -> END
 
-El tope de 5 workers respeta el rate limit que señala el README línea 21:
-"el OCR masivo debe correr con 5-10 llamadas en paralelo como máximo".
+- ingesta: OCR / caché de cada archivo (secuencial: la ingesta ya paraleliza sus llamadas).
+- agente: el especialista de cada tipo (escritura, predial, alineamiento, uso de suelo) extrae
+  con evidencia y evalúa sus reglas. LangGraph los corre en paralelo (`Send`), con un tope de
+  MAX_AGENTES_PARALELO llamadas simultáneas.
+- cruce: compara los datos entre documentos (Diego).
+- auditor: revisa lo que reportaron los agentes contra el texto original (AUD-01..03). Si descarta
+  datos que se cruzan, el cruce se repite con los datos limpios (máximo MAX_RONDAS_AUDITORIA).
+- dictamen: decide Cumple / Requiere revisión / No cumple (Juan Pablo).
 
-Mientras los agentes no existan, `usar_ejemplo=True` devuelve `ejemplos/dictamen_ejemplo.json`
-para que la UI pueda trabajar desde ya.
+Un agente o una ingesta que fallan no tumban el expediente: el documento sale con un hallazgo
+EXP-ERROR / EXP-INGESTA. El estado del grafo no se manda a Langfuse (contiene el texto de los
+documentos, regla 06); cada agente traza solo su propia llamada al LLM.
 """
+from __future__ import annotations
+
 import logging
-from concurrent.futures import ThreadPoolExecutor
+import operator
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional, TypedDict
 
-from .agentes import alineamiento, cruce, dictamen, escritura, ingesta, predial, uso_suelo
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Send
+
+from .agentes import alineamiento, auditor, cruce, dictamen, escritura, ingesta, predial, uso_suelo
 from .cache import nombre_archivo
 from .config import RAIZ
 from .schemas import (
@@ -41,16 +48,17 @@ from .schemas import (
     DocumentoLeido,
     EstadoRegla,
     Hallazgo,
+    Inconsistencia,
     Legibilidad,
     Severidad,
     TipoDocumento,
 )
 
-# Prefijo en `DocumentoLeido.notas` para marcar que la ingesta falló; `_analizar`
-# lo detecta y emite el hallazgo EXP-INGESTA en lugar de EXP-TIPO.
-_PREFIJO_INGESTA_ROTA = "[ingesta-fallida] "
-
 log = logging.getLogger(__name__)
+
+# Prefijo en `DocumentoLeido.notas` para marcar que la ingesta falló; `_analizar` lo detecta y
+# emite EXP-INGESTA en lugar de EXP-TIPO.
+_PREFIJO_INGESTA_ROTA = "[ingesta-fallida] "
 
 AGENTES_POR_TIPO = {
     TipoDocumento.ESCRITURA: escritura.analizar,
@@ -61,11 +69,12 @@ AGENTES_POR_TIPO = {
 
 EJEMPLO = RAIZ / "ejemplos" / "dictamen_ejemplo.json"
 
-# Tope de agentes corriendo al mismo tiempo. Respeta el rate limit del README
-# (5-10 llamadas simultáneas). Para bajar sin tocar código, setear la env var.
-import os as _os
-MAX_AGENTES_PARALELO = int(_os.getenv("MAX_AGENTES_PARALELO", "5"))
+# Llamadas simultáneas al LLM (README: 5-10 como máximo con una key nueva).
+MAX_AGENTES_PARALELO = int(os.getenv("MAX_AGENTES_PARALELO", "5"))
+MAX_RONDAS_AUDITORIA = 2
 
+
+# ---------------------------------------------------------------- pasos (también usados por las pruebas)
 
 def _sin_analisis(doc: DocumentoLeido, id_regla: str, explicacion: str) -> DocumentoAnalizado:
     """Documento recibido que no se pudo analizar: se muestra igual, con un hallazgo de revisión."""
@@ -89,12 +98,7 @@ def _sin_analisis(doc: DocumentoLeido, id_regla: str, explicacion: str) -> Docum
 
 
 def _leer(ruta: Path) -> DocumentoLeido:
-    """Wrap de `ingesta.leer_documento` que tolera fallas (timeout, 429, PDF dañado).
-
-    Si la ingesta explota, devuelve un DocumentoLeido de tipo OTRO con las notas
-    marcadas con `_PREFIJO_INGESTA_ROTA` para que `_analizar` emita EXP-INGESTA
-    y el revisor humano sepa que el problema fue el OCR, no el agente.
-    """
+    """`ingesta.leer_documento` tolerante a fallas (timeout, 429, PDF dañado)."""
     try:
         return ingesta.leer_documento(ruta)
     except Exception as e:
@@ -111,8 +115,6 @@ def _leer(ruta: Path) -> DocumentoLeido:
 
 
 def _analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
-    # La ingesta puede haber fallado antes del clasificador; lo detectamos por las notas
-    # para dar una explicación precisa al revisor.
     if doc.notas and doc.notas.startswith(_PREFIJO_INGESTA_ROTA):
         razon = doc.notas[len(_PREFIJO_INGESTA_ROTA):]
         return _sin_analisis(doc, "EXP-INGESTA", f"Falló la lectura del documento: {razon}.")
@@ -126,22 +128,132 @@ def _analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
         return _sin_analisis(doc, "EXP-ERROR", f"Falló el análisis automático: {type(e).__name__}: {e}")
 
 
-def _analizar_en_paralelo(leidos: list[DocumentoLeido], ctx: Contexto) -> list[DocumentoAnalizado]:
-    """Corre `_analizar` sobre cada DocumentoLeido en paralelo.
+# ---------------------------------------------------------------- estado del grafo
 
-    - Preserva el orden de `leidos` (executor.map es ordenado).
-    - Como `_analizar` ya captura excepciones por agente, un agente lento o
-      roto no bloquea a los otros.
-    - Si hay un solo doc no vale la pena el overhead del executor.
-    """
+class _EstadoAgentes(TypedDict, total=False):
+    leidos: list[DocumentoLeido]
+    ctx: Contexto
+    # Cada agente agrega (índice, resultado); el índice conserva el orden de `rutas`.
+    resultados: Annotated[list[tuple[int, DocumentoAnalizado]], operator.add]
+
+
+class Estado(_EstadoAgentes, total=False):
+    rutas: list[Path]
+    expediente_id: str
+    analizados: list[DocumentoAnalizado]
+    inconsistencias: list[Inconsistencia]
+    rondas_auditoria: int
+    reabrir_cruce: bool
+    bitacora: Annotated[list[str], operator.add]
+    dictamen: Dictamen
+
+
+# ---------------------------------------------------------------- nodos
+
+def _nodo_ingesta(s: Estado) -> dict:
+    leidos = [_leer(Path(r)) for r in s["rutas"]]
+    tipos = ", ".join(f"{d.archivo} -> {d.tipo.value} ({d.legibilidad.value})" for d in leidos)
+    return {"leidos": leidos, "bitacora": [f"ingesta: {len(leidos)} documentos. {tipos}"]}
+
+
+def _repartir(siguiente: str):
+    """Arista condicional: un `Send` por documento al agente de su tipo; sin documentos, sigue."""
+    def repartir(s: _EstadoAgentes):
+        sends = [Send("agente", {"indice": i, "doc": d, "ctx": s["ctx"]}) for i, d in enumerate(s.get("leidos") or [])]
+        return sends or siguiente
+    return repartir
+
+
+def _nodo_agente(p: dict) -> dict:
+    return {"resultados": [(p["indice"], _analizar(p["doc"], p["ctx"]))]}
+
+
+def _nodo_consolidar(s: Estado) -> dict:
+    analizados = [a for _, a in sorted(s.get("resultados") or [], key=lambda x: x[0])]
+    resumen = "; ".join(f"{a.tipo.value}: {sum(h.estado == EstadoRegla.NO_CUMPLE for h in a.hallazgos)} no cumple"
+                        for a in analizados)
+    return {"analizados": analizados, "bitacora": [f"agentes: {resumen or 'sin documentos'}"]}
+
+
+def _nodo_cruce(s: Estado) -> dict:
+    inconsistencias = cruce.validar_cruzado(s["analizados"], s["ctx"])
+    campos = ", ".join(i.campo for i in inconsistencias) or "ninguna"
+    return {"inconsistencias": inconsistencias, "bitacora": [f"cruce: {len(inconsistencias)} inconsistencias ({campos})"]}
+
+
+def _nodo_auditor(s: Estado) -> dict:
+    r = auditor.auditar(s["leidos"], s["analizados"])
+    ronda = s.get("rondas_auditoria", 0) + 1
+    nota = f"auditor (ronda {ronda}): " + ("; ".join(r.intervenciones) if r.intervenciones else "sin correcciones")
+    if r.reabrir_cruce:
+        nota += " -> se repite el cruce con los datos verificados"
+    return {"analizados": r.documentos, "reabrir_cruce": r.reabrir_cruce, "rondas_auditoria": ronda, "bitacora": [nota]}
+
+
+def _despues_del_auditor(s: Estado) -> str:
+    return "cruce" if s.get("reabrir_cruce") and s.get("rondas_auditoria", 0) < MAX_RONDAS_AUDITORIA else "dictamen"
+
+
+def _nodo_dictamen(s: Estado) -> dict:
+    presentes = {d.tipo for d in s["leidos"]}
+    faltantes = [t for t in TIPOS_REQUERIDOS if t not in presentes]
+    d = dictamen.dictaminar(s["expediente_id"], s["analizados"], faltantes, s["inconsistencias"], s["ctx"])
+    return {"dictamen": d, "bitacora": [f"dictamen: {d.recomendacion.value} (confianza {d.confianza:.2f})"]}
+
+
+# ---------------------------------------------------------------- grafos
+
+def construir_grafo():
+    g = StateGraph(Estado)
+    g.add_node("ingesta", _nodo_ingesta)
+    g.add_node("agente", _nodo_agente)
+    g.add_node("consolidar", _nodo_consolidar)
+    g.add_node("cruce", _nodo_cruce)
+    g.add_node("auditor", _nodo_auditor)
+    g.add_node("dictamen", _nodo_dictamen)
+    g.add_edge(START, "ingesta")
+    g.add_conditional_edges("ingesta", _repartir("consolidar"), ["agente", "consolidar"])
+    g.add_edge("agente", "consolidar")
+    g.add_edge("consolidar", "cruce")
+    g.add_edge("cruce", "auditor")
+    g.add_conditional_edges("auditor", _despues_del_auditor, ["cruce", "dictamen"])
+    g.add_edge("dictamen", END)
+    return g.compile()
+
+
+def _construir_grafo_agentes():
+    """Solo el abanico de agentes (lo usa `_analizar_en_paralelo`)."""
+    g = StateGraph(_EstadoAgentes)
+    g.add_node("agente", _nodo_agente)
+    g.add_conditional_edges(START, _repartir(END), ["agente", END])
+    g.add_edge("agente", END)
+    return g.compile()
+
+
+GRAFO = construir_grafo()
+_GRAFO_AGENTES = _construir_grafo_agentes()
+
+
+def diagrama() -> str:
+    """Diagrama Mermaid del grafo (para el README y el pitch)."""
+    return GRAFO.get_graph().draw_mermaid()
+
+
+def _config() -> dict:
+    return {"max_concurrency": MAX_AGENTES_PARALELO}
+
+
+def _analizar_en_paralelo(leidos: list[DocumentoLeido], ctx: Contexto) -> list[DocumentoAnalizado]:
+    """Corre los agentes por tipo en paralelo con LangGraph, conservando el orden de `leidos`."""
     if not leidos:
         return []
     if len(leidos) == 1:
         return [_analizar(leidos[0], ctx)]
-    workers = min(MAX_AGENTES_PARALELO, len(leidos))
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="agente") as pool:
-        return list(pool.map(lambda d: _analizar(d, ctx), leidos))
+    final = _GRAFO_AGENTES.invoke({"leidos": leidos, "ctx": ctx, "resultados": []}, config=_config())
+    return [a for _, a in sorted(final["resultados"], key=lambda x: x[0])]
 
+
+# ---------------------------------------------------------------- punto de entrada
 
 def analizar_expediente(
     rutas: list[Path],
@@ -159,9 +271,10 @@ def analizar_expediente(
         return Dictamen.model_validate_json(EJEMPLO.read_text(encoding="utf-8"))
 
     expediente_id = expediente_id or datetime.now().strftime("EXP-%Y%m%d-%H%M%S")
-    leidos = [_leer(Path(r)) for r in rutas]
-    analizados = _analizar_en_paralelo(leidos, ctx)
-    presentes = {d.tipo for d in leidos}
-    faltantes = [t for t in TIPOS_REQUERIDOS if t not in presentes]
-    inconsistencias = cruce.validar_cruzado(analizados, ctx)
-    return dictamen.dictaminar(expediente_id, analizados, faltantes, inconsistencias, ctx)
+    final = GRAFO.invoke(
+        {"rutas": list(rutas), "ctx": ctx, "expediente_id": expediente_id, "resultados": [], "bitacora": []},
+        config=_config(),
+    )
+    for paso in final.get("bitacora", []):
+        log.info("[%s] %s", expediente_id, paso)
+    return final["dictamen"]
