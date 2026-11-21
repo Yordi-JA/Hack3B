@@ -1,0 +1,15 @@
+# Orquestación multiagente (obligatorio: LangChain)
+langchain>=0.3
+langgraph>=0.2
+langchain-openai
+langchain-anthropic
+langchain-ollama
+
+# Documentos
+pymupdf
+pillow
+
+# Modelos y app
+pydantic>=2
+python-dotenv
+streamlit
