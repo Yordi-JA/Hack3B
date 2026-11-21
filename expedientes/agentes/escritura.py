@@ -19,7 +19,7 @@ import unicodedata
 from typing import Callable, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ..config import get_callbacks, get_llm
 from ..schemas import (
@@ -72,6 +72,20 @@ class _CampoLLM(BaseModel):
 
 class _EscrituraLLM(BaseModel):
     """Extracción cruda de la escritura antes de normalización y verificación."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalizar_nulos(cls, data):
+        # Claude a veces devuelve el campo entero como string "null" en lugar de
+        # un objeto con valor=null. Lo mapeamos a un _CampoLLM vacío para que
+        # Pydantic no explote y el campo salga como "no encontrado".
+        if isinstance(data, dict):
+            for clave, v in list(data.items()):
+                if v is None:
+                    data[clave] = {}
+                elif isinstance(v, str) and v.strip().lower() in ("null", "none", ""):
+                    data[clave] = {}
+        return data
 
     propietario: _CampoLLM = Field(default_factory=_CampoLLM)
     direccion: _CampoLLM = Field(default_factory=_CampoLLM)
