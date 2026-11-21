@@ -3,6 +3,9 @@
 Correr desde la raíz del repo:
     python -m streamlit run app.py
 Solo consume `Dictamen` (expedientes/schemas.py) a través de `analizar_expediente`.
+
+Pendiente conocido: Ctrl+C en la terminal espera a que termine el análisis en curso, porque el
+hilo del ejecutor no es daemon. Para cortar en seco, cerrar la terminal.
 """
 from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
