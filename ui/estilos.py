@@ -152,6 +152,8 @@ a.exp:hover, a.exp:focus {{ border-color: var(--rojo-osc); }}
 svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .mx-estado {{ stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
 .mx-enlace, .mx-llamada {{ cursor: pointer; }}
+/* Los enlaces del SVG heredan el subrayado de los de Streamlit; los números no lo llevan. */
+.mx-mapa a, .mx-mapa a:hover, .mx-mapa a:focus, .mx-mapa a:focus-visible, .mx-mapa text {{ text-decoration: none !important; }}
 .mx-enlace:hover .mx-estado {{ stroke: var(--tinta); stroke-width: 2; }}
 .mx-borde-sel {{ fill: none; stroke: var(--tinta); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }}
 /* Números en unidades del mapa (1000 de ancho): con la columna de 330 a 390 px quedan en 12 a 14 px. */

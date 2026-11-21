@@ -171,3 +171,11 @@ def test_tarjeta_de_bandeja_sin_etiquetas_y_estado_en_texto():
 def test_estado_en_texto_contrasta_con_el_fondo_de_la_pagina():
     for tono in (t.VERDE, t.AMBAR, t.VINO):
         assert t.contraste(tono.texto, t.PANEL) >= 4.5
+
+
+def test_css_solo_lleva_la_etiqueta_style():
+    # st.html solo inyecta el bloque como hoja de estilos si no trae otras etiquetas; un "<a>" en un
+    # comentario bastó para que la app se quedara sin estilos.
+    import re
+    from ui import estilos
+    assert re.findall(r"<[^>]+>", estilos.css()) == ["<style>", "</style>"]
