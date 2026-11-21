@@ -31,6 +31,7 @@ FONDO_APP = ROJO_3B_SIDEBAR   # detrás del panel principal y en la barra latera
 PANEL = "#F4F5F1"             # panel principal redondeado
 TARJETA = "#FFFFFF"
 BORDE = "#DEE2DC"
+RADIO = 6                     # px: radio de toda caja con línea de 2 px (Subir expediente, Detalle)
 TEXTO = "#16201F"
 TEXTO_2 = "#4D5A57"
 TEXTO_SOBRE_ROJO = "#FFFFFF"  # blanco puro: con transparencia baja a ~3:1 sobre el rojo

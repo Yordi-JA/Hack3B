@@ -280,8 +280,8 @@ def caja_mapa_tablero(svg: str, ventana: str, sin_entidad: int) -> str:
         )
     return (
         '<div class="mapa-tarjeta"><div class="mapa-cab"><div><h3>Mapa de expedientes</h3>'
-        "<p>Color: la recomendación que predomina en el estado. Número: expedientes. "
-        "Clic en un estado para ver sus porcentajes.</p></div>"
+        "<p>Color: la recomendación que predomina en el estado. "
+        "Haz clic en un estado para ver su información.</p></div>"
         f'<div class="leyenda">{leyenda}</div></div>'
         f'<div class="mapa-lienzo">{svg}{ventana}</div>{pie}</div>'
     )

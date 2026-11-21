@@ -37,7 +37,7 @@ PASOS: list[Paso] = [
          "tarjeta para filtrar la lista.", "b-kpis"),
     Paso("Mapa por estado",
          "Cada estado toma el color de la recomendación que predomina en sus expedientes: verde cumple, "
-         "ámbar requiere revisión y rojo no cumple. El número es cuántos expedientes tiene.", "b-mapa"),
+         "ámbar requiere revisión y rojo no cumple. Los estados en gris no tienen expedientes.", "b-mapa"),
     Paso("Ventana del estado",
          "Al hacer clic en un estado se abre una ventana sobre el mapa con el porcentaje de cada "
          "recomendación. Desde ahí entras a los expedientes de ese estado.", "b-mapa"),
