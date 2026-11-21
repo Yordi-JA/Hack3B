@@ -145,7 +145,8 @@ def test_ejercicio_vigente_y_sin_adeudo(llm_falso):
     r = predial.analizar(_doc(texto=texto), CTX_2025)
     assert _hallazgo(r, "PRE-03").estado == EstadoRegla.CUMPLE
     assert _hallazgo(r, "PRE-04").estado == EstadoRegla.CUMPLE
-    assert _hallazgo(r, "PRE-02").severidad == Severidad.REVISION  # sin clave ni cuenta
+    pre02 = _hallazgo(r, "PRE-02")  # sin clave ni cuenta: dato ausente, no incumplimiento
+    assert pre02.estado == EstadoRegla.NO_EVALUABLE and pre02.severidad == Severidad.REVISION
 
 
 def test_identificador_sin_descripcion(llm_falso):
@@ -158,3 +159,52 @@ def test_identificador_sin_descripcion(llm_falso):
     r = predial.analizar(_doc(texto=texto), CTX_2025)
     assert r.datos.especificos["otras_cuentas"].valor == "U-02946"
     assert _hallazgo(r, "PRE-07").estado == EstadoRegla.NO_CUMPLE
+
+
+def test_embargo_es_rechazo_directo(llm_falso):
+    texto = "OBSERVACIONES: PREDIO CON EMBARGO DERIVADO DEL PROCEDIMIENTO ADMINISTRATIVO DE EJECUCIÓN"
+    llm_falso(_respuesta(embargo=_d("PREDIO CON EMBARGO", "PREDIO CON EMBARGO DERIVADO DEL PROCEDIMIENTO")))
+    h = _hallazgo(predial.analizar(_doc(texto=texto), CTX_2025), "PRE-10")
+    assert h.estado == EstadoRegla.NO_CUMPLE and h.severidad == Severidad.BLOQUEANTE
+    assert h.evidencias[0].cita in texto
+
+
+def test_embargo_dentro_del_texto_de_adeudos(llm_falso):
+    texto = "ADEUDO 2023-2024 EN PROCEDIMIENTO ADMINISTRATIVO DE EJECUCIÓN"
+    llm_falso(_respuesta(adeudos=_d(texto, texto)))
+    assert _hallazgo(predial.analizar(_doc(texto=texto), CTX_2025), "PRE-10").severidad == Severidad.BLOQUEANTE
+
+
+def test_leyenda_generica_no_es_embargo(llm_falso):
+    texto = "EL PAGO EXTEMPORÁNEO DARÁ LUGAR AL PROCEDIMIENTO ADMINISTRATIVO DE EJECUCIÓN\nEN CASO DE QUE SU PREDIO NO SEA BALDÍO ACUDA A CATASTRO"
+    llm_falso(_respuesta())  # el modelo no reporta embargo ni uso: la letra chica no debe disparar reglas
+    r = predial.analizar(_doc(texto=texto), CTX_2025)
+    assert not [h for h in r.hallazgos if h.id_regla in ("PRE-08", "PRE-10")]
+
+
+@pytest.mark.parametrize("uso,clave", [("BALDÍO URBANO", "baldío"), ("AGROPECUARIO", "no urbano"),
+                                       ("EJIDAL", "dominio pleno"), ("RÚSTICO", "no urbano")])
+def test_usos_de_riesgo_piden_revision(llm_falso, uso, clave):
+    texto = f"USO DEL PREDIO | {uso}"
+    llm_falso(_respuesta(uso_del_predio=_d(uso, texto)))
+    h = _hallazgo(predial.analizar(_doc(texto=texto), CTX_2025), "PRE-08")
+    assert h.estado == EstadoRegla.NO_CUMPLE and h.severidad == Severidad.REVISION and clave in h.explicacion
+
+
+def test_uso_habitacional_o_comercial_cumple(llm_falso):
+    texto = "USO DEL PREDIO | COMERCIAL"
+    llm_falso(_respuesta(uso_del_predio=_d("COMERCIAL", texto)))
+    assert _hallazgo(predial.analizar(_doc(texto=texto), CTX_2025), "PRE-08").estado == EstadoRegla.CUMPLE
+
+
+def test_construccion_cero_pide_revision(llm_falso):
+    texto = "SUPERFICIE CONSTRUCCIÓN (M²) | 0.00"
+    llm_falso(_respuesta(superficie_construccion_m2=_d("0.00", texto)))
+    h = _hallazgo(predial.analizar(_doc(texto=texto), CTX_2025), "PRE-11")
+    assert h.estado == EstadoRegla.NO_CUMPLE and h.severidad == Severidad.REVISION
+
+
+def test_construccion_registrada_cumple(llm_falso):
+    texto = "Superficie construcción propia:98.00"
+    llm_falso(_respuesta(superficie_construccion_m2=_d("98.00", texto)))
+    assert _hallazgo(predial.analizar(_doc(texto=texto), CTX_2025), "PRE-11").estado == EstadoRegla.CUMPLE
