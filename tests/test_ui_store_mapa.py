@@ -89,8 +89,8 @@ def test_html_escapa_datos_de_documentos_y_no_deja_lineas_en_blanco():
     doc = d.documentos[0]
     doc.datos.propietario.valor = "<script>alert(1)</script>"
     doc.hallazgos[0].evidencias[0].cita = 'línea 1\n\nlínea "2" <b>'
-    piezas = [C.tarjeta_dictamen(d, True), C.tarjetas_documentos(d), C.tabla_datos(d),
-              C.lista_hallazgos(doc.hallazgos), C.tipos_recibidos(d), C.tarjeta_expediente("ejemplo:x", d, True)]
+    piezas = [C.tarjeta_dictamen(d, True), C.documentos(d), C.tabla_datos(d), C.lista_pendientes(d),
+              C.detalle_completo(d), C.tarjeta_expediente("ejemplo:x", d, True)]
     for html in piezas:
         assert "<script>" not in html and "\n\n" not in html
     assert "&lt;script&gt;" in C.tabla_datos(d)

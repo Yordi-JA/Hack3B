@@ -62,25 +62,6 @@ def fecha(valor) -> str:
     return valor.strftime("%d/%m/%Y %H:%M") if hasattr(valor, "hour") else valor.strftime("%d/%m/%Y")
 
 
-def etiqueta(texto: str, tono: t.Tono, borde: bool = False) -> str:
-    extra = " etq-borde" if borde else ""
-    return f'<span class="etq tono-{clase_tono(tono)}{extra}">{txt(texto)}</span>'
-
-
-def etq_regla(e: EstadoRegla) -> str:
-    return etiqueta(L.NOMBRE_ESTADO_REGLA[e], t.REGLA[e])
-
-
-def etq_severidad(s: Severidad) -> str:
-    return etiqueta(L.NOMBRE_SEVERIDAD[s], t.SEVERIDAD[s], borde=True)
-
-
-def etq_legibilidad(leg: Legibilidad) -> str:
-    return etiqueta(NOMBRE_LEGIBILIDAD[leg], t.LEGIBILIDAD[leg])
-
-
-
-
 def logo_3b(invertido: bool = False) -> str:
     """Círculo con B sobre BB, dibujado aquí porque las imágenes de marca no se versionan.
 
@@ -288,7 +269,22 @@ def usuario_lateral(nombre: str, rol: str) -> str:
     )
 
 
-# ------------------------------------------------------------------ detalle: tarjeta del dictamen
+# ------------------------------------------------------------------ detalle
+# Sin etiquetas tipo píldora: estado y severidad van como texto en su color, siempre con la palabra.
+
+def _sev(sev: Optional[Severidad]) -> str:
+    if sev is None or sev == Severidad.INFO:
+        return '<span class="est-gris">Informativo</span>'
+    return f'<b class="est-{clase_tono(t.SEVERIDAD[sev])}">{L.NOMBRE_SEVERIDAD[sev]}</b>'
+
+
+def _estado(e: EstadoRegla) -> str:
+    return f'<b class="est-{clase_tono(t.REGLA[e])}">{L.NOMBRE_ESTADO_REGLA[e]}</b>'
+
+
+def _archivos(archivos: list[str]) -> str:
+    return txt(", ".join(archivos)) if archivos else "Expediente completo"
+
 
 def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
     u = L.consolidar_ubicacion(d)
@@ -296,16 +292,12 @@ def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
     # Cada parte de la ceja se queda en una pieza: si no cabe, el corte cae entre partes.
     partes_ceja = [d.expediente_id, texto_ubicacion(u)] + (["datos de ejemplo"] if es_ejemplo else [])
     ceja = " · ".join(f'<span class="nobr">{txt(p)}</span>' for p in partes_ceja)
-    n_inc = len(d.inconsistencias)
-    reqs = L.consolidar_requisitos(d)
-    no_cumplidos = sum(1 for r in reqs if r.estado == EstadoRegla.NO_CUMPLE)
-    cumplidos = sum(1 for r in reqs if r.estado == EstadoRegla.CUMPLE)
-    req = f"{no_cumplidos} sin cumplir" if no_cumplidos else f"{cumplidos} cumplidos"
-    botones = f'<a class="btn-acento" href="#requisitos" target="_self">Ver requisitos ({req})</a>'
-    if n_inc:
-        botones += f'<a class="btn-linea" href="#inconsistencias" target="_self">Ver inconsistencias ({n_inc})</a>'
+    n = len(L.pendientes(d)[0])
+    if n:
+        botones = f'<a class="btn-acento" href="#resolver" target="_self">Qué resolver ({n})</a>'
     else:
-        botones += '<span class="btn-nada">Sin inconsistencias</span>'
+        botones = '<span class="btn-nada">Sin pendientes</span>'
+    botones += '<a class="btn-linea" href="#documentos" target="_self">Ver documentos</a>'
     if u.entidad:
         pie = f"{mapa.nombre_entidad(u.entidad)}" + ("" if u.confirmada else " (los documentos no coinciden)")
     elif u.valores:
@@ -330,189 +322,202 @@ def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
     )
 
 
-def razones(d: Dictamen) -> str:
-    if not d.razones:
-        return ""
-    items = "".join(f"<li>{txt(r)}</li>" for r in d.razones)
-    return f'<div class="razones"><h3>Razones de la recomendación</h3><ol>{items}</ol></div>'
+# ---------------------------------------------------------------- bloque 2: qué hay que resolver
 
-
-# ------------------------------------------------------------------ detalle: documentos
-
-def tipos_recibidos(d: Dictamen) -> str:
-    faltan = set(L.faltantes(d))
-    celdas = []
-    for tr in L.documentos_por_tipo(d):
-        archivos = "".join(f"<small>{txt(a)}</small>" for a in tr.archivos)
-        nombre = L.NOMBRE_TIPO[tr.tipo]
-        if tr.tipo in faltan and tr.recibido:
-            celdas.append(
-                f'<div class="tipo tipo-falta">{etiqueta("Falta", t.VINO)}<b>{nombre}</b>'
-                f"<small>Se recibió {txt(', '.join(tr.archivos))} pero el dictamen lo considera faltante "
-                "(por ejemplo, ilegible).</small></div>"
-            )
-        elif tr.tipo in faltan:
-            celdas.append(
-                f'<div class="tipo tipo-falta">{etiqueta("Falta", t.VINO)}<b>{nombre}</b>'
-                "<small>No se recibió ningún archivo de este tipo.</small></div>"
-            )
-        elif L.tipo_sin_analizar(d, tr.tipo):
-            celdas.append(f'<div class="tipo">{etiqueta("Recibido, sin analizar", t.AMBAR)}<b>{nombre}</b>{archivos}</div>')
-        else:
-            celdas.append(f'<div class="tipo">{etiqueta("Recibido", t.VERDE)}<b>{nombre}</b>{archivos}</div>')
-    otros = [doc for doc in d.documentos if doc.tipo == TipoDocumento.OTRO]
-    for doc in otros:
-        celdas.append(
-            f'<div class="tipo">{etiqueta("No reconocido", t.GRIS)}<b>Otro documento</b>'
-            f"<small>{txt(doc.archivo)}</small></div>"
+def tabla_inconsistencia(inc: Inconsistencia) -> str:
+    """Documento, valor encontrado y cita. El valor que no coincide va en negrita y ámbar."""
+    discrepan = L.valores_inconsistencia_discrepantes([v.valor for v in inc.valores])
+    filas = []
+    for i, v in enumerate(inc.valores):
+        valor = txt(v.valor or "Sin dato")
+        if i in discrepan:
+            valor = f'<b class="est-ambar">{valor}</b><span class="sr"> (no coincide)</span>'
+        evid = cita(v.evidencia) if v.evidencia else '<span class="fuente">Sin cita</span>'
+        filas.append(
+            f"<tr><td>{L.NOMBRE_TIPO_CORTO[v.tipo]}<br><span class='fuente'>{txt(v.archivo)}</span></td>"
+            f"<td>{valor}</td><td>{evid}</td></tr>"
         )
-    return f'<div class="tipos">{"".join(celdas)}</div>'
-
-
-def tarjeta_documento(doc: DocumentoAnalizado) -> str:
-    titulo = L.NOMBRE_TIPO_CORTO[doc.tipo] if doc.tipo != TipoDocumento.OTRO else "Otro"
-    if L.sin_analizar(doc):
-        etiquetas = etq_legibilidad(doc.legibilidad) + etiqueta("Sin analizar", t.AMBAR)
-    else:
-        etiquetas = (
-            etq_legibilidad(doc.legibilidad)
-            + etiqueta(f"Tipo detectado con {pct(doc.confianza_tipo)}", t.GRIS)
-            + etiqueta(f"Confianza {pct(doc.confianza)}", t.GRIS)
-        )
-    avisos = "".join(f'<div class="doc-aviso">{txt(h.explicacion)}</div>' for h in L.avisos_de_proceso(doc))
-    if doc.legibilidad == Legibilidad.ILEGIBLE and not avisos:
-        avisos = '<div class="doc-aviso">El archivo es ilegible: sus reglas quedan sin evaluar. Pide una copia legible.</div>'
-    campos = L.campos_clave(doc)
-    lista = "".join(f"<dt>{txt(L.nombre_campo(c))}</dt><dd>{txt(campo.valor or '')}</dd>" for c, campo in campos)
-    datos = f'<dl class="doc-campos">{lista}</dl>' if lista else ""
-    reglas = [h for h in doc.hallazgos if h.id_regla not in L.REGLAS_DE_PROCESO]
-    conteo = L.contar_por_estado(reglas)
-    if reglas:
-        partes = [f"<b>{conteo[e]}</b> {L.NOMBRE_ESTADO_REGLA[e].lower()}" for e in EstadoRegla]
-        pie = f'<div class="doc-conteo">Reglas revisadas: {" · ".join(partes)}</div>'
-    else:
-        pie = '<div class="doc-conteo">Sin reglas evaluadas en este archivo.</div>'
     return (
-        f'<section class="marco"><h3 class="marco-titulo">{txt(titulo)}</h3>'
-        f'<p class="doc-archivo">{txt(doc.archivo)}</p>'
-        f'<div class="doc-etiquetas">{etiquetas}</div>{avisos}{datos}{pie}</section>'
+        f'<table class="tabla"><thead><tr><th>Documento</th><th>{txt(L.nombre_campo(inc.campo))}</th>'
+        f'<th>Cita</th></tr></thead><tbody>{"".join(filas)}</tbody></table>'
     )
 
 
-def tarjetas_documentos(d: Dictamen) -> str:
-    if not d.documentos:
-        return '<p class="vacio-msg">El dictamen no trae documentos.</p>'
-    return f'<div class="docs">{"".join(tarjeta_documento(doc) for doc in d.documentos)}</div>'
+def _evidencia_requisito(r: L.Requisito) -> str:
+    partes = [f'<p class="ev-regla">{txt(r.descripcion)} <span class="fuente">({txt(r.id_regla)})</span></p>']
+    for h in r.hallazgos:
+        partes.append(f"<p>{txt(h.explicacion)}</p>")
+        partes.extend(cita(e) for e in h.evidencias)
+    return "".join(partes)
 
 
-# ------------------------------------------------------------------ detalle: tablas
+def _evidencia(it: L.Pendiente) -> str:
+    if it.requisito:
+        return _evidencia_requisito(it.requisito)
+    if it.inconsistencia:
+        return tabla_inconsistencia(it.inconsistencia) + "".join(_evidencia_requisito(r) for r in it.relacionados)
+    if it.explicacion:
+        return f"<p>{txt(it.explicacion)}</p>"
+    return ""
 
-def _celda_campo(campo: Optional[Campo], difiere: bool, sin_analizar: bool = False) -> str:
+
+def lista_pendientes(d: Dictamen) -> str:
+    items, sueltas = L.pendientes(d)
+    if items:
+        filas = []
+        for it in items:
+            evid = _evidencia(it)
+            detalle = f'<details class="ev"><summary>Evidencia</summary>{evid}</details>' if evid else ""
+            filas.append(
+                f'<li><p class="resolver-texto">{txt(it.texto)}</p>'
+                f'<p class="resolver-meta">{_sev(it.severidad)} · {_archivos(it.archivos)}</p>{detalle}</li>'
+            )
+        cuerpo = f'<ol class="resolver">{"".join(filas)}</ol>'
+    else:
+        cuerpo = '<p class="resolver-vacio">No hay pendientes: todos los requisitos evaluados se cumplen.</p>'
+    if sueltas:
+        notas = "".join(f"<li>{txt(r)}</li>" for r in sueltas)
+        cuerpo += f'<div class="resolver-notas"><h3>Otras notas del dictamen</h3><ul>{notas}</ul></div>'
+    return cuerpo
+
+
+# ---------------------------------------------------------------- bloque 3: documentos
+
+def _estado_documento(doc: DocumentoAnalizado) -> str:
+    if L.sin_analizar(doc):
+        motivo = next((h.explicacion for h in doc.hallazgos if h.id_regla == "EXP-ERROR"), "")
+        return f'<p class="doc-estado"><span class="est-ambar"><b>Sin analizar:</b> {txt(motivo)}</span></p>'
+    if doc.tipo == TipoDocumento.OTRO:
+        return '<p class="doc-estado">No se reconoció el tipo; no se analizó.</p>'
+    legible = NOMBRE_LEGIBILIDAD[doc.legibilidad]
+    if doc.legibilidad != Legibilidad.BUENA:
+        legible = f'<b class="est-{clase_tono(t.LEGIBILIDAD[doc.legibilidad])}">{legible}</b>'
+    return (
+        f'<p class="doc-estado">{legible} · tipo detectado con {pct(doc.confianza_tipo)} · '
+        f"confianza {pct(doc.confianza)}</p>"
+    )
+
+
+def _tarjeta_documento(titulo: str, doc: DocumentoAnalizado) -> str:
+    campos = "".join(
+        f"<dt>{txt(L.nombre_campo(c))}</dt><dd>{txt(campo.valor or '')}</dd>" for c, campo in L.campos_clave(doc)
+    )
+    reglas = [h for h in doc.hallazgos if h.id_regla not in L.REGLAS_DE_PROCESO]
+    conteo = L.contar_por_estado(reglas)
+    pie = ""
+    if reglas:
+        n_no = conteo[EstadoRegla.NO_CUMPLE]
+        pie = (
+            f'<p class="doc-reglas">Reglas: {conteo[EstadoRegla.CUMPLE]} cumple{"n" if conteo[EstadoRegla.CUMPLE] != 1 else ""}'
+            f' · {n_no} no cumple{"n" if n_no != 1 else ""} · {conteo[EstadoRegla.NO_EVALUABLE]} sin evaluar</p>'
+        )
+    return (
+        f'<div class="doc-tarjeta"><span class="doc-titulo">{txt(titulo)}</span>'
+        f'<p class="doc-archivo">{txt(doc.archivo)}</p>{_estado_documento(doc)}'
+        + (f'<dl class="doc-campos">{campos}</dl>' if campos else "")
+        + f"{pie}</div>"
+    )
+
+
+def documentos(d: Dictamen) -> str:
+    """Una tarjeta por archivo de cada tipo requerido; una tarjeta punteada por tipo faltante; al final
+    los archivos que no se reconocieron."""
+    faltan = set(L.faltantes(d))
+    tarjetas = []
+    for tr in L.documentos_por_tipo(d):
+        nombre = L.NOMBRE_TIPO[tr.tipo]
+        if tr.tipo in faltan:
+            texto = (
+                f"Falta · se recibió {', '.join(tr.archivos)}, pero el dictamen lo considera faltante "
+                "(por ejemplo, ilegible)." if tr.recibido else "Falta · no se recibió ningún archivo."
+            )
+            tarjetas.append(
+                f'<div class="doc-tarjeta doc-falta"><span class="doc-titulo">{txt(nombre)}</span>'
+                f'<p class="doc-estado"><b class="est-vino">{txt(texto)}</b></p></div>'
+            )
+            continue
+        for doc in d.documentos:
+            if doc.tipo == tr.tipo:
+                tarjetas.append(_tarjeta_documento(nombre, doc))
+    for doc in d.documentos:
+        if doc.tipo == TipoDocumento.OTRO:
+            tarjetas.append(_tarjeta_documento("Otro archivo", doc))
+    return f'<div class="docs-grid">{"".join(tarjetas)}</div>'
+
+
+# ---------------------------------------------------------------- bloque 4: detalle completo
+
+def _celda_campo(campo: Optional[Campo], difiere: bool) -> str:
     if campo is None:
-        return f'<td class="vacio">{"Sin analizar" if sin_analizar else "No encontrado"}</td>'
-    marca = " " + etiqueta("Difiere", t.AMBAR) if difiere else ""
+        return '<td class="vacio">No encontrado</td>'
+    valor = txt(campo.valor or "")
+    if difiere:
+        valor = f'<b class="est-ambar">{valor}</b><span class="sr"> (no coincide)</span>'
     evid = ""
     if campo.evidencia:
         evid = (
-            f"<details><summary>Evidencia, página {campo.evidencia.pagina}</summary>"
+            f'<details class="ev ev-celda"><summary>p. {campo.evidencia.pagina}</summary>'
             f'<q class="cita">{txt(campo.evidencia.cita)}</q></details>'
         )
-    clase = ' class="difiere"' if difiere else ""
-    return f"<td{clase}>{txt(campo.valor or '')}{marca}{evid}</td>"
+    return f"<td>{valor}{evid}</td>"
 
 
 def tabla_datos(d: Dictamen) -> str:
-    filas = L.filas_datos(d)
+    """Dato x documento. Se omiten las columnas de archivos sin datos (sin analizar o no reconocidos)
+    y se dice arriba cuáles son."""
+    con_datos = [doc for doc in d.documentos if L.campos_con_dato(doc)]
+    notas = []
+    for doc in d.documentos:
+        if doc in con_datos:
+            continue
+        if L.sin_analizar(doc):
+            notas.append(f"{doc.archivo} no se pudo analizar.")
+        elif doc.tipo == TipoDocumento.OTRO:
+            notas.append(f"{doc.archivo} no se reconoció; no tiene datos.")
+        else:
+            notas.append(f"{doc.archivo} no tiene datos extraídos.")
+    nota = "".join(f'<p class="dc-nota">{txt(n)}</p>' for n in notas)
+    filas = L.filas_datos(d, con_datos)
     if not filas:
-        return '<p class="vacio-msg">Ningún documento tiene datos extraídos.</p>'
+        return nota + '<p class="dc-nota">Ningún documento tiene datos extraídos.</p>'
     cab = "".join(
-        f"<th>{L.NOMBRE_TIPO_CORTO[doc.tipo]}<br><span style='font-weight:400'>{txt(doc.archivo)}</span></th>"
-        for doc in d.documentos
+        f"<th>{L.NOMBRE_TIPO_CORTO[doc.tipo]}<br><span class='fuente'>{txt(doc.archivo)}</span></th>"
+        for doc in con_datos
     )
-    sin = [L.sin_analizar(doc) for doc in d.documentos]
-    cuerpo = []
+    cuerpo, hay_diferencias = [], False
     for clave, celdas in filas:
         difieren = L.valores_discrepantes(celdas) if clave in L.CAMPOS_COMPARABLES else set()
-        tds = "".join(_celda_campo(c, i in difieren, sin[i]) for i, c in enumerate(celdas))
+        hay_diferencias = hay_diferencias or bool(difieren)
+        tds = "".join(_celda_campo(c, i in difieren) for i, c in enumerate(celdas))
         cuerpo.append(f'<tr><td class="campo">{txt(L.nombre_campo(clave))}</td>{tds}</tr>')
+    leyenda = (
+        '<p class="dc-nota">En <b class="est-ambar">negrita y ámbar</b>, el valor que no coincide con el de '
+        "los demás documentos.</p>" if hay_diferencias else ""
+    )
     return (
-        f'<div class="tabla-caja"><table class="tabla"><thead><tr><th>Dato</th>{cab}</tr></thead>'
+        f'{nota}{leyenda}<div class="tabla-scroll"><table class="tabla"><thead><tr><th>Dato</th>{cab}</tr></thead>'
         f'<tbody>{"".join(cuerpo)}</tbody></table></div>'
     )
 
 
-def avisos_sin_analizar(d: Dictamen) -> str:
-    avisos = []
-    for doc in L.archivos_sin_analizar(d):
-        if doc.tipo == TipoDocumento.OTRO:  # no es un tipo requerido: no deja requisitos incompletos
-            continue
-        tipo = L.NOMBRE_TIPO[doc.tipo]
-        avisos.append(
-            f'<div class="aviso-req">{etiqueta("Sin analizar", t.AMBAR)} {txt(doc.archivo)} ({tipo}) no se pudo '
-            f"analizar; los requisitos de {tipo} pueden estar incompletos.</div>"
-        )
-    return "".join(avisos)
-
-
 def tabla_requisitos(reqs: list[L.Requisito]) -> str:
     if not reqs:
-        return '<p class="vacio-msg">El dictamen no trae reglas evaluadas.</p>'
+        return '<p class="dc-nota">El dictamen no trae reglas evaluadas.</p>'
     filas = []
     for r in reqs:
-        archivos = ", ".join(r.archivos) if r.archivos else "Expediente completo"
         filas.append(
-            f"<tr><td>{etq_regla(r.estado)}</td><td><b>{txt(r.descripcion)}</b><br>"
-            f'<span class="fuente">{txt(r.id_regla)}</span></td>'
-            f"<td>{etq_severidad(r.severidad)}</td><td>{txt(archivos)}</td></tr>"
+            f"<tr><td>{txt(r.descripcion)}"
+            f'<details class="ev ev-celda"><summary>Evidencia</summary>{_evidencia_requisito(r)}</details></td>'
+            f"<td>{_estado(r.estado)}</td><td>{_sev(r.severidad)}</td><td>{_archivos(r.archivos)}</td></tr>"
         )
     return (
-        '<div class="tabla-caja"><table class="tabla"><thead><tr><th>Estado</th><th>Requisito</th>'
-        f'<th>Severidad</th><th>Dónde se evaluó</th></tr></thead><tbody>{"".join(filas)}</tbody></table></div>'
+        '<table class="tabla"><thead><tr><th>Requisito</th><th>Estado</th><th>Severidad</th><th>Archivo</th>'
+        f'</tr></thead><tbody>{"".join(filas)}</tbody></table>'
     )
 
 
-def resumen_requisitos(reqs: list[L.Requisito]) -> str:
-    por_estado = {e: sum(1 for r in reqs if r.estado == e) for e in EstadoRegla}
-    partes = [
-        etiqueta(f"{por_estado[EstadoRegla.CUMPLE]} cumplidos", t.VERDE),
-        etiqueta(f"{por_estado[EstadoRegla.NO_CUMPLE]} no cumplidos", t.VINO),
-        etiqueta(f"{por_estado[EstadoRegla.NO_EVALUABLE]} sin evaluar", t.AZUL),
-    ]
-    return f'<div class="resumen-req">{"".join(partes)}</div>'
-
-
-def hallazgo(h: Hallazgo) -> str:
-    evid = "".join(cita(e) for e in h.evidencias)
-    if not evid:
-        evid = '<span class="fuente">Sin cita en el documento.</span>'
+def detalle_completo(d: Dictamen) -> str:
     return (
-        f'<div class="hallazgo"><div class="hallazgo-cab">{etq_regla(h.estado)}{etq_severidad(h.severidad)}'
-        f'<b>{txt(h.descripcion)}</b><span class="hallazgo-id">{txt(h.id_regla)}</span></div>'
-        f"<p>{txt(h.explicacion)}</p>{evid}</div>"
-    )
-
-
-def lista_hallazgos(hallazgos: list[Hallazgo]) -> str:
-    if not hallazgos:
-        return '<p class="vacio-msg">Sin hallazgos para este archivo.</p>'
-    return "".join(hallazgo(h) for h in hallazgos)
-
-
-def inconsistencia(inc: Inconsistencia) -> str:
-    discrepan = L.valores_inconsistencia_discrepantes([v.valor for v in inc.valores])
-    filas = []
-    for i, v in enumerate(inc.valores):
-        marca = " " + etiqueta("Difiere", t.AMBAR) if i in discrepan else ""
-        evid = cita(v.evidencia) if v.evidencia else '<span class="fuente">Sin evidencia</span>'
-        clase = ' class="difiere"' if i in discrepan else ""
-        filas.append(
-            f"<tr><td><b>{L.NOMBRE_TIPO_CORTO[v.tipo]}</b><br><span class='fuente'>{txt(v.archivo)}</span></td>"
-            f"<td{clase}>{txt(v.valor or 'Sin dato')}{marca}</td><td>{evid}</td></tr>"
-        )
-    return (
-        f'<div class="inc"><div class="hallazgo-cab">{etq_severidad(inc.severidad)}'
-        f'<b>{txt(L.nombre_campo(inc.campo))}</b><span class="hallazgo-id">{txt(inc.id_regla)}</span></div>'
-        f"<p>{txt(inc.descripcion)}</p>"
-        '<div class="tabla-caja"><table class="tabla"><thead><tr><th>Documento</th><th>Valor encontrado</th>'
-        f'<th>Evidencia</th></tr></thead><tbody>{"".join(filas)}</tbody></table></div></div>'
+        '<h3 class="dc-titulo">Datos extraídos</h3>' + tabla_datos(d)
+        + '<h3 class="dc-titulo">Todos los requisitos</h3>' + tabla_requisitos(L.consolidar_requisitos(d))
     )

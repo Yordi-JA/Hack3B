@@ -117,7 +117,8 @@ def test_tabla_no_marca_fechas_distintas_como_diferencia():
     d = dictamen([doc("a", fecha_emision="2020-01-01", propietario="X"), doc("b", fecha_emision="2026-01-01", propietario="Y"),
                   doc("c", propietario="X")])
     html = C.tabla_datos(d)
-    assert html.count("Difiere") == 1  # solo el propietario distinto
+    assert html.count("(no coincide)") == 1  # solo el propietario distinto
+    assert 'class="etq' not in html
 
 
 # ------------------------------------------------------------------ bandeja

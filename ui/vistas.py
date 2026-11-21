@@ -459,53 +459,28 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
         return
 
     d: Dictamen = entrada.dictamen
-    with st.container(horizontal=True, horizontal_alignment="distribute"):
-        st.button("Volver al inicio", on_click=ir, args=("bandeja",))
-        st.download_button(
-            "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
-            mime="application/json",
-        )
+    st.button("Volver al inicio", on_click=ir, args=("bandeja",))
 
+    # 1. El dictamen
     html(C.tarjeta_dictamen(d, entrada.es_ejemplo))
-    html(C.razones(d))
 
-    html(C.seccion("Documentos recibidos y faltantes", "documentos",
-                   "Los 4 tipos requeridos y qué se extrajo de cada archivo."))
-    html(C.tipos_recibidos(d))
-    html(C.tarjetas_documentos(d))
+    # 2. Qué hay que resolver: una sola lista, priorizada y sin duplicados
+    n = len(L.pendientes(d)[0])
+    html(C.seccion(f"Qué hay que resolver ({n})", "resolver"))
+    html(C.lista_pendientes(d))
 
-    reqs = L.consolidar_requisitos(d)
-    html(C.seccion("Requisitos cumplidos y no cumplidos", "requisitos",
-                   "Un requisito se da por cumplido si algún archivo de su tipo lo cumple."))
-    html(C.resumen_requisitos(reqs))
-    avisos = C.avisos_sin_analizar(d)
-    if avisos:
-        html(avisos)
-    html(C.tabla_requisitos(reqs))
+    # 3. Documentos recibidos y faltantes
+    html(C.seccion("Documentos", "documentos"))
+    html(C.documentos(d))
 
-    html(C.seccion("Inconsistencias entre documentos", "inconsistencias",
-                   "Qué dice cada documento sobre el mismo dato y dónde está la evidencia."))
-    if d.inconsistencias:
-        for inc in d.inconsistencias:
-            html(C.inconsistencia(inc))
-    else:
-        html('<p class="vacio-msg">No se encontraron diferencias entre documentos en los datos comparados.</p>')
+    # 4. Todo lo demás, plegado
+    with st.expander("Ver detalle completo", key="detalle-completo"):
+        html(C.detalle_completo(d))
 
-    html(C.seccion("Datos extraídos", "datos",
-                   "Cada dato tal como aparece en el documento. Abre “Evidencia” para ver la cita y la página."))
-    html(C.tabla_datos(d))
-
-    html(C.seccion("Criterios y validaciones", "criterios",
-                   "Cada regla evaluada, con su explicación y la cita del documento que la sustenta."))
-    pestañas = [("Expediente", d.hallazgos_expediente)]
-    for doc in d.documentos:
-        raiz = seguro(Path(doc.archivo).stem)
-        corto = raiz if len(raiz) <= 22 else raiz[:21].rstrip() + "…"
-        pestañas.append((f"{L.NOMBRE_TIPO_CORTO[doc.tipo]} · {corto}", doc.hallazgos))
-    etiquetas = [f"{n} ({len(h)})" for n, h in pestañas]
-    for tab, (_, hallazgos) in zip(st.tabs(etiquetas), pestañas):
-        with tab:
-            html(C.lista_hallazgos(hallazgos))
+    st.download_button(
+        "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
+        mime="application/json", type="tertiary", key="detalle-descargar",
+    )
 
 
 def host_permitido(host: Optional[str], puerto: int) -> bool:

@@ -43,10 +43,9 @@ def _dictamen_hostil():
 def _piezas(d):
     reqs = L.consolidar_requisitos(d)
     return [
-        C.tarjeta_dictamen(d, True), C.razones(d), C.tipos_recibidos(d), C.tarjetas_documentos(d),
-        C.tabla_datos(d), C.tabla_requisitos(reqs), C.resumen_requisitos(reqs), C.avisos_sin_analizar(d),
-        C.lista_hallazgos(d.documentos[0].hallazgos), C.lista_hallazgos(d.hallazgos_expediente),
-        C.inconsistencia(d.inconsistencias[0]), C.lista_expedientes([("resultado:x", d, False)]),
+        C.tarjeta_dictamen(d, True), C.lista_pendientes(d), C.documentos(d), C.tabla_datos(d),
+        C.tabla_requisitos(reqs), C.detalle_completo(d), C.tabla_inconsistencia(d.inconsistencias[0]),
+        C.lista_expedientes([("resultado:x", d, False)]),
     ]
 
 
@@ -95,25 +94,27 @@ def _doc_con_error(archivo, tipo):
     )
 
 
-def test_archivo_sin_analizar_se_ve_en_recibidos_tarjeta_tabla_y_requisitos():
+def test_archivo_sin_analizar_se_ve_en_documentos_tabla_y_pendientes():
     d = analizar_expediente([], usar_ejemplo=True)
     d.documentos = [doc for doc in d.documentos if doc.tipo != TipoDocumento.PREDIAL]
     d.documentos.append(_doc_con_error("Predial roto.pdf", TipoDocumento.PREDIAL))
-    assert [doc.archivo for doc in L.archivos_sin_analizar(d)] == ["Predial roto.pdf"]
-    assert L.tipo_sin_analizar(d, TipoDocumento.PREDIAL)
-    assert "Recibido, sin analizar" in C.tipos_recibidos(d)
-    assert "Sin analizar" in C.tarjeta_documento(d.documentos[-1])
-    assert "Confianza 0" not in C.tarjeta_documento(d.documentos[-1])
-    assert "Sin analizar" in C.tabla_datos(d)
-    aviso = C.avisos_sin_analizar(d)
-    assert "Predial roto.pdf (Predial) no se pudo analizar" in aviso and "requisitos de Predial" in aviso
+    assert [doc.archivo for doc in d.documentos if L.sin_analizar(doc)] == ["Predial roto.pdf"]
+    docs = C.documentos(d)
+    assert "<b>Sin analizar:</b> Falló el análisis automático: TimeoutError" in docs
+    assert "confianza 0" not in docs.split("Predial roto.pdf")[1]
+    tabla = C.tabla_datos(d)
+    assert "Predial roto.pdf no se pudo analizar." in tabla and "<th>Predial" not in tabla
+    items, _ = L.pendientes(d)
+    fila = next(it for it in items if it.clase == "sin_analizar")
+    assert fila.archivos == ["Predial roto.pdf"] and "TimeoutError" in fila.explicacion
 
 
 def test_faltante_recibido_explica_por_que():
     d = analizar_expediente([], usar_ejemplo=True)
     d.documentos_faltantes = [TipoDocumento.ALINEAMIENTO]
-    html = C.tipos_recibidos(d)
-    assert "Se recibió 03 Alineamiento DEMO.pdf pero el dictamen lo considera faltante" in html
+    html = C.documentos(d)
+    assert "Falta · se recibió 03 Alineamiento DEMO.pdf, pero el dictamen lo considera faltante" in html
+    assert "doc-falta" in html
 
 
 def test_requisitos_agrupan_por_tipo_y_regla():
@@ -145,4 +146,4 @@ def test_pie_del_mapa_con_entidades_empatadas():
 def test_valor_inconsistencia_vacio():
     inc = Inconsistencia(id_regla="CRU-X", campo="propietario", descripcion="d", severidad=Severidad.INFO,
                          valores=[ValorEncontrado(archivo="a", tipo=TipoDocumento.PREDIAL, valor=None)])
-    assert "Sin dato" in C.inconsistencia(inc)
+    assert "Sin dato" in C.tabla_inconsistencia(inc)

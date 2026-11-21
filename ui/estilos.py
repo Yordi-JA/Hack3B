@@ -17,7 +17,6 @@ def clase_tono(tono: t.Tono) -> str:
 def _css_tonos() -> str:
     reglas = []
     for nombre, tono in TONOS.items():
-        reglas.append(f".tono-{nombre}{{color:{tono.texto};background:{tono.fondo};}}")
         # Sello del dictamen: blanco sobre el color fuerte del estado (6.7:1 a 8.1:1).
         reglas.append(f".sello-{nombre}{{color:#fff;background:{tono.texto};}}")
         # Estado en texto (tarjetas de la bandeja): el color fuerte del estado sobre el fondo claro.
@@ -135,10 +134,7 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .ancla {{ scroll-margin-top: 16px; height: 0; }}
 .seccion-sub {{ color: var(--texto2); font-size: 14px; margin: 0 0 14px; }}
 
-/* ---- etiquetas de estado: fondo suave, texto siempre presente ---- */
-.etq {{ display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 12px; font-weight: 700;
-  line-height: 1.6; white-space: nowrap; }}
-.etq-borde {{ background: transparent; border: 1px solid currentColor; }}
+/* ---- estados en texto de color y sello del dictamen ---- */
 {_css_tonos()}
 
 /* ---- resumen de la bandeja: una línea de texto, sin tarjetas ---- */
@@ -229,60 +225,62 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .marco-dictamen .mx-vecino {{ fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.5); }}
 .marco-dictamen .mx-resaltado {{ fill: #fff; stroke: #fff; }}
 
-.razones {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 16px 20px; margin-top: 12px; }}
-.razones h3 {{ font-size: 14px; margin: 0 0 8px; padding: 0; color: var(--tinta); }}
-.razones ol {{ margin: 0; padding-left: 20px; }}
-.razones li {{ font-size: 15px; line-height: 1.5; margin: 3px 0; }}
+/* ---- Detalle: dictamen, qué resolver, documentos y detalle completo ----
+   Sin etiquetas tipo píldora. Las cajas usan la línea de Subir expediente: 2 px tinta y radio de 6 px. */
+.sr {{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }}
+.resolver {{ margin: 8px 0 0; padding-left: 28px; }}
+.resolver li {{ padding: 12px 0; border-bottom: 1px solid var(--borde); }}
+.resolver li::marker {{ font-weight: 700; color: var(--tinta); }}
+.resolver-texto {{ font-size: 15px; line-height: 1.45; color: var(--texto); margin: 0 0 4px; }}
+.resolver-meta {{ font-size: 13px; color: var(--texto2); margin: 0; overflow-wrap: anywhere; }}
+.resolver-vacio {{ font-size: 15px; color: var(--texto); margin: 8px 0 0; }}
+.resolver-notas {{ margin-top: 18px; }}
+.stApp .resolver-notas h3 {{ font-family: var(--f-texto); font-size: 14px; font-weight: 700; color: var(--tinta);
+  margin: 0 0 4px; padding: 0; }}
+.resolver-notas ul {{ margin: 0; padding-left: 20px; }}
+.resolver-notas li {{ font-size: 14px; line-height: 1.5; color: var(--texto); }}
+details.ev summary {{ cursor: pointer; width: fit-content; margin-top: 6px; font-size: 13px; color: var(--tinta);
+  text-decoration: underline; text-underline-offset: 3px; }}
+details.ev summary:hover {{ color: var(--rojo-osc); }}
+details.ev[open] {{ padding-bottom: 4px; }}
+details.ev p {{ font-size: 14px; line-height: 1.5; margin: 6px 0; }}
+details.ev-celda summary {{ font-size: 12px; color: var(--texto2); margin-top: 2px; }}
+.ev-regla {{ font-weight: 600; color: var(--tinta); }}
 
-/* ---- tipos de documento: recibidos y faltantes ---- */
-.tipos {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }}
-.tipo {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; min-width: 0; }}
-.tipo b {{ display: block; font-size: 14px; margin: 6px 0 2px; color: var(--tinta); }}
-.tipo small {{ display: block; font-size: 12px; color: var(--texto2); overflow-wrap: anywhere; }}
-.tipo-falta {{ border: 1.5px dashed {t.VINO.texto}; }}
-
-/* tarjetas por documento: marco claro, línea y título en tinta */
-.docs {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr)); gap: 6px 16px; }}
-.docs .marco {{ padding: 46px 26px 26px; margin: 26px 0 4px; }}
-.docs .marco::before {{ inset: 22px 10px 10px; }}
-.docs .marco-titulo {{ top: 22px; left: 22px; font-size: 21px; padding: 0 10px; }}
-.doc-archivo {{ font-size: 12px; color: var(--texto2); margin: 0 0 10px; overflow-wrap: anywhere; }}
-.doc-etiquetas {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }}
-.doc-campos {{ display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; margin: 0 0 12px; }}
+.docs-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 20px; margin-top: 24px; }}
+.doc-tarjeta {{ position: relative; border: 2px solid var(--tinta); border-radius: var(--radio); padding: 24px 18px 14px; min-width: 0; }}
+.doc-falta {{ border-style: dashed; }}
+.doc-titulo {{ position: absolute; top: 0; left: 12px; transform: translateY(-55%); background: var(--panel);
+  padding: 0 8px; font-family: var(--f-titular); font-weight: 900; font-size: 15px; line-height: 1.1; color: var(--tinta);
+  text-transform: uppercase; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.doc-archivo {{ font-size: 13px; color: var(--texto2); margin: 0 0 4px; overflow-wrap: anywhere; }}
+.doc-estado {{ font-size: 14px; color: var(--texto); margin: 0 0 10px; overflow-wrap: anywhere; }}
+.doc-campos {{ display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 10px; }}
 .doc-campos dt {{ color: var(--texto2); }}
 .doc-campos dd {{ margin: 0; color: var(--texto); overflow-wrap: anywhere; }}
-.doc-conteo {{ font-size: 13px; color: var(--texto2); border-top: 1px solid var(--borde); padding-top: 10px; }}
-.doc-conteo b {{ color: var(--tinta); }}
-.doc-aviso {{ font-size: 13px; line-height: 1.5; color: var(--texto); background: {t.AMBAR.fondo}; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }}
+.doc-reglas {{ font-size: 13px; color: var(--texto2); margin: 0; border-top: 1px solid var(--borde); padding-top: 8px; }}
 
-/* ---- tablas: datos extraídos, requisitos, inconsistencias ---- */
-.tabla-caja {{ overflow-x: auto; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; }}
-table.tabla {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-.tabla th {{ text-align: left; font-size: 12px; color: var(--texto2); font-weight: 600; background: #F8F9F6;
-  padding: 10px 12px; border-bottom: 1px solid var(--borde); vertical-align: bottom; }}
-.tabla td {{ padding: 10px 12px; border-bottom: 1px solid var(--borde); vertical-align: top; min-width: 140px; }}
-.tabla tr:last-child td {{ border-bottom: 0; }}
-.tabla td.campo {{ font-weight: 600; color: var(--tinta); min-width: 150px; }}
-.tabla td.difiere {{ background: {t.AMBAR.fondo}; }}
+/* tablas con reglas de 1 px, sin caja alrededor */
+.tabla-scroll {{ overflow-x: auto; }}
+table.tabla {{ width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 4px; }}
+.stApp table.tabla {{ border: 0; }}
+.stApp table.tabla th {{ text-align: left; font-size: 12px; color: var(--texto2); font-weight: 600; padding: 8px 10px;
+  border: 0; border-bottom: 1px solid var(--tinta); vertical-align: bottom; background: transparent; }}
+.stApp table.tabla td {{ padding: 8px 10px; border: 0; border-bottom: 1px solid var(--borde); vertical-align: top; }}
+.tabla td.campo {{ font-weight: 600; color: var(--tinta); min-width: 140px; }}
 .tabla .vacio {{ color: var(--texto2); }}
-.tabla details summary {{ cursor: pointer; color: var(--texto2); font-size: 12px; margin-top: 4px; }}
 q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; color: var(--texto); background: #F3F5F0;
   border-left: 3px solid var(--borde); padding: 6px 10px; margin: 4px 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }}
 .fuente {{ font-size: 12px; color: var(--texto2); }}
-
-.aviso-req {{ background: {t.AMBAR.fondo}; color: var(--texto); border-radius: 8px; padding: 8px 12px; margin: 0 0 8px; font-size: 14px; }}
-.resumen-req {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
-
-.inc {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }}
-.inc h3 {{ font-size: 15px; color: var(--tinta); margin: 0 0 4px; padding: 0; }}
-.inc p {{ font-size: 14px; margin: 0 0 10px; }}
-
-.hallazgo {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }}
-.hallazgo-cab {{ display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 6px; }}
-.hallazgo-cab b {{ font-size: 14px; color: var(--tinta); }}
-.hallazgo-id {{ font-size: 12px; color: var(--texto2); font-weight: 600; }}
-.hallazgo p {{ font-size: 14px; line-height: 1.5; margin: 0 0 6px; }}
-.vacio-msg {{ color: var(--texto2); font-size: 14px; }}
+.stApp h3.dc-titulo {{ font-family: var(--f-texto); font-size: 15px; font-weight: 700; color: var(--tinta); margin: 20px 0 6px; padding: 0; }}
+.stApp h3.dc-titulo:first-child {{ margin-top: 4px; }}
+.dc-nota {{ font-size: 13px; color: var(--texto2); margin: 0 0 4px; }}
+.st-key-detalle-completo {{ margin-top: 30px; }}
+.st-key-detalle-completo [data-testid="stExpander"] > details {{ border: 2px solid var(--tinta); border-radius: var(--radio); }}
+.st-key-detalle-completo [data-testid="stExpander"] > details > summary p {{ font-weight: 700; color: var(--tinta); }}
+.st-key-detalle-descargar button {{ padding: 0; min-height: 0; margin-top: 18px; }}
+.st-key-detalle-descargar button p {{ font-size: 14px; color: var(--tinta); text-decoration: underline; text-underline-offset: 3px; }}
+.st-key-detalle-descargar button:hover p {{ color: var(--rojo-osc); }}
 
 /* ---- Subir expediente (vista "nuevo"): todo lo de esta vista va en este bloque ----
    Todas las líneas de la vista son de 2 px en tinta con radio de 6 px (RADIO): marco, campos y botones. */
