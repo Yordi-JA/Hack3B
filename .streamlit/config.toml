@@ -1,0 +1,30 @@
+# Tema de la UI. Los colores salen de ui/tokens.py (marca Tiendas 3B).
+[theme]
+base = "light"
+primaryColor = "#C0141B"
+backgroundColor = "#F4F5F1"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#16201F"
+borderColor = "#7D8783"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#D9161E"
+textColor = "#FFFFFF"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = "type"  # sin trazas en pantalla; la traza queda en la consola
+
+[browser]
+gatherUsageStats = false
+
+
+[server]
+# Solo este equipo: sin esto Streamlit escucha en todas las interfaces y cualquiera en la red
+# podría subir archivos o leer dictámenes (regla 06).
+address = "127.0.0.1"
+port = 8501
+headless = true
+# MB por archivo. Una escritura escaneada de 50 páginas cabe de sobra.
+maxUploadSize = 50

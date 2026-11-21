@@ -1,0 +1,752 @@
+{
+  "expediente_id": "EXP-DEMO-003",
+  "fecha_analisis": "2026-11-21T08:40:00",
+  "fecha_referencia": "2026-11-21",
+  "documentos": [
+    {
+      "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+      "tipo": "escritura",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Andrés Ignacio Domínguez Luna",
+          "normalizado": "DOMINGUEZ LUNA ANDRES IGNACIO",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 2,
+            "cita": "y de otra parte el señor ANDRÉS IGNACIO DOMÍNGUEZ LUNA, a quien en lo sucesivo se le denominará EL COMPRADOR"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Calle Cerro Azul número 27, Barrio La Palma",
+          "normalizado": "CALLE CERRO AZUL 27, BARRIO LA PALMA, IXMIQUILPAN, HGO",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 2,
+            "cita": "predio urbano ubicado en la calle Cerro Azul número 27, Barrio La Palma"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Hidalgo",
+          "normalizado": "HIDALGO",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "IXMIQUILPAN, ESTADO DE HIDALGO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "Ixmiquilpan",
+          "normalizado": "IXMIQUILPAN",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 2,
+            "cita": "Municipio de Ixmiquilpan, Hidalgo"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "385.00 m²",
+          "normalizado": "385.00",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 2,
+            "cita": "con superficie total de 385.00 m2"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "052 004 019 0000",
+          "normalizado": "0520040190000",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 3,
+            "cita": "clave catastral número 052 004 019 0000"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "27",
+          "normalizado": "27",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 2,
+            "cita": "número 27"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "18 de octubre de 2025",
+          "normalizado": "2025-10-18",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "a dieciocho de octubre de dos mil veinticinco"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "autoridad_emisora": {
+          "valor": "Notaría Pública No. 2 de Ixmiquilpan",
+          "normalizado": "NOTARIA PUBLICA 2 IXMIQUILPAN",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "Notario Público número 2 del Distrito Judicial de Ixmiquilpan"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "numero_escritura": {
+            "valor": "6,152",
+            "normalizado": "6152",
+            "evidencia": {
+              "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "VOLUMEN 211, INSTRUMENTO 6,152"
+            },
+            "confianza": 0.93
+          },
+          "tipo_acto": {
+            "valor": "Compraventa",
+            "normalizado": "COMPRAVENTA",
+            "evidencia": {
+              "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "CONTRATO DE COMPRAVENTA"
+            },
+            "confianza": 0.93
+          },
+          "vendedor": {
+            "valor": "Mercedes Aguirre Beltrán",
+            "normalizado": "AGUIRRE BELTRAN MERCEDES",
+            "evidencia": {
+              "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+              "pagina": 2,
+              "cita": "la señora MERCEDES AGUIRRE BELTRÁN, LA VENDEDORA"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ESC-01",
+          "descripcion": "La escritura identifica al titular del inmueble",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "El comprador y titular actual es Andrés Ignacio Domínguez Luna.",
+          "evidencias": [
+            {
+              "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+              "pagina": 2,
+              "cita": "y de otra parte el señor ANDRÉS IGNACIO DOMÍNGUEZ LUNA, a quien en lo sucesivo se le denominará EL COMPRADOR"
+            }
+          ]
+        },
+        {
+          "id_regla": "ESC-02",
+          "descripcion": "Inscripción en el Registro Público de la Propiedad",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "La copia no incluye la hoja de inscripción en el Registro Público; no se puede confirmar que esté inscrita.",
+          "evidencias": [
+            {
+              "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+              "pagina": 7,
+              "cita": "PENDIENTE DE INSCRIPCIÓN"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.9
+    },
+    {
+      "archivo": "Predial Ixmiquilpan DEMO.pdf",
+      "tipo": "predial",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "AGUIRRE BELTRAN MERCEDES",
+          "normalizado": "AGUIRRE BELTRAN MERCEDES",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "NOMBRE DEL CONTRIBUYENTE: AGUIRRE BELTRAN MERCEDES"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "CERRO AZUL 27 BO LA PALMA",
+          "normalizado": "CALLE CERRO AZUL 27, BARRIO LA PALMA, IXMIQUILPAN, HGO",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "UBICACION: CERRO AZUL 27 BO LA PALMA"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Hidalgo",
+          "normalizado": "HIDALGO",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "GOBIERNO DEL ESTADO DE HIDALGO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "Ixmiquilpan",
+          "normalizado": "IXMIQUILPAN",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "PRESIDENCIA MUNICIPAL DE IXMIQUILPAN, HGO."
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "385",
+          "normalizado": "385.00",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUP. TERRENO: 385 M2"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "052 004 019 0000",
+          "normalizado": "0520040190000",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE: 052-004-019-0000"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "27",
+          "normalizado": "27",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "CERRO AZUL 27"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "22/01/2026",
+          "normalizado": "2026-01-22",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "FECHA: 22/01/2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "Ejercicio 2026",
+          "normalizado": "2026-12-31",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "EJERCICIO FISCAL 2026"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Tesorería Municipal de Ixmiquilpan",
+          "normalizado": "TESORERIA MUNICIPAL IXMIQUILPAN",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "TESORERÍA MUNICIPAL"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "adeudo": {
+            "valor": "$0.00",
+            "normalizado": "0",
+            "evidencia": {
+              "archivo": "Predial Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "ADEUDO ANTERIOR: $0.00"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "PRE-01",
+          "descripcion": "Predial pagado del ejercicio vigente",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "El recibo cubre el ejercicio fiscal 2026.",
+          "evidencias": [
+            {
+              "archivo": "Predial Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "EJERCICIO FISCAL 2026"
+            }
+          ]
+        },
+        {
+          "id_regla": "PRE-03",
+          "descripcion": "El contribuyente es el titular del inmueble",
+          "estado": "no_cumple",
+          "severidad": "revision",
+          "explicacion": "El predial sigue a nombre de la vendedora; el traslado de dominio en catastro no está actualizado.",
+          "evidencias": [
+            {
+              "archivo": "Predial Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "NOMBRE DEL CONTRIBUYENTE: AGUIRRE BELTRAN MERCEDES"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.93
+    },
+    {
+      "archivo": "Alineamiento Ixmiquilpan DEMO.jpg",
+      "tipo": "alineamiento_numero_oficial",
+      "confianza_tipo": 0.81,
+      "legibilidad": "ilegible",
+      "datos": {
+        "propietario": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "direccion": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "entidad_federativa": {
+          "valor": "Hidalgo",
+          "normalizado": "HIDALGO",
+          "evidencia": {
+            "archivo": "Alineamiento Ixmiquilpan DEMO.jpg",
+            "pagina": 1,
+            "cita": "ESTADO DE HIDALGO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "superficie_terreno_m2": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "clave_catastral": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "numero_oficial": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "fecha_emision": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "vigencia_hasta": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "autoridad_emisora": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "especificos": {}
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ALI-01",
+          "descripcion": "Número oficial asignado coincide con la dirección",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "La fotografía del documento está desenfocada; no se puede leer el número oficial.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento Ixmiquilpan DEMO.jpg",
+              "pagina": 1,
+              "cita": "CONSTANCIA DE ALINEAMIENTO Y NÚMERO OFICIAL [resto ilegible]"
+            }
+          ]
+        },
+        {
+          "id_regla": "ALI-02",
+          "descripcion": "Constancia vigente a la fecha de referencia",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "No se leen la fecha de expedición ni la vigencia.",
+          "evidencias": []
+        },
+        {
+          "id_regla": "ALI-03",
+          "descripcion": "Afectaciones o restricciones al predio",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "No se lee la sección de observaciones.",
+          "evidencias": []
+        }
+      ],
+      "confianza": 0.35
+    },
+    {
+      "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+      "tipo": "uso_de_suelo",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Andrés Ignacio Domínguez Luna",
+          "normalizado": "DOMINGUEZ LUNA ANDRES IGNACIO",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "PROPIETARIO: ANDRÉS IGNACIO DOMÍNGUEZ LUNA"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Calle Cerro Azul No. 27, Bo. La Palma",
+          "normalizado": "CALLE CERRO AZUL 27, BARRIO LA PALMA, IXMIQUILPAN, HGO",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "DOMICILIO: CALLE CERRO AZUL NO. 27, BO. LA PALMA"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Hidalgo",
+          "normalizado": "HIDALGO",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "ESTADO DE HIDALGO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "Ixmiquilpan",
+          "normalizado": "IXMIQUILPAN",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "DIRECCIÓN DE OBRAS PÚBLICAS DE IXMIQUILPAN"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "385.00 m²",
+          "normalizado": "385.00",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUPERFICIE: 385.00 M2"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "052 004 019 0000",
+          "normalizado": "0520040190000",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE CATASTRAL 052 004 019 0000"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "27",
+          "normalizado": "27",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "NO. 27"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "6 de marzo de 2026",
+          "normalizado": "2026-03-06",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "IXMIQUILPAN, HGO., 06 DE MARZO DE 2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "6 de marzo de 2027",
+          "normalizado": "2027-03-06",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "VIGENCIA HASTA EL 06 DE MARZO DE 2027"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Dirección de Obras Públicas y Desarrollo Urbano",
+          "normalizado": "DIRECCION DE OBRAS PUBLICAS Y DESARROLLO URBANO",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "DIRECCIÓN DE OBRAS PÚBLICAS Y DESARROLLO URBANO"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "uso_autorizado": {
+            "valor": "Habitacional con comercio en planta baja",
+            "normalizado": "MIXTO",
+            "evidencia": {
+              "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "USO: HABITACIONAL CON COMERCIO EN PLANTA BAJA (H2-C)"
+            },
+            "confianza": 0.93
+          },
+          "giro_autorizado": {
+            "valor": "Comercio básico hasta 120 m²",
+            "normalizado": "COMERCIO BASICO <=120",
+            "evidencia": {
+              "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "GIRO PERMITIDO: COMERCIO BÁSICO HASTA 120 M² DE ÁREA DE VENTA"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "USO-01",
+          "descripcion": "Autoriza el uso comercial requerido",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "Autoriza uso mixto con comercio básico hasta 120 m² de área de venta. Hay que confirmar si el formato de tienda previsto cabe en ese límite.",
+          "evidencias": [
+            {
+              "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "USO: HABITACIONAL CON COMERCIO EN PLANTA BAJA (H2-C)"
+            },
+            {
+              "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "GIRO PERMITIDO: COMERCIO BÁSICO HASTA 120 M² DE ÁREA DE VENTA"
+            }
+          ]
+        },
+        {
+          "id_regla": "USO-02",
+          "descripcion": "Licencia vigente a la fecha de referencia",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Vigente hasta el 06/03/2027.",
+          "evidencias": [
+            {
+              "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+              "pagina": 1,
+              "cita": "VIGENCIA HASTA EL 06 DE MARZO DE 2027"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.9
+    },
+    {
+      "archivo": "Croquis de localizacion DEMO.pdf",
+      "tipo": "otro",
+      "confianza_tipo": 0.88,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "direccion": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "entidad_federativa": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "municipio": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "superficie_terreno_m2": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "clave_catastral": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "numero_oficial": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "fecha_emision": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "vigencia_hasta": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "autoridad_emisora": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "especificos": {}
+      },
+      "hallazgos": [
+        {
+          "id_regla": "EXP-TIPO",
+          "descripcion": "Documento recibido sin análisis",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "No se reconoció como uno de los 4 tipos requeridos.",
+          "evidencias": []
+        }
+      ],
+      "confianza": 0.0
+    }
+  ],
+  "documentos_faltantes": [],
+  "hallazgos_expediente": [
+    {
+      "id_regla": "EXP-01",
+      "descripcion": "El expediente trae los 4 tipos documentales requeridos",
+      "estado": "cumple",
+      "severidad": "info",
+      "explicacion": "Se recibieron los 4 tipos, más un croquis que no corresponde a ninguno.",
+      "evidencias": []
+    },
+    {
+      "id_regla": "EXP-02",
+      "descripcion": "Todos los documentos requeridos son legibles",
+      "estado": "no_cumple",
+      "severidad": "revision",
+      "explicacion": "La constancia de alineamiento y número oficial es una fotografía ilegible; hay que pedir una copia escaneada.",
+      "evidencias": [
+        {
+          "archivo": "Alineamiento Ixmiquilpan DEMO.jpg",
+          "pagina": 1,
+          "cita": "CONSTANCIA DE ALINEAMIENTO Y NÚMERO OFICIAL [resto ilegible]"
+        }
+      ]
+    }
+  ],
+  "inconsistencias": [
+    {
+      "id_regla": "CRU-PRO",
+      "campo": "propietario",
+      "descripcion": "El predial está a nombre de la vendedora (Mercedes Aguirre Beltrán); la escritura y el uso de suelo, a nombre del comprador.",
+      "severidad": "revision",
+      "valores": [
+        {
+          "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+          "tipo": "escritura",
+          "valor": "DOMINGUEZ LUNA ANDRES IGNACIO",
+          "evidencia": {
+            "archivo": "Escritura Ixmiquilpan DEMO.pdf",
+            "pagina": 2,
+            "cita": "y de otra parte el señor ANDRÉS IGNACIO DOMÍNGUEZ LUNA, a quien en lo sucesivo se le denominará EL COMPRADOR"
+          }
+        },
+        {
+          "archivo": "Predial Ixmiquilpan DEMO.pdf",
+          "tipo": "predial",
+          "valor": "AGUIRRE BELTRAN MERCEDES",
+          "evidencia": {
+            "archivo": "Predial Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "NOMBRE DEL CONTRIBUYENTE: AGUIRRE BELTRAN MERCEDES"
+          }
+        },
+        {
+          "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+          "tipo": "uso_de_suelo",
+          "valor": "DOMINGUEZ LUNA ANDRES IGNACIO",
+          "evidencia": {
+            "archivo": "Uso de suelo Ixmiquilpan DEMO.pdf",
+            "pagina": 1,
+            "cita": "PROPIETARIO: ANDRÉS IGNACIO DOMÍNGUEZ LUNA"
+          }
+        }
+      ]
+    }
+  ],
+  "recomendacion": "Requiere revisión",
+  "confianza": 0.71,
+  "resumen": "Escritura, predial y uso de suelo describen el mismo predio (misma clave catastral, dirección y 385 m²), pero el predial sigue a nombre de la vendedora y la constancia de alineamiento es ilegible, así que no se pudo validar el número oficial ni las afectaciones. El uso de suelo permite comercio básico hasta 120 m² de área de venta; hay que confirmar que el formato de tienda quepa en ese límite.",
+  "razones": [
+    "Propietario distinto en el predial (vendedora) frente a escritura y uso de suelo (comprador).",
+    "Constancia de alineamiento y número oficial ilegible: sus 3 reglas quedaron sin evaluar.",
+    "Uso de suelo mixto con comercio básico limitado a 120 m² de área de venta.",
+    "La copia de la escritura no trae la hoja de inscripción en el Registro Público.",
+    "Se recibió un croquis que no es de los 4 tipos requeridos; no se analizó."
+  ]
+}
