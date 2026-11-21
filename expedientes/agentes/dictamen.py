@@ -26,6 +26,7 @@ from statistics import mean
 from typing import Optional
 
 from ..schemas import (
+    CAMPOS_CRUZABLES,
     TIPOS_REQUERIDOS,
     Contexto,
     Dictamen,
@@ -163,6 +164,12 @@ def _confianza(documentos: list[DocumentoAnalizado], faltantes: list[TipoDocumen
     return round(max(0.0, base - PENALIZACION_FALTANTE * len(faltantes)), 2)
 
 
+def _con_datos_cruzables(documentos: list[DocumentoAnalizado]) -> int:
+    """Documentos con al menos un campo que `cruce` pudo comparar."""
+    return sum(1 for d in documentos
+               if any(getattr(d.datos, c).normalizado for c in CAMPOS_CRUZABLES))
+
+
 def _razon(d: Optional[DocumentoAnalizado], h: Hallazgo) -> str:
     origen = f" ({NOMBRE_TIPO[d.tipo]})" if d else ""
     return f"{h.descripcion}{origen}: {h.explicacion}"
@@ -218,8 +225,10 @@ def dictaminar(
     if inconsistencias:
         campos = sorted({i.campo for i in inconsistencias})
         partes.append(f"Entre documentos hay {len(inconsistencias)} inconsistencia(s) en: {', '.join(campos)}.")
-    elif recibidos >= 2:
+    elif _con_datos_cruzables(documentos) >= 2:
         partes.append("Los datos comparables coinciden entre documentos.")
+    else:
+        partes.append("No hubo suficientes datos extraídos para comparar los documentos entre sí.")
 
     return Dictamen(
         expediente_id=expediente_id,

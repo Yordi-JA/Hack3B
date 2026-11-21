@@ -114,3 +114,8 @@ def test_razones_acotadas():
                          for i in range(12)])
     d = _dictaminar(docs)
     assert len(d.razones) == dt.MAX_RAZONES and d.razones[-1].startswith("Y ")
+
+
+def test_sin_datos_no_dice_que_coinciden():
+    d = _dictaminar(_expediente())  # documentos sin datos extraídos
+    assert "No hubo suficientes datos" in d.resumen and "coinciden" not in d.resumen
