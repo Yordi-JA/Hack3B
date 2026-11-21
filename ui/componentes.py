@@ -204,6 +204,11 @@ def saludo(nombre: str, subtitulo: str) -> str:
     )
 
 
+def cabecera(titulo: str, subtitulo: str) -> str:
+    """Encabezado de las demás vistas con la misma banda y tipografía del saludo del inicio."""
+    return f'<div class="saludo"><h1>{txt(titulo)}</h1><p>{txt(subtitulo)}</p></div>'
+
+
 def _pct_entero(parte: int, total: int) -> str:
     return f"{round(100 * parte / total)} %" if total else "0 %"
 
@@ -219,7 +224,7 @@ def kpis_bandeja(ind: L.Indicadores, params: dict[str, str]) -> str:
     tarjetas = [
         f'<a class="kpi kpi-total" href="{escape(url(**base))}" target="_self">'
         f'<span class="kpi-etq">Expedientes analizados</span><b class="kpi-num">{ind.total}</b>'
-        f'<small class="kpi-sub">{txt(" · ".join(sub_total) or "en la bandeja")}</small></a>'
+        f'<small class="kpi-sub">{txt(" · ".join(sub_total) or "en total")}</small></a>'
     ]
     for r in RECS_TABLERO:
         n = ind.por_recomendacion.get(r, 0)

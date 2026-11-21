@@ -423,6 +423,41 @@ h2.lista-titulo small {{ font-size: 13px; font-weight: 600; color: var(--texto2)
 .stApp h3.tour-titulo {{ font-family: var(--f-ui); font-size: 18px; font-weight: 700; color: var(--tinta); margin: 6px 0 6px; padding: 0; }}
 .tour-texto {{ font-size: 14px; line-height: 1.5; color: var(--texto); margin: 0 0 6px; }}
 
+/* Subir expediente con el diseño del inicio (pedido de producto): tarjetas blancas de 16 px,
+   bordes finos, campos redondeados sobre gris claro y tipografía del tablero. Solo sobrescribe
+   el bloque de Subir expediente, que va antes; no lo modifica. */
+.st-key-subir, .st-key-subir p, .st-key-subir label, .st-key-subir input, .st-key-subir button {{ font-family: var(--f-ui); }}
+.st-key-subir {{ max-width: none; }}
+.st-key-subir-marco {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px;
+  padding: 22px 24px 20px; margin-top: 0; }}
+.st-key-subir-marco::before {{ content: "Datos del expediente"; position: static; display: block; transform: none;
+  background: transparent; padding: 0; margin: 0 0 14px; font-family: var(--f-ui); font-weight: 700; font-size: 16px;
+  text-transform: none; color: var(--tinta); }}
+.st-key-subir-nombre [data-testid="stWidgetLabel"] p, .st-key-subir-archivos [data-testid="stWidgetLabel"] p {{
+  font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--texto2); }}
+.st-key-subir-nombre [data-testid="stTextInputRootElement"] {{ height: 44px; border: 1px solid var(--borde);
+  border-radius: 10px; background: var(--panel); }}
+.st-key-subir-nombre [data-testid="stTextInputRootElement"]:focus-within {{ border-color: var(--rojo-osc);
+  box-shadow: 0 0 0 1px var(--rojo-osc); }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] {{ border: 1.5px dashed {t.BORDE}; border-radius: 14px;
+  background: var(--panel); min-height: 200px; }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:hover {{ border-color: var(--rojo-osc); }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] button {{ border-radius: 8px; }}
+.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button {{ border-radius: 8px; min-height: 44px; padding: 0 22px;
+  background: var(--rojo-osc); border-color: var(--rojo-osc); }}
+.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button p {{ color: #fff; font-weight: 700; }}
+.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button:hover {{ background: #A51118; border-color: #A51118; }}
+.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button:disabled {{ background: {t.BORDE}; border-color: {t.BORDE}; }}
+.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button:disabled p {{ color: var(--texto2); }}
+.subir-esperados {{ margin-top: 0; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px;
+  padding: 22px 24px 20px; font-family: var(--f-ui); }}
+.stApp .subir-esperados h3 {{ font-family: var(--f-ui); }}
+.subir-esperados dt {{ display: flex; align-items: center; gap: 8px; }}
+.subir-esperados dt::before {{ content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--rojo-osc); }}
+.subir-esperados dd {{ padding-left: 16px; }}
+.st-key-subir-ejemplo {{ margin-top: 18px; }}
+.subir-ejemplo-texto, .st-key-subir-abrir-ejemplo button p {{ font-family: var(--f-ui); }}
+
 @media (max-width: 1100px) {{
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
   .mx-ventana {{ width: 220px; }}

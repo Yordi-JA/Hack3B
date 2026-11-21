@@ -27,10 +27,10 @@ class Paso:
 
 PASOS: list[Paso] = [
     Paso("Bienvenido a la revisión de expedientes",
-         "En un minuto te mostramos cómo leer la bandeja: indicadores, mapa por estado, filtros y "
+         "En un minuto te mostramos cómo leer el inicio: indicadores, mapa por estado, filtros y "
          "expedientes. Puedes salir del recorrido cuando quieras."),
     Paso("Menú",
-         "Desde aquí vas a la bandeja, subes un expediente nuevo para analizarlo o repites este recorrido.",
+         "Desde aquí vas al inicio, subes un expediente nuevo para analizarlo o repites este recorrido.",
          "nav-bandeja", lateral=True),
     Paso("Indicadores",
          "Cuántos expedientes hay y cuántos cumplen, requieren revisión o no cumplen. Haz clic en una "

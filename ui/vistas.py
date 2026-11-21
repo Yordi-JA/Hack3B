@@ -21,6 +21,8 @@ from . import logica as L
 from . import mapa, store, tour, trabajos
 
 FILTROS = ("entidad", "rec", "q", "ej")
+# Usuario de la demo (no hay inicio de sesión): nombre y rol que se muestran en la barra lateral y el saludo.
+USUARIO = ("Ana Martínez", "Abogada · Expansión")
 TIPOS_ARCHIVO = ["pdf", "png", "jpg", "jpeg", "tif", "tiff"]
 
 
@@ -97,7 +99,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
         )
         html('<div class="lateral-grupo">Principal</div>')
         st.button(
-            "Bandeja", key="nav-bandeja", on_click=ir, args=("bandeja",), icon=":material/map:",
+            "Inicio", key="nav-bandeja", on_click=ir, args=("bandeja",), icon=":material/home:",
             type="primary" if vista == "bandeja" else "secondary", width="stretch",
         )
         st.button(
@@ -117,11 +119,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
         )
         seguimiento()
         avisos_laterales()
-        html(
-            '<p class="lateral-nota">Revisión inicial automática. La decisión final sobre cada expediente '
-            "es del equipo legal.</p>"
-        )
-        html(C.usuario_lateral("Equipo legal", "Tiendas 3B · Expansión"))
+        html(C.usuario_lateral(*USUARIO))
 
 
 def _iniciar_tour() -> None:
@@ -150,7 +148,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     with st.container(key="b-cabecera"):
         cab, buscador = st.columns([3, 2], vertical_alignment="center")
         with cab:
-            html(C.saludo("equipo legal", "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
+            html(C.saludo(USUARIO[0].split()[0], "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
         with buscador:
             st.text_input(
                 "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
@@ -372,7 +370,8 @@ def _documentos_esperados() -> str:
 
 
 def vista_nuevo() -> None:
-    html(C.encabezado("Subir expediente"))
+    with st.container(key="b-cabecera"):  # misma banda de encabezado que el inicio
+        html(C.cabecera("Subir expediente", "Sube los PDF o imágenes de un inmueble y el sistema emite el dictamen con su evidencia."))
     pendiente = _trabajo_pendiente()
     with st.container(key="subir"):
         izq, der = st.columns([1.5, 1], gap="large")
@@ -395,7 +394,7 @@ def vista_nuevo() -> None:
             html(_documentos_esperados())
 
         if pendiente:
-            st.info("Hay un análisis en curso; el avance aparece en la barra lateral. Puedes ir a la bandeja "
+            st.info("Hay un análisis en curso; el avance aparece en la barra lateral. Puedes ir al inicio "
                     "mientras tanto: el dictamen se guarda al terminar y te avisamos.")
         if enviar and not pendiente:
             if not archivos:
@@ -457,12 +456,12 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
     if entrada is None:
         html(C.encabezado("Expediente no encontrado"))
         st.info("No existe un expediente con esa clave. Pudo haberse borrado o renombrado el archivo de resultados.")
-        st.button("Volver a la bandeja", on_click=ir, args=("bandeja",), type="primary")
+        st.button("Volver al inicio", on_click=ir, args=("bandeja",), type="primary")
         return
 
     d: Dictamen = entrada.dictamen
     with st.container(horizontal=True, horizontal_alignment="distribute"):
-        st.button("Volver a la bandeja", on_click=ir, args=("bandeja",))
+        st.button("Volver al inicio", on_click=ir, args=("bandeja",))
         st.download_button(
             "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
             mime="application/json",
