@@ -59,6 +59,14 @@ Reglas del contrato:
 
 ## Arranque
 
+**Un solo comando, Windows o Mac** (crea `.venv`, instala dependencias, crea `.env`, descomprime los zip con los nombres bien y corre la prueba):
+
+```bash
+python configurar.py --zips RUTA/A/LA/CARPETA/DE/LOS/ZIP     # en Windows, si no hay "python": py configurar.py ...
+```
+
+Luego: pegar la `ANTHROPIC_API_KEY` en `.env` y copiar la carpeta `cache/` compartida. Pasos manuales equivalentes:
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
