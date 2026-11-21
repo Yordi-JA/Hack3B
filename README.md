@@ -10,13 +10,13 @@ Que cada responsable la resuelva, la anote aquí y avise en el grupo.
 
 | # | Decisión | Responsable | Para | Estado |
 | :- | :--- | :--- | :--- | :--- |
-| 1 | Proveedor y modelo del LLM, y de quién es la API key con créditos. Propuesta: `claude-opus-5-5` con `effort` bajo en OCR. Ver nota abajo. | Carlos | 10:15 | Pendiente |
+| 1 | Proveedor y modelo del LLM, y de quién es la API key con créditos. | Carlos | 10:15 | **Resuelto:** Anthropic `claude-haiku-5-5` (~40 veces más barato que Opus, ~$2 USD el día) con `effort="low"` y `max_tokens=4000`. Key de Julián con $5 prepagados, sin recarga automática. Ver [Uso de la API](#uso-de-la-api-créditos). |
 | 2 | Langfuse: instancia de la organización, cloud propia o local con Docker. Una cuenta cloud propia recibiría el contenido de los documentos (regla 06). | Juan Pablo | 10:30 | Pendiente |
-| 3 | Orquestador con LangGraph o con LangChain puro. Confirmar con los jueces que LangGraph cuenta como "sobre LangChain". | Carlos | 11:00 | Pendiente |
+| 3 | Orquestador con LangGraph o con LangChain puro. | Carlos → Julián | 11:00 | **Resuelto**: **LangGraph** (`StateGraph`), con los agentes por tipo en paralelo (`Send`) y un **agente auditor** que contrasta lo reportado contra el documento original; si corrige datos, se repite el cruce. Ver [Arquitectura](#arquitectura-langgraph). |
 | 4 | UI en Streamlit (llama directo a `analizar_expediente`, sin API). | Yordi | 10:15 | Propuesto |
 | 5 | Guías y criterios oficiales por tipo: ¿dónde están? Sin ellas las reglas son suposiciones. | Todos | Ya | Pendiente |
-| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | Pendiente |
-| 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | Pendiente |
+| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | **Parcial**: escritura.py manda al modelo máx. 15 páginas (primeras 5 + hasta 10 con palabras clave), pero la ingesta solo leyó las primeras 15 de cada archivo. Las 4 escrituras de 16, 25, 33 y 50 páginas necesitan releerse completas (`--max-paginas 60`, ~$0.05) para que la selección por palabras clave sirva. |
+| 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | **Resuelta**: 2 % o 1 m², la mayor (`cruce.TOLERANCIA_SUP_*`). Más que eso es `CRU-SUP` con severidad revisión. |
 
 Nota sobre el LLM: 57 de 62 PDFs son escaneos, así que el modelo tiene que tener visión. Cambiar de proveedor es cambiar `LLM_PROVIDER` y `LLM_MODEL` en el `.env` (`expedientes/config.py`). Una key nueva tiene límites bajos por minuto: el OCR masivo debe correr con 5-10 llamadas en paralelo como máximo.
 
@@ -27,12 +27,30 @@ Cada quien trabaja en su rama y hace push directo. Para traer cambios del contra
 | Persona | Rama | Archivos |
 | :--- | :--- | :--- |
 | Juan Pablo | `juanpablo/uso-suelo` | `agentes/uso_suelo.py`, `agentes/dictamen.py`, Langfuse |
-| Julián | `julian/predial` | `agentes/predial.py`, `agentes/ingesta.py`, caché OCR |
+| Julián | `julian/predial` | `agentes/predial.py`, `agentes/ingesta.py`, `agentes/escritura.py`, `agentes/auditor.py`, `orquestador.py`, `cache.py`, caché OCR |
 | Diego | `diego/alineamiento` | `agentes/alineamiento.py`, `agentes/cruce.py` |
-| Carlos | `carlos/escrituras` | `agentes/escritura.py`, `orquestador.py`, `config.py` |
+| Carlos | `carlos/escrituras` | UI (con Yordi), `config.py` |
 | Yordi | `yordi/ui` | `app.py` |
 
 Cada quien toca solo sus archivos. `schemas.py` es de todos: si hay que cambiarlo, se avisa, se cambia en `main` y todos hacen `git merge main`.
+
+## Arquitectura (LangGraph)
+
+`expedientes/orquestador.py` arma un `StateGraph` (`python -c "from expedientes import orquestador as o; print(o.diagrama())"`):
+
+```mermaid
+graph TD
+  START([inicio]) --> ingesta
+  ingesta -.->|Send, uno por documento| agente[agente por tipo<br/>escritura · predial · alineamiento · uso de suelo]
+  agente --> consolidar --> cruce[validación cruzada] --> auditor
+  auditor -.->|corrigió datos que se cruzan| cruce
+  auditor -.-> dictamen --> FIN([fin])
+```
+
+- **Agentes por tipo** (LLM): extraen con cita literal y evalúan sus reglas; corren en paralelo (máx. `MAX_AGENTES_PARALELO=5`).
+- **Cruce** (Diego): compara propietario, dirección, superficie, clave y número oficial entre documentos.
+- **Auditor** (`agentes/auditor.py`, sin LLM): revisa lo que reportó cada agente contra el texto original. AUD-01 la cita existe en la página; AUD-02 en datos que se cruzan, el valor aparece en la página (cita real con valor inventado); AUD-03 un rechazo bloqueante sin evidencia baja a revisión. Si descarta datos que se cruzan, el cruce se repite. En los 17 prediales reales revisó 210 datos sin falsos positivos.
+- **Dictamen** (Juan Pablo): consolida por tipo y decide con reglas fijas.
 
 ## Contrato
 
@@ -56,6 +74,33 @@ Reglas del contrato:
 - Un documento `ILEGIBLE` no extrae datos inventados: sus reglas salen `NO_EVALUABLE`.
 
 `ejemplos/dictamen_ejemplo.json` es un dictamen completo con datos inventados. La UI se construye sobre él con `analizar_expediente([], usar_ejemplo=True)`.
+
+## Uso de la API (créditos)
+
+Hay **$5 USD prepagados para todo el equipo** y no se recargan solos: si se acaban, la API deja de responder para los 5. Con estas reglas el día completo cuesta ~$2.
+
+**Modelo**
+
+1. **`claude-haiku-5-5` para todo** (`LLM_MODEL` en el `.env`). Subir un agente a Sonnet u Opus solo si se demuestra que Haiku falla en ese caso, y avisando antes en el grupo: Opus cuesta 40 veces más.
+2. **`effort="low"` y `max_tokens` acotado** (≈4000 para extracción) al pedir el modelo: `get_llm(effort="low", max_tokens=4000)`.
+
+**No repetir trabajo**
+
+3. **Nadie corre OCR.** El texto de los 63 documentos ya está en `cache/` (se comparte por Drive). Las imágenes nunca se vuelven a mandar al modelo; los agentes trabajan sobre el texto.
+4. **Desarrollar contra un solo expediente** (los sintéticos `01–04` son ideales). Correr los 63 documentos solo en la integración de las 13:00 y en la demo.
+5. **Guardar en disco lo que ya respondió el modelo** mientras se desarrolla (ej. `cache/analisis/<archivo>.json`) y leerlo de ahí si el documento y el prompt no cambiaron. Cambiar código que no toca el prompt no debe costar llamadas.
+6. **`pytest` nunca llama a la API**: las pruebas usan `cache/` o `ejemplos/`.
+
+**Llamadas eficientes**
+
+7. **Una llamada por documento** con todos los campos juntos (`with_structured_output(..., method="json_schema")`), no una por campo.
+8. **Mandar solo el texto necesario**: las páginas que tienen datos del inmueble, no anexos, planos ni hojas en blanco (`notas` del caché dice qué páginas son de otro tipo o ilegibles).
+9. **Lo que se resuelve con código no va al LLM**: fechas, vigencias, aritmética de superficies, normalización de nombres y direcciones, comparaciones exactas. El LLM solo extrae y juzga casos ambiguos.
+10. **Máximo 6 llamadas en paralelo y sin bucles de reintento propios** (LangChain ya reintenta los 429). Un bucle sin tope es la forma más rápida de vaciar el saldo.
+
+**Vigilar**
+
+11. Antes de una corrida grande, avisar en el grupo. El saldo y el gasto se ven en la consola (`Spending & usage`); si se pasa de **$3**, Julián avisa y se para todo lo que no sea demo.
 
 ## Arranque
 
@@ -98,6 +143,9 @@ python -m expedientes.agentes.ingesta --motor tesseract   # respaldo local sin A
 
 - Se puede interrumpir y volver a correr: solo procesa lo que falta.
 - Tope de 15 páginas por documento (`--max-paginas`, decisión 6), anotado en `notas` del `DocumentoLeido`.
+- Páginas borrosas: se mide la nitidez de cada página localmente; bajo el umbral (5.0, calibrado con el set) la página queda `ILEGIBLE` y su texto se descarta, porque el modelo "lee" páginas borrosas inventando datos. Así los 3 sintéticos `...` salen `ILEGIBLE`.
+- `notas` también dice qué páginas son de otro tipo (ej. un predial con la escritura anexa en p2-p4).
+- Resultado con `claude-haiku-5-5`: 63/63 tipos correctos, ~4 min, ~$0.15 USD.
 - Las llamadas del OCR no se mandan a Langfuse salvo con `OCR_LANGFUSE=1` (la traza llevaría la imagen del documento).
 - Para descomprimir los zip en Mac usar doble clic o `ditto -x -k archivo.zip Documentos/`: así los nombres con acento coinciden con las llaves del caché.
 
