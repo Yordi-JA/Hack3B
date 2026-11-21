@@ -116,11 +116,6 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
                 type="primary" if vista in ("detalle", "documento") else "secondary", width="stretch",
                 help="Expediente abierto",
             )
-        html('<div class="lateral-grupo">Ayuda</div>')
-        st.button(
-            "Recorrido guiado", key="nav-tour", on_click=_iniciar_tour, icon=":material/explore:",
-            type="secondary", width="stretch",
-        )
         seguimiento()
         avisos_laterales()
         html(C.usuario_lateral(*USUARIO))
@@ -129,6 +124,16 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
 def _iniciar_tour() -> None:
     tour.iniciar()
     ir("bandeja")
+
+
+def boton_recorrido() -> None:
+    """Botón flotante con la cara del gallo 3B para abrir el recorrido guiado. Se oculta mientras el
+    recorrido está activo, para no tapar sus tarjetas."""
+    if tour.activo() is not None:
+        return
+    with st.container(key="tour-fab-caja", horizontal=True, vertical_alignment="center", gap="small"):
+        st.button("¿Cómo se usa?", key="tour-fab-etiqueta", on_click=_iniciar_tour)
+        st.button("Ver recorrido guiado", key="tour-fab", on_click=_iniciar_tour)
 
 
 # ------------------------------------------------------------------ bandeja
@@ -684,4 +689,5 @@ def main() -> None:
         vista_estado(entradas, st.query_params.get("entidad"))
     else:
         vista_bandeja(entradas, invalidos)
+    boton_recorrido()  # antes del paisaje: el paisaje tiene que ser lo último para llegar al borde del panel
     st.html(C.paisaje())  # pie de todas las vistas, también los estados vacíos y "no encontrado"

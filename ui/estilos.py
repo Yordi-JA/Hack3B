@@ -5,6 +5,10 @@ contenido va sobre blanco o gris muy claro. La tinta solo se usa como color de t
 """
 from __future__ import annotations
 
+import base64
+from functools import lru_cache
+from pathlib import Path
+
 from . import tokens as t
 
 TONOS = {"verde": t.VERDE, "ambar": t.AMBAR, "vino": t.VINO, "azul": t.AZUL, "gris": t.GRIS}
@@ -24,6 +28,19 @@ def _css_tonos() -> str:
         # Sobre la tarjeta roja del dictamen el sello se invierte: bloque blanco, texto del estado.
         reglas.append(f".marco-dictamen .sello-{nombre}{{color:{tono.texto};background:#fff;}}")
     return "".join(reglas)
+
+
+GALLO = Path(__file__).resolve().parent / "assets" / "gallo.webp"
+
+
+@lru_cache(maxsize=1)
+def _gallo(_version: int) -> str:
+    return "data:image/webp;base64," + base64.b64encode(GALLO.read_bytes()).decode("ascii")
+
+
+def gallo_uri() -> str:
+    """Cara del gallo 3B (botón del recorrido) como data URI; se cachea por fecha del archivo."""
+    return _gallo(GALLO.stat().st_mtime_ns)
 
 
 def css() -> str:
@@ -350,6 +367,36 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 [data-testid="stMainBlockContainer"]:has(.paisaje) > [data-testid="stVerticalBlock"] {{ flex: 1 0 auto; }}
 [data-testid="stElementContainer"]:has(> .paisaje), [data-testid="stElementContainer"]:has(.paisaje) {{ margin-top: auto; }}
 .paisaje img {{ display: block; width: 100%; height: auto; }}
+
+/* ---- Botón flotante del recorrido: cara del gallo 3B y globo "Cómo se usa" ----
+   Fijo abajo a la derecha en todas las vistas, por debajo de las tarjetas del recorrido (que lo ocultan
+   mientras corre) y de los diálogos de Streamlit. Sin brillo ni animación en bucle. */
+.st-key-tour-fab-caja {{ position: fixed; right: 24px; bottom: 24px; z-index: 900; width: auto !important;
+  max-width: none !important; }}
+.st-key-tour-fab button {{ position: relative; width: 64px; height: 64px; min-height: 64px; padding: 0;
+  border-radius: 50%; border: 3px solid var(--rojo-osc);
+  background: #fff url("{gallo_uri()}") center / cover no-repeat; box-shadow: none; transition: transform .15s ease; }}
+.st-key-tour-fab button p {{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; }}
+.st-key-tour-fab button::after {{ content: "?"; position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--rojo-osc); color: #fff; font: 700 14px/22px var(--f-texto); text-align: center; }}
+.st-key-tour-fab button:hover {{ border-color: #A51118; transform: translateY(-2px); background-color: #fff; }}
+.st-key-tour-fab-etiqueta button {{ position: relative; min-height: 0; padding: 8px 12px; background: #fff;
+  border: 2px solid var(--tinta); border-radius: var(--radio); box-shadow: none; transition: transform .15s ease; }}
+.st-key-tour-fab-etiqueta button p {{ font-size: 14px; font-weight: 700; color: var(--tinta); white-space: nowrap; }}
+.st-key-tour-fab-etiqueta button::after {{ content: ""; position: absolute; right: -7px; top: 50%; width: 10px; height: 10px;
+  background: #fff; border-top: 2px solid var(--tinta); border-right: 2px solid var(--tinta);
+  transform: translateY(-50%) rotate(45deg); }}
+.st-key-tour-fab-etiqueta button:hover {{ transform: translateY(-2px); background: #fff; border-color: var(--rojo-osc); }}
+.st-key-tour-fab-etiqueta button:hover p {{ color: var(--rojo-osc); }}
+.st-key-tour-fab button:focus-visible, .st-key-tour-fab-etiqueta button:focus-visible {{
+  outline: 3px solid var(--tinta); outline-offset: 3px; }}
+@media (prefers-reduced-motion: reduce) {{
+  .st-key-tour-fab button, .st-key-tour-fab-etiqueta button {{ transition: none; }}
+  .st-key-tour-fab button:hover, .st-key-tour-fab-etiqueta button:hover {{ transform: none; }}
+}}
+/* Los avisos de Streamlit salen abajo a la derecha: se suben para que el botón no los tape. */
+[data-testid="stToastContainer"] {{ bottom: 112px !important; }}
 
 /* Streamlit da estilo propio a h1-h3 y p dentro de Markdown; estas reglas ganan por especificidad. */
 .stApp .marco .marco-titulo, .stApp .encabezado h1, .stApp h2.seccion {{ font-family: var(--f-titular); font-weight: 900; }}
