@@ -6,10 +6,12 @@ enlaces del mapa y de las tarjetas, que recargan la página, conserven filtros y
 from __future__ import annotations
 
 import logging
+import re
+import threading
 import time
 import traceback
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Optional
@@ -27,7 +29,15 @@ TIPOS_ARCHIVO = ["pdf", "png", "jpg", "jpeg", "tif", "tiff"]
 
 
 def html(fragmento: str) -> None:
-    st.markdown(fragmento, unsafe_allow_html=True)
+    """Único punto donde entra HTML a st.markdown. Los fragmentos van en una sola línea; si alguno
+    trajera saltos, se quitan aquí para que nada se interprete como Markdown (ver componentes.txt)."""
+    st.markdown(re.sub(r"\s*[\r\n]+\s*", " ", fragmento), unsafe_allow_html=True)
+
+
+def seguro(texto: str) -> str:
+    """Texto de documentos o del usuario para etiquetas que Streamlit interpreta como Markdown
+    (botones, pestañas, avisos): sin corchetes, paréntesis, !, <, > ni comillas invertidas."""
+    return " ".join(re.sub(r"[\[\]()!<>`]", "", texto).split())
 
 
 # ------------------------------------------------------------------ navegación y filtros
@@ -61,7 +71,7 @@ def params_filtros() -> dict[str, str]:
     return {k: st.query_params[k] for k in FILTROS if k in st.query_params}
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4)
 def _cargar_cache(huella: tuple) -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
     return store.cargar()
 
@@ -82,7 +92,7 @@ def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
 def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
     with st.sidebar:
         html(
-            f'<div class="lateral-marca">{C.logo_3b()}<div><b>Revisión de expedientes</b>'
+            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}<div><b>Revisión de expedientes</b>'
             "<small>Tiendas 3B · Expansión</small></div></div>"
         )
         html('<div class="lateral-grupo">Expedientes</div>')
@@ -96,7 +106,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
         )
         if abierto:
             st.button(
-                abierto.dictamen.expediente_id, key="nav-detalle", on_click=ir, args=("detalle", abierto.clave),
+                seguro(abierto.dictamen.expediente_id) or "Expediente abierto", key="nav-detalle", on_click=ir, args=("detalle", abierto.clave),
                 type="primary" if vista == "detalle" else "secondary", use_container_width=True,
                 help="Expediente abierto",
             )
@@ -111,7 +121,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
 def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoInvalido]) -> None:
     cab, buscador = st.columns([3, 2], vertical_alignment="bottom")
     with cab:
-        html(C.encabezado("Bandeja de expedientes", "Lo que requiere atención aparece primero."))
+        html(C.encabezado("Bandeja de expedientes", "Primero los que no cumplen, luego los que requieren revisión."))
     with buscador:
         _filtro("q")
         st.text_input(
@@ -125,7 +135,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     visibles = [e for e in entradas if con_ejemplos or not e.es_ejemplo]
 
     if invalidos:
-        nombres = ", ".join(f"{i.ruta.name} ({i.motivo})" for i in invalidos)
+        nombres = ", ".join(f"{seguro(i.ruta.name)}: {i.motivo}" for i in invalidos)
         st.warning(f"No se pudieron abrir {len(invalidos)} archivo(s) de resultados y no se muestran: {nombres}.")
 
     html(C.kpis(L.indicadores([(e.dictamen, e.es_ejemplo) for e in visibles])))
@@ -195,83 +205,142 @@ def _quitar_filtros() -> None:
 
 
 # ------------------------------------------------------------------ nuevo análisis
+#
+# El análisis real tarda minutos. Corre en un ejecutor de módulo (no en un `with`) y la pantalla lo
+# consulta cada segundo con un fragmento. Así el usuario puede moverse por la app sin bloquear nada
+# y el resultado no se pierde: el hilo guarda el dictamen aunque nadie esté mirando.
+
+_EJECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="analisis")
+_LINEAS_POR_HILO: dict[int, deque] = {}
+_log = logging.getLogger(__name__)
+
 
 class _Bitacora(logging.Handler):
-    """Junta los mensajes de log del análisis para mostrarlos mientras corre."""
-
-    def __init__(self) -> None:
-        super().__init__(level=logging.INFO)
-        self.lineas: deque[str] = deque(maxlen=6)
+    """Copia los mensajes del logger `expedientes` a la bitácora del trabajo del hilo que los emite.
+    Cada trabajo registra su hilo, así una sesión no ve las líneas de otra."""
 
     def emit(self, record: logging.LogRecord) -> None:
-        self.lineas.append(record.getMessage()[:200])
+        lineas = _LINEAS_POR_HILO.get(record.thread)
+        if lineas is not None:
+            lineas.append(record.getMessage()[:200])
+
+
+_logger_expedientes = logging.getLogger("expedientes")
+# Streamlit recarga este módulo al editarlo; se compara por nombre para no duplicar el handler.
+if not any(type(h).__name__ == "_Bitacora" for h in _logger_expedientes.handlers):
+    _logger_expedientes.addHandler(_Bitacora(level=logging.INFO))
+if _logger_expedientes.getEffectiveLevel() > logging.INFO:
+    _logger_expedientes.setLevel(logging.INFO)
 
 
 def _analizar(archivos: list[tuple[str, bytes]], nombre: Optional[str]) -> store.Entrada:
-    """Corre en un hilo aparte: guarda las subidas con su nombre original, analiza y persiste."""
+    """Guarda las subidas con su nombre original, analiza y persiste. Corre en el hilo del ejecutor."""
     from expedientes.orquestador import analizar_expediente  # tarde: un agente roto no tumba la app
 
-    with TemporaryDirectory(prefix="expediente-") as tmp:
+    # Se guarda dentro del `with`: si Windows no puede borrar el temporal (un PDF aún abierto), el
+    # dictamen ya quedó en disco.
+    with TemporaryDirectory(prefix="expediente-", ignore_cleanup_errors=True) as tmp:
         rutas = []
         for nombre_archivo, contenido in archivos:
             destino = Path(tmp) / Path(nombre_archivo).name
             destino.write_bytes(contenido)
             rutas.append(destino)
         dictamen = analizar_expediente(rutas, expediente_id=nombre or None)
-    return store.guardar(dictamen)
+        return store.guardar(dictamen)
 
 
-def _correr_con_estado(etiqueta: str, funcion, *args):
-    """Ejecuta `funcion` en un hilo y muestra tiempo transcurrido y bitácora. Devuelve (resultado, error)."""
-    bitacora = _Bitacora()
-    logger = logging.getLogger("expedientes")
-    nivel_previo = logger.level
-    logger.addHandler(bitacora)
-    if logger.getEffectiveLevel() > logging.INFO:
-        logger.setLevel(logging.INFO)
-    inicio = time.monotonic()
+def _en_hilo(lineas: deque, funcion, *args):
+    hilo = threading.get_ident()
+    _LINEAS_POR_HILO[hilo] = lineas
     try:
-        with st.status(etiqueta, expanded=True) as estado:
-            reloj = st.empty()
-            registro = st.empty()
-            with ThreadPoolExecutor(max_workers=1) as hilo:
-                futuro = hilo.submit(funcion, *args)
-                while not futuro.done():
-                    seg = int(time.monotonic() - inicio)
-                    reloj.markdown(f"Tiempo transcurrido: **{seg // 60}:{seg % 60:02d}**")
-                    lineas = list(bitacora.lineas)
-                    registro.caption(
-                        "\n\n".join(lineas) if lineas else
-                        "Leyendo y clasificando los archivos. Una escritura larga puede tardar varios minutos."
-                    )
-                    time.sleep(0.5)
-                error = futuro.exception()
-            if error:
-                estado.update(label="El análisis no terminó", state="error", expanded=False)
-                return None, error
-            estado.update(label="Análisis terminado", state="complete", expanded=False)
-            return futuro.result(), None
+        return funcion(*args)
     finally:
-        logger.removeHandler(bitacora)
-        logger.setLevel(nivel_previo)
+        _LINEAS_POR_HILO.pop(hilo, None)
+
+
+def _registrar_fallo(futuro: Future) -> None:
+    error = futuro.exception()
+    if error is not None:
+        _log.error("Falló el análisis lanzado desde la UI", exc_info=error)
+
+
+def _lanzar(archivos: list[tuple[str, bytes]], nombre: Optional[str]) -> None:
+    lineas: deque = deque(maxlen=6)
+    futuro = _EJECUTOR.submit(_en_hilo, lineas, _analizar, archivos, nombre)
+    futuro.add_done_callback(_registrar_fallo)
+    st.session_state["trabajo"] = {"futuro": futuro, "inicio": time.monotonic(), "lineas": lineas, "n": len(archivos)}
+
+
+def _trabajo_pendiente() -> bool:
+    trabajo = st.session_state.get("trabajo")
+    return bool(trabajo) and not trabajo["futuro"].done()
+
+
+@st.fragment(run_every=1)
+def _seguimiento() -> None:
+    trabajo = st.session_state.get("trabajo")
+    if not trabajo:
+        return
+    futuro: Future = trabajo["futuro"]
+    if futuro.done():
+        del st.session_state["trabajo"]
+        error = futuro.exception()
+        if error is None:
+            ir("detalle", futuro.result().clave)
+        else:
+            st.session_state["error_trabajo"] = error
+        st.rerun(scope="app")
+        return
+    seg = int(time.monotonic() - trabajo["inicio"])
+    plural = "archivo" if trabajo["n"] == 1 else "archivos"
+    estado = f"Analizando {trabajo['n']} {plural}" if futuro.running() else "En espera: hay otro análisis en curso"
+    with st.status(f"{estado} · {seg // 60}:{seg % 60:02d}", expanded=True):
+        lineas = list(trabajo["lineas"])
+        if lineas:
+            st.code("\n".join(lineas), language=None)
+        else:
+            st.write("Leyendo y clasificando los archivos. Una escritura larga puede tardar varios minutos.")
+        st.caption("Puedes ir a la bandeja mientras tanto; el resultado se guarda al terminar.")
 
 
 def _mostrar_error(error: BaseException) -> None:
-    logging.getLogger(__name__).error("Falló el análisis desde la UI", exc_info=error)
     if isinstance(error, NotImplementedError):
         st.error(
             "El análisis automático todavía no está disponible en esta versión: falta implementar alguno de "
             "los agentes. Mientras tanto puedes abrir el dictamen de ejemplo."
         )
     else:
-        detalle = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
         st.error(
-            f"No se pudo analizar el expediente ({detalle}).\n\n"
-            "Revisa que los archivos sean PDF o imágenes legibles y vuelve a intentarlo. Si el error se repite, "
-            "comparte el detalle técnico con quien mantiene los agentes."
+            "No se pudo analizar el expediente. Revisa que los archivos sean PDF o imágenes legibles y vuelve "
+            "a intentarlo. Si el error se repite, comparte el detalle técnico con quien mantiene los agentes."
         )
     with st.expander("Detalle técnico"):
         st.code("".join(traceback.format_exception(error)), language=None)
+
+
+def _archivos_validos(archivos) -> list[tuple[str, bytes]]:
+    """Quita nombres que Windows no acepta y repetidos, avisando cuáles se omitieron."""
+    validos: dict[str, tuple[str, bytes]] = {}
+    omitidos, repetidos = [], []
+    for a in archivos:
+        nombre = Path(a.name).name
+        if store.nombre_reservado(a.name) or store.nombre_reservado(Path(nombre).stem):
+            omitidos.append(a.name)
+        elif nombre in validos:
+            repetidos.append(nombre)
+        else:
+            validos[nombre] = (nombre, a.getvalue())
+    if omitidos:
+        st.warning(
+            "Se omitieron archivos con un nombre que Windows no acepta (por ejemplo CON, NUL o con dos puntos): "
+            + ", ".join(seguro(n) for n in omitidos) + ". Cámbiales el nombre y súbelos de nuevo."
+        )
+    if repetidos:
+        st.warning(
+            "Hay archivos con el mismo nombre y solo se analizará uno de cada uno: "
+            + ", ".join(seguro(n) for n in sorted(set(repetidos))) + "."
+        )
+    return list(validos.values())
 
 
 def vista_nuevo() -> None:
@@ -280,6 +349,7 @@ def vista_nuevo() -> None:
         "Sube los archivos de un expediente: Escritura, Predial, Alineamiento y Número Oficial, y Uso de Suelo.",
     ))
     st.write("")
+    pendiente = _trabajo_pendiente()
     with st.form("nuevo", border=False):
         nombre = st.text_input(
             "Nombre del expediente (opcional)", max_chars=80,
@@ -288,37 +358,34 @@ def vista_nuevo() -> None:
         )
         archivos = st.file_uploader(
             "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
-            help="PDF o imagen. El sistema identifica el tipo de cada archivo; conserva el nombre original.",
+            help="PDF o imagen. No hace falta renombrarlos: el sistema reconoce el tipo de cada archivo.",
         )
-        enviar = st.form_submit_button("Analizar expediente", type="primary")
+        enviar = st.form_submit_button("Analizar expediente", type="primary", disabled=pendiente)
 
-    if enviar:
+    if enviar and not pendiente:
         if not archivos:
             st.warning("Agrega al menos un archivo del expediente antes de analizar.")
         else:
-            nombres = [a.name for a in archivos]
-            repetidos = sorted({n for n in nombres if nombres.count(n) > 1})
-            if repetidos:
-                st.warning(f"Hay archivos con el mismo nombre y solo se analizará uno de cada uno: {', '.join(repetidos)}.")
-            datos = list({a.name: (a.name, a.getvalue()) for a in archivos}.values())
-            plural = "archivo" if len(datos) == 1 else "archivos"
-            entrada, error = _correr_con_estado(
-                f"Analizando {len(datos)} {plural}", _analizar, datos, nombre.strip() or None
-            )
-            if error:
-                _mostrar_error(error)
-            else:
-                ir("detalle", entrada.clave)
+            datos = _archivos_validos(archivos)
+            if datos:
+                _lanzar(datos, nombre.strip() or None)
                 st.rerun()
 
+    _seguimiento()
+    error = st.session_state.pop("error_trabajo", None)
+    if error is not None:
+        _mostrar_error(error)
+
     html(C.seccion("Probar con el dictamen de ejemplo", "ejemplo",
-                   "Corre el flujo con el dictamen de ejemplo del equipo, sin subir archivos ni llamar a los agentes."))
+                   "Abre un dictamen ya generado para ver la pantalla de resultados sin subir archivos."))
     if st.button("Abrir dictamen de ejemplo"):
-        resultado, error = _correr_con_estado("Cargando dictamen de ejemplo", _ejemplo)
-        if error:
-            _mostrar_error(error)
+        try:
+            clave = _ejemplo()
+        except Exception as e:  # el orquestador es de otro equipo: si falla, se muestra y se registra
+            _log.error("No se pudo abrir el dictamen de ejemplo", exc_info=e)
+            _mostrar_error(e)
         else:
-            ir("detalle", resultado)
+            ir("detalle", clave)
             st.rerun()
 
 
@@ -339,10 +406,8 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
         return
 
     d: Dictamen = entrada.dictamen
-    volver, descargar = st.columns([1, 1])
-    with volver:
+    with st.container(horizontal=True, horizontal_alignment="distribute"):
         st.button("Volver a la bandeja", on_click=ir, args=("bandeja",))
-    with descargar:
         st.download_button(
             "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
             mime="application/json",
@@ -360,6 +425,9 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
     html(C.seccion("Requisitos cumplidos y no cumplidos", "requisitos",
                    "Un requisito se da por cumplido si algún archivo de su tipo lo cumple."))
     html(C.resumen_requisitos(reqs))
+    avisos = C.avisos_sin_analizar(d)
+    if avisos:
+        html(avisos)
     html(C.tabla_requisitos(reqs))
 
     html(C.seccion("Inconsistencias entre documentos", "inconsistencias",
@@ -377,12 +445,10 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
     html(C.seccion("Criterios y validaciones", "criterios",
                    "Cada regla evaluada, con su explicación y la cita del documento que la sustenta."))
     pestañas = [("Expediente", d.hallazgos_expediente)]
-    tipos = [doc.tipo for doc in d.documentos]
     for doc in d.documentos:
-        nombre = L.NOMBRE_TIPO_CORTO[doc.tipo]
-        if tipos.count(doc.tipo) > 1:
-            nombre = f"{nombre}: {doc.archivo[:28]}"
-        pestañas.append((nombre, doc.hallazgos))
+        raiz = seguro(Path(doc.archivo).stem)
+        corto = raiz if len(raiz) <= 22 else raiz[:21].rstrip() + "…"
+        pestañas.append((f"{L.NOMBRE_TIPO_CORTO[doc.tipo]} · {corto}", doc.hallazgos))
     etiquetas = [f"{n} ({len(h)})" for n, h in pestañas]
     for tab, (_, hallazgos) in zip(st.tabs(etiquetas), pestañas):
         with tab:

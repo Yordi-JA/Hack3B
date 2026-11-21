@@ -636,7 +636,7 @@
   ],
   "recomendacion": "No cumple",
   "confianza": 0.82,
-  "resumen": "No cumple porque falta la Licencia de Uso de Suelo y el predial reporta un adeudo de $14,862.00 de ejercicios anteriores. Además, la constancia de alineamiento asigna el número 17 mientras la escritura y el predial dicen 15; hay que aclarar si es el mismo predio. Un segundo recibo de predial (2024) no se pudo analizar y debe revisarse a mano.",
+  "resumen": "Falta la Licencia de Uso de Suelo y el predial reporta un adeudo de $14,862.00 de ejercicios anteriores. Además, la constancia de alineamiento asigna el número 17 mientras la escritura y el predial dicen 15; hay que aclarar si es el mismo predio. Un segundo recibo de predial (2024) no se pudo analizar y debe revisarse a mano.",
   "razones": [
     "Falta la Licencia de Uso de Suelo (bloqueante).",
     "Adeudo de predial de ejercicios anteriores por $14,862.00 (bloqueante).",

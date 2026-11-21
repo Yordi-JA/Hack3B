@@ -60,3 +60,4 @@ desktop.ini
 resultados/
 # Material de referencia visual del equipo, no se versiona.
 REFERENCIA/
+.streamlit/secrets.toml

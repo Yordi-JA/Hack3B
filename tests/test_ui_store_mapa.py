@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 
 from expedientes.orquestador import analizar_expediente
@@ -96,11 +97,31 @@ def test_html_escapa_datos_de_documentos_y_no_deja_lineas_en_blanco():
 
 
 def test_contraste_de_etiquetas_cumple_aa():
-    for tono in (t.VERDE, t.AMBAR, t.VINO, t.AZUL, t.GRIS):
-        assert t.contraste(tono.texto, tono.fondo) >= 4.5
-        assert t.contraste(tono.oscuro, t.TARJETA_OSCURA) >= 4.5
-    assert t.contraste("#FFFFFF", t.ROJO_3B_OSCURO) >= 4.5
-    assert t.contraste(t.TEXTO_SOBRE_OSCURO_2, t.TARJETA_OSCURA) >= 4.5
+    estados = (t.VERDE, t.AMBAR, t.VINO, t.AZUL, t.GRIS)
+    for tono in estados:
+        assert t.contraste(tono.texto, tono.fondo) >= 4.5            # etiqueta suave
+        assert t.contraste("#FFFFFF", tono.texto) >= 4.5              # sello sobre fondo claro
+        assert t.contraste(tono.texto, "#FFFFFF") >= 4.5              # sello blanco sobre la tarjeta roja
+    pares = [
+        ("#FFFFFF", t.ROJO_3B_SIDEBAR),   # texto de la barra lateral y foco blanco
+        ("#FFFFFF", t.ROJO_3B_OSCURO),    # tarjeta del dictamen, KPI principal, botón principal
+        (t.ROJO_3B_OSCURO, "#FFFFFF"),    # botón blanco dentro del dictamen, texto rojo sobre blanco
+        (t.ROJO_3B_OSCURO, t.PANEL),      # pestaña activa de la navegación
+        (t.TINTA_3B, "#FFFFFF"), (t.TINTA_3B, t.PANEL),
+        (t.TEXTO, t.PANEL), (t.TEXTO_2, t.PANEL), (t.TEXTO_2, "#FFFFFF"),
+    ]
+    for texto, fondo in pares:
+        assert t.contraste(texto, fondo) >= 4.5, (texto, fondo)
+    assert t.contraste("#FFFFFF", t.ROJO_3B) < 4.5  # por eso la barra usa ROJO_3B_SIDEBAR
+
+
+def test_no_quedan_superficies_oscuras():
+    raiz = Path(__file__).resolve().parent.parent
+    fuentes = "".join((raiz / "ui" / f).read_text(encoding="utf-8")
+                      for f in ("tokens.py", "estilos.py", "componentes.py", "mapa.py"))
+    for viejo in ("#0A2C29", "#163D39", "#06231F", "#1D4641", "#21504B", "TARJETA_OSCURA", "oscuro="):
+        assert viejo not in fuentes, viejo
+    assert "background: var(--tinta)" not in fuentes
 
 
 # ------------------------------------------------------------------ flujo de análisis (sin Streamlit en pantalla)

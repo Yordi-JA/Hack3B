@@ -101,6 +101,7 @@ class Ubicacion:
     municipio: Optional[str]         # normalizado mayoritario
     confirmada: bool                 # todos los documentos que la mencionan coinciden
     valores: list[str] = field(default_factory=list)  # entidades distintas encontradas, mayoritaria primero
+    municipio_valor: Optional[str] = None  # el municipio como lo escribe el documento (con acentos)
 
 
 def _mayoritario(valores: list[str]) -> tuple[Optional[str], bool]:
@@ -132,12 +133,18 @@ def consolidar_ubicacion(dictamen: Dictamen) -> Ubicacion:
         for d in dictamen.documentos
     ]
     municipio, empate_mun = _mayoritario([m for m in municipios if m])
+    municipio_valor = next(
+        (d.datos.municipio.valor for d, m in zip(dictamen.documentos, municipios)
+         if municipio and m == municipio and d.datos.municipio.valor),
+        None,
+    )
 
     return Ubicacion(
         entidad=None if empate else entidad,
         municipio=None if empate_mun else municipio,
         confirmada=len(distintas) == 1,
         valores=distintas,
+        municipio_valor=None if empate_mun else municipio_valor,
     )
 
 
@@ -151,24 +158,27 @@ class Requisito:
     severidad: Severidad
     archivos: list[str]
     hallazgos: list[Hallazgo]
+    tipo: Optional[TipoDocumento] = None  # None: regla del expediente completo
 
 
 def consolidar_requisitos(dictamen: Dictamen) -> list[Requisito]:
-    """Un requisito por id de regla, siguiendo el contrato: se cumple si algún archivo lo cumple.
+    """Un requisito por (tipo, id de regla), siguiendo el contrato: se cumple si algún archivo de ese
+    tipo lo cumple. Las reglas de `hallazgos_expediente` van con tipo None.
 
     Si ninguno lo cumple y alguno lo incumple, no cumple; si no, queda no evaluable.
-    Los avisos de proceso (EXP-ERROR, EXP-TIPO) se excluyen: se muestran con su documento.
+    Los avisos de proceso (EXP-ERROR, EXP-TIPO) se excluyen: se muestran con su documento, y
+    `archivos_sin_analizar` dice qué tipos pueden tener requisitos incompletos por eso.
     Orden: no cumple, no evaluable, cumple; dentro de cada grupo, más severo primero.
     """
-    grupos: dict[str, list[tuple[Optional[str], Hallazgo]]] = {}
+    grupos: dict[tuple[Optional[TipoDocumento], str], list[tuple[Optional[str], Hallazgo]]] = {}
     for h in dictamen.hallazgos_expediente:
-        grupos.setdefault(h.id_regla, []).append((None, h))
+        grupos.setdefault((None, h.id_regla), []).append((None, h))
     for doc in dictamen.documentos:
         for h in doc.hallazgos:
-            grupos.setdefault(h.id_regla, []).append((doc.archivo, h))
+            grupos.setdefault((doc.tipo, h.id_regla), []).append((doc.archivo, h))
 
     requisitos = []
-    for id_regla, items in grupos.items():
+    for (tipo, id_regla), items in grupos.items():
         if id_regla in REGLAS_DE_PROCESO:
             continue
         hallazgos = [h for _, h in items]
@@ -182,11 +192,22 @@ def consolidar_requisitos(dictamen: Dictamen) -> list[Requisito]:
         decisivos = [h for h in hallazgos if h.estado == estado]
         severidad = max((h.severidad for h in decisivos), key=_RANGO_SEVERIDAD.__getitem__)
         archivos = list(dict.fromkeys(a for a, _ in items if a))
-        requisitos.append(Requisito(id_regla, decisivos[0].descripcion, estado, severidad, archivos, hallazgos))
+        requisitos.append(
+            Requisito(id_regla, decisivos[0].descripcion, estado, severidad, archivos, hallazgos, tipo)
+        )
 
     orden_estado = {EstadoRegla.NO_CUMPLE: 0, EstadoRegla.NO_EVALUABLE: 1, EstadoRegla.CUMPLE: 2}
     requisitos.sort(key=lambda r: (orden_estado[r.estado], -_RANGO_SEVERIDAD[r.severidad], r.id_regla))
     return requisitos
+
+
+def sin_analizar(doc: DocumentoAnalizado) -> bool:
+    """El agente de este archivo falló: sus datos vienen vacíos y sus reglas no se evaluaron."""
+    return any(h.id_regla == "EXP-ERROR" for h in doc.hallazgos)
+
+
+def archivos_sin_analizar(dictamen: Dictamen) -> list[DocumentoAnalizado]:
+    return [d for d in dictamen.documentos if sin_analizar(d)]
 
 
 def contar_por_estado(hallazgos: Iterable[Hallazgo]) -> dict[EstadoRegla, int]:
@@ -215,6 +236,12 @@ def documentos_por_tipo(dictamen: Dictamen) -> list[TipoRecibido]:
     return [
         TipoRecibido(t, [d.archivo for d in dictamen.documentos if d.tipo == t]) for t in TIPOS_REQUERIDOS
     ]
+
+
+def tipo_sin_analizar(dictamen: Dictamen, tipo: TipoDocumento) -> bool:
+    """Se recibió al menos un archivo del tipo y ninguno se pudo analizar."""
+    docs = [d for d in dictamen.documentos if d.tipo == tipo]
+    return bool(docs) and all(sin_analizar(d) for d in docs)
 
 
 def faltantes(dictamen: Dictamen) -> list[TipoDocumento]:
@@ -261,24 +288,26 @@ def filas_datos(dictamen: Dictamen) -> list[tuple[str, list[Optional[Campo]]]]:
     return filas
 
 
-def valores_discrepantes(celdas: list[Optional[Campo]]) -> set[int]:
-    """Índices cuyo `normalizado` difiere del más frecuente (los None no cuentan)."""
-    normalizados = [c.normalizado for c in celdas if c and c.normalizado]
-    if len(set(normalizados)) < 2:
-        return set()
-    comun, _ = Counter(normalizados).most_common(1)[0]
-    return {i for i, c in enumerate(celdas) if c and c.normalizado and c.normalizado != comun}
-
-
-def valores_inconsistencia_discrepantes(valores: list[Optional[str]]) -> set[int]:
-    """Igual que `valores_discrepantes` pero para Inconsistencia.valores (texto ya comparable)."""
+def _discrepantes(valores: list[Optional[str]]) -> set[int]:
+    """Índices cuyo valor difiere del más frecuente. Con empate en el primer lugar no hay mayoría y
+    se marcan todos los que tienen valor. Los vacíos no cuentan."""
     presentes = [v for v in valores if v]
     if len(set(presentes)) < 2:
         return set()
     conteo = Counter(presentes).most_common()
-    if len(conteo) > 1 and conteo[0][1] == conteo[1][1]:
-        return {i for i, v in enumerate(valores) if v}  # empate: todos discrepan entre sí
+    if conteo[0][1] == conteo[1][1]:
+        return {i for i, v in enumerate(valores) if v}
     return {i for i, v in enumerate(valores) if v and v != conteo[0][0]}
+
+
+def valores_discrepantes(celdas: list[Optional[Campo]]) -> set[int]:
+    """Para la tabla de datos: compara `normalizado` de cada celda."""
+    return _discrepantes([c.normalizado if c else None for c in celdas])
+
+
+def valores_inconsistencia_discrepantes(valores: list[Optional[str]]) -> set[int]:
+    """Para Inconsistencia.valores (texto ya comparable)."""
+    return _discrepantes(valores)
 
 
 # ------------------------------------------------------------------ bandeja

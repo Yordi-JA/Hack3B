@@ -134,13 +134,23 @@ def _tooltip(clave: str, conteo: Optional[ConteoEntidad]) -> str:
     return f"{nombre}: {conteo.total} {plural} ({', '.join(partes)})"
 
 
+def etiqueta_accesible(clave: str, conteo: ConteoEntidad) -> str:
+    """Para lectores de pantalla: 'Hidalgo: 1 expediente, requiere revisión'."""
+    plural = "expediente" if conteo.total == 1 else "expedientes"
+    partes = [
+        f"{n} {r.value.lower()}" if conteo.total > 1 else r.value.lower()
+        for r in reversed(ORDEN_GRAVEDAD) if (n := conteo.por_recomendacion.get(r))
+    ]
+    return f"{nombre_entidad(clave)}: {conteo.total} {plural}, {', '.join(partes)}"
+
+
 def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], params_base: dict[str, str]) -> str:
     """Mapa completo. Cada estado con expedientes es un enlace que filtra la bandeja."""
     geo = _geometria()
     rellenos = relleno_por_entidad(conteos)
     x, y, w, h = caja_de_datos(list(conteos))
     partes = [
-        f'<svg class="mx-mapa" viewBox="{x} {y} {w} {h}" role="img" '
+        f'<svg class="mx-mapa" viewBox="{x} {y} {w} {h}" role="group" '
         f'aria-label="Mapa de expedientes por entidad federativa" xmlns="http://www.w3.org/2000/svg">'
     ]
     etiquetas = []
@@ -157,7 +167,10 @@ def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], par
         if conteo and conteo.total:
             nuevo = dict(params_base, entidad="" if clave == seleccion else clave)
             href = "?" + urlencode({k: v for k, v in nuevo.items() if v})
-            trazo = f'<a href="{escape(href)}" target="_self" class="mx-enlace">{trazo}</a>'
+            trazo = (
+                f'<a href="{escape(href)}" target="_self" class="mx-enlace" '
+                f'aria-label="{escape(etiqueta_accesible(clave, conteo))}">{trazo}</a>'
+            )
             x, y = estado.get("etiqueta", [0, 0])
             etiquetas.append(
                 f'<text class="mx-num" x="{x}" y="{y}" text-anchor="middle" dominant-baseline="central">'

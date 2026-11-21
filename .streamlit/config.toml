@@ -5,10 +5,11 @@ primaryColor = "#C0141B"
 backgroundColor = "#F4F5F1"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#16201F"
+borderColor = "#7D8783"
 font = "sans serif"
 
 [theme.sidebar]
-backgroundColor = "#04211F"
+backgroundColor = "#D9161E"
 textColor = "#FFFFFF"
 
 [client]
@@ -18,3 +19,12 @@ showErrorDetails = "type"  # sin trazas en pantalla; la traza queda en la consol
 [browser]
 gatherUsageStats = false
 
+
+[server]
+# Solo este equipo: sin esto Streamlit escucha en todas las interfaces y cualquiera en la red
+# podría subir archivos o leer dictámenes (regla 06).
+address = "127.0.0.1"
+port = 8501
+headless = true
+# MB por archivo. Una escritura escaneada de 50 páginas cabe de sobra.
+maxUploadSize = 50
