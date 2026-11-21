@@ -24,6 +24,7 @@ from expedientes.schemas import (
     TipoDocumento,
 )
 
+from . import decisiones as Dec
 from . import logica as L
 from . import mapa
 from . import tokens as t
@@ -146,6 +147,90 @@ def tarjeta_expediente(clave: str, d: Dictamen, es_ejemplo: bool) -> str:
 
 def lista_expedientes(items: Iterable[tuple[str, Dictamen, bool]]) -> str:
     return '<div class="lista">' + "".join(tarjeta_expediente(*i) for i in items) + "</div>"
+
+
+# ------------------------------------------------------------------ tabla de expedientes (repositorio)
+#
+# Una fila por expediente para que la vista aguante miles de registros: encabezado fijo con el
+# nombre de cada columna, filas compactas que abren el detalle y paginación.
+
+COLUMNAS_TABLA = ("Expediente", "Ubicación", "Recomendación", "Estatus", "Documentos", "Inconsistencias", "Confianza", "Análisis")
+
+
+def insignia_estatus(e: "Dec.Estatus") -> str:
+    return f'<span class="insignia est-{clase_tono(Dec.TONO[e])}" style="background:{Dec.TONO[e].fondo}">{txt(e.value)}</span>'
+
+
+def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Estatus") -> str:
+    u = L.consolidar_ubicacion(d)
+    recibidos = sum(1 for tr in L.documentos_por_tipo(d) if tr.recibido)
+    tono = t.ESTADO[d.recomendacion]
+    ejemplo = ' <small class="t-ej">Ejemplo</small>' if es_ejemplo else ""
+    celdas = (
+        f'<span class="t-id">{txt(d.expediente_id)}{ejemplo}</span>',
+        f'<span class="t-lugar">{txt(texto_ubicacion(u))}</span>',
+        f'<span class="t-rec est-{clase_tono(tono)}"><i style="background:{tono.mapa}"></i>{txt(d.recomendacion.value)}</span>',
+        insignia_estatus(estatus),
+        f"<span>{recibidos} de 4</span>",
+        f"<span>{len(d.inconsistencias)}</span>",
+        f"<span>{pct(d.confianza)}</span>",
+        f'<span class="t-fecha">{fecha(d.fecha_analisis)}</span>',
+    )
+    cuerpo = "".join(f'<span class="t-celda" role="cell" data-col="{escape(n)}">{c}</span>' for n, c in zip(COLUMNAS_TABLA, celdas))
+    return f'<a class="t-fila" role="row" href="{escape(url(vista="detalle", exp=clave))}" target="_self">{cuerpo}</a>'
+
+
+def tabla_expedientes(filas: Iterable[tuple[str, Dictamen, bool, "Dec.Estatus"]]) -> str:
+    cab = "".join(f'<span class="t-celda" role="columnheader">{n}</span>' for n in COLUMNAS_TABLA)
+    return (
+        f'<div class="t-tabla" role="table" aria-label="Expedientes"><div class="t-cab" role="row">{cab}</div>'
+        + "".join(fila_expediente(*f) for f in filas)
+        + "</div>"
+    )
+
+
+def paginador(pagina: int, por_pagina: int, total: int, params: dict[str, str]) -> str:
+    """'Mostrando 26-50 de 18 000' y enlaces a la página anterior y siguiente."""
+    paginas = max(1, -(-total // por_pagina))
+    desde = (pagina - 1) * por_pagina + 1 if total else 0
+    hasta = min(pagina * por_pagina, total)
+
+    def enlace(p: int, texto: str) -> str:
+        if p < 1 or p > paginas or p == pagina:
+            return f'<span class="pag-btn pag-off">{texto}</span>'
+        return f'<a class="pag-btn" href="{escape(url(**dict(params, pag=str(p) if p > 1 else "")))}" target="_self">{texto}</a>'
+
+    def miles(n: int) -> str:
+        return f"{n:,}".replace(",", " ")
+
+    return (
+        f'<div class="paginador"><span>Mostrando {miles(desde)}–{miles(hasta)} de {miles(total)}</span>'
+        f'<span class="pag-nav">{enlace(pagina - 1, "‹ Anterior")}'
+        f'<span class="pag-num">Página {miles(pagina)} de {miles(paginas)}</span>{enlace(pagina + 1, "Siguiente ›")}</span></div>'
+    )
+
+
+def tarjeta_decision(dec: Optional["Dec.Decision"]) -> str:
+    """Tarjeta con el estatus vigente del expediente y el comentario que lo explica."""
+    if dec is None:
+        return (
+            f'<div class="decision-actual">{insignia_estatus(Dec.Estatus.SIN_REVISAR)}'
+            '<p class="dec-com">Nadie ha revisado este expediente todavía.</p></div>'
+        )
+    return (
+        f'<div class="decision-actual" style="border-left-color:{Dec.TONO[dec.estatus].texto}">{insignia_estatus(dec.estatus)}'
+        f'<p class="dec-com">{txt(dec.comentario)}</p>'
+        f'<p class="dec-meta">{txt(dec.usuario)} · {dec.cuando:%d/%m/%Y %H:%M}</p></div>'
+    )
+
+
+def historial_decisiones(hist: list["Dec.Decision"]) -> str:
+    filas = "".join(
+        f'<li>{insignia_estatus(h.estatus)} <span class="dec-meta">{txt(h.usuario)} · {h.cuando:%d/%m/%Y %H:%M}</span>'
+        f'<p class="dec-com">{txt(h.comentario)}</p></li>'
+        for h in reversed(hist)
+    )
+    return f'<ul class="dec-historial">{filas}</ul>'
 
 
 def caja_mapa(svg: str, sin_entidad: int) -> str:

@@ -441,10 +441,47 @@ a.kpi.kpi-activo {{ border-color: var(--rojo-osc); box-shadow: inset 0 0 0 2px v
 .estado-mapa svg {{ width: 100%; max-height: 300px; }}
 .st-key-estado-volver button {{ border: 2px solid var(--tinta); border-radius: 6px; }}
 
+/* Tabla de expedientes (repositorio): encabezado con nombre de columna y una fila por expediente. */
+.t-tabla {{ margin-top: 14px; border: 2px solid var(--tinta); border-radius: 6px; overflow: hidden; background: #fff; }}
+.t-cab, a.t-fila {{ display: grid; align-items: center; gap: 12px; padding: 0 16px;
+  grid-template-columns: 1.3fr 1.8fr 1.2fr 1fr .75fr 1.05fr .7fr 1fr; }}
+.t-cab {{ background: var(--panel); color: var(--tinta); border-bottom: 2px solid var(--tinta); font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; min-height: 40px; }}
+a.t-fila {{ min-height: 48px; font-size: 14px; color: var(--texto); text-decoration: none; border-top: 1px solid var(--borde); }}
+a.t-fila:nth-child(odd) {{ background: #FAFBF8; }}
+a.t-fila:hover, a.t-fila:focus {{ background: #FDECEC; color: var(--texto); text-decoration: none; }}
+.t-celda {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 8px 0; }}
+.t-id {{ font-weight: 700; color: var(--tinta); }}
+.t-ej {{ font-size: 11px; font-weight: 600; color: var(--texto2); border: 1px solid var(--borde); border-radius: 4px; padding: 0 4px; margin-left: 4px; }}
+.t-rec {{ font-weight: 700; }}
+.t-rec i {{ display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; }}
+.t-fecha {{ color: var(--texto2); font-size: 13px; }}
+.insignia {{ display: inline-block; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px; }}
+.paginador {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  font-size: 13px; color: var(--texto2); margin: 12px 0 0; }}
+.pag-nav {{ display: flex; align-items: center; gap: 10px; }}
+.pag-btn {{ border: 2px solid var(--tinta); border-radius: 6px; padding: 4px 12px; font-weight: 700; color: var(--tinta);
+  text-decoration: none; background: #fff; }}
+a.pag-btn:hover {{ background: var(--verde); border-color: var(--verde); color: var(--tinta); text-decoration: none; }}
+.pag-btn.pag-off {{ opacity: .35; }}
+.st-key-estado-filtros {{ margin-top: 18px; }}
+
+/* Decisión de la abogada en el detalle. */
+.decision-actual {{ border: 2px solid var(--tinta); border-left-width: 8px; border-radius: 6px; background: #fff;
+  padding: 14px 18px; margin: 10px 0 14px; }}
+.decision-actual .insignia {{ font-size: 14px; padding: 3px 14px; }}
+.dec-com {{ font-size: 15px; line-height: 1.45; color: var(--texto); margin: 10px 0 4px; white-space: normal; }}
+.dec-meta {{ font-size: 12px; color: var(--texto2); margin: 0; }}
+.dec-historial {{ list-style: none; padding: 0; margin: 0; }}
+.dec-historial li {{ border-top: 1px solid var(--borde); padding: 10px 0; }}
+.dec-historial li:first-child {{ border-top: 0; }}
+
 @media (max-width: 1100px) {{
   .estado-resumen {{ grid-template-columns: 1fr; }}
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
   .mapa-cuerpo {{ grid-template-columns: 1fr; }}
+  .t-cab, a.t-fila {{ grid-template-columns: 1.3fr 1.6fr 1.2fr 1fr .9fr; }}
+  .t-cab .t-celda:nth-child(n+6), a.t-fila .t-celda:nth-child(n+6) {{ display: none; }}
 }}
 
 /* escritorio angosto (1280): más aire para el texto del dictamen */

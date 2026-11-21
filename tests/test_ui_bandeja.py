@@ -74,3 +74,46 @@ def test_resumen_del_estado_marca_el_filtro_activo():
     html = C.resumen_estado(ind, {"vista": "estado", "entidad": "HIDALGO"}, "<svg></svg>", "Hidalgo", "No cumple")
     assert "\n" not in html and "Hidalgo" in html
     assert html.count("kpi-activo") == 1 and "vista=estado" in html and "entidad=HIDALGO" in html
+
+
+# ------------------------------------------------------------------ tabla y decisiones
+
+def test_tabla_una_fila_por_expediente_con_encabezado():
+    from ui import decisiones as Dec
+    d = analizar_expediente([], usar_ejemplo=True)
+    html = C.tabla_expedientes([("ejemplo:a", d, True, Dec.Estatus.RECHAZADO), ("ejemplo:b", d, False, Dec.Estatus.SIN_REVISAR)])
+    assert "\n" not in html and html.count('class="t-fila"') == 2
+    assert all(n in html for n in C.COLUMNAS_TABLA)
+    assert "Rechazado" in html and "Sin revisar" in html and "vista=detalle" in html
+
+
+def test_paginador_limites():
+    html = C.paginador(1, 25, 18000, {"vista": "bandeja", "q": "x"})
+    assert "Mostrando 1–25 de 18 000" in html and "Página 1 de 720" in html
+    assert "pag=2" in html and "q=x" in html and "pag-off" in html  # sin página anterior
+    assert "pag-off" in C.paginador(720, 25, 18000, {}).split("pag-num")[1]  # sin siguiente
+
+
+def test_decision_exige_comentario_y_guarda_historial(tmp_path):
+    from datetime import datetime
+
+    import pytest
+
+    from ui import decisiones as Dec
+    with pytest.raises(ValueError):
+        Dec.registrar("x", Dec.Estatus.RECHAZADO, "   ", "Ana", tmp_path)
+    with pytest.raises(ValueError):
+        Dec.registrar("x", Dec.Estatus.SIN_REVISAR, "algo", "Ana", tmp_path)
+    Dec.registrar("x", Dec.Estatus.EN_REVISION, "Falta el predial", "Ana", tmp_path, datetime(2026, 11, 21, 10))
+    Dec.registrar("x", Dec.Estatus.RECHAZADO, "Uso de suelo vencido", "Ana", tmp_path, datetime(2026, 11, 21, 11))
+    h = Dec.cargar(tmp_path)
+    assert [d.estatus for d in h["x"]] == [Dec.Estatus.EN_REVISION, Dec.Estatus.RECHAZADO]
+    assert Dec.estatus(h, "x") == Dec.Estatus.RECHAZADO and Dec.estatus(h, "otro") == Dec.Estatus.SIN_REVISAR
+    tarjeta = C.tarjeta_decision(Dec.vigente(h, "x"))
+    assert "Rechazado" in tarjeta and "Uso de suelo vencido" in tarjeta and "21/11/2026 11:00" in tarjeta
+
+
+def test_decisiones_archivo_danado_no_rompe(tmp_path):
+    from ui import decisiones as Dec
+    (tmp_path / Dec.ARCHIVO).write_text("{no es json", encoding="utf-8")
+    assert Dec.cargar(tmp_path) == {}

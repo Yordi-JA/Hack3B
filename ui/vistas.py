@@ -18,9 +18,11 @@ from expedientes.schemas import Dictamen, Recomendacion
 
 from . import componentes as C
 from . import logica as L
+from . import decisiones as Dec
 from . import mapa, store, tour, trabajos
 
-FILTROS = ("entidad", "rec", "q", "ej")
+FILTROS = ("entidad", "rec", "est", "q", "ej")
+POR_PAGINA = 25
 # Usuario de la demo (no hay inicio de sesión): nombre y rol que se muestran en la barra lateral y el saludo.
 USUARIO = ("Ana Martínez", "Abogada · Expansión")
 TIPOS_ARCHIVO = ["pdf", "png", "jpg", "jpeg", "tif", "tiff"]
@@ -55,6 +57,7 @@ def _sincronizar(nombre: str) -> None:
         st.query_params[nombre] = valor
     elif nombre in st.query_params:
         del st.query_params[nombre]
+    st.query_params.pop("pag", None)  # con otro filtro, de vuelta a la primera página
 
 
 def ir(vista: str, exp: Optional[str] = None) -> None:
@@ -146,14 +149,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
 
     # Tablero: saludo y buscador, 4 indicadores, mapa en tarjeta con ventana por estado, filtros y lista.
     with st.container(key="b-cabecera"):
-        cab, buscador = st.columns([3, 2], vertical_alignment="bottom")
-        with cab:
-            html(C.encabezado(f"Hola, {USUARIO[0].split()[0]}", "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
-        with buscador:
-            st.text_input(
-                "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
-                placeholder="Buscar expediente, municipio, propietario o archivo", icon=":material/search:",
-            )
+        html(C.encabezado(f"Hola, {USUARIO[0].split()[0]}", "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
 
     if invalidos:
         nombres = ", ".join(f"{seguro(i.ruta.name)}: {i.motivo}" for i in invalidos)
@@ -180,8 +176,22 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         svg = mapa.svg_bandeja(conteos, seleccion, enlace, numeros=False, parametro="mapa")
         html(C.caja_mapa_tablero(svg, ventana, sin_entidad))
 
+    # Repositorio: buscador y filtros justo arriba de la tabla.
+    historial = Dec.cargar()
+    est = _filtro("est")
     filtros = st.container(key="b-filtros")
-    f1, f2, f3 = filtros.columns([1, 1.6, 1.2], vertical_alignment="bottom")
+    b1, f1, b3 = filtros.columns([2, 1, 1], vertical_alignment="bottom")
+    with b1:
+        st.text_input(
+            "Buscar", key="f_q", on_change=_sincronizar, args=("q",),
+            placeholder="Identificador, municipio, propietario o archivo", icon=":material/search:",
+        )
+    with b3:
+        st.selectbox(
+            "Estatus", [""] + [e.value for e in Dec.Estatus], key="f_est", on_change=_sincronizar, args=("est",),
+            format_func=lambda v: v or "Todos",
+        )
+    f2, f3 = filtros.columns([2, 1], vertical_alignment="bottom")
     opciones = [""] + sorted(conteos, key=mapa.nombre_entidad)
     if sin_entidad:
         opciones.append(L.SIN_ENTIDAD)
@@ -205,7 +215,11 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         )
 
     rec = st.session_state.get("f_rec")
-    filtrados = [e for e in base if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
+    filtrados = [
+        e for e in base
+        if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
+        and (not est or Dec.estatus(historial, e.clave).value == est)
+    ]
     filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
     html('<div id="expedientes" class="ancla"></div>')
@@ -219,9 +233,22 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
             st.info("Ningún expediente coincide con los filtros.")
             st.button("Quitar filtros", on_click=_quitar_filtros)
         else:
-            html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+            _tabla(filtrados, historial, enlace)
 
     tour.mostrar(html)
+
+
+def _tabla(filas: list[store.Entrada], historial: dict, params: dict[str, str]) -> None:
+    """Tabla paginada: aguanta miles de expedientes sin volverse una pared de tarjetas."""
+    try:
+        pagina = max(1, int(st.query_params.get("pag", "1")))
+    except ValueError:
+        pagina = 1
+    paginas = max(1, -(-len(filas) // POR_PAGINA))
+    pagina = min(pagina, paginas)
+    tramo = filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
+    html(C.tabla_expedientes((e.clave, e.dictamen, e.es_ejemplo, Dec.estatus(historial, e.clave)) for e in tramo))
+    html(C.paginador(pagina, POR_PAGINA, len(filas), params))
 
 
 # ------------------------------------------------------------------ vista de un estado
@@ -250,14 +277,27 @@ def vista_estado(entradas: list[store.Entrada], clave: Optional[str]) -> None:
     with st.container(key="estado-resumen"):
         html(C.resumen_estado(ind, params, mapa.svg_detalle(clave, color), nombre, rec))
 
-    filtrados = [e for e in del_estado if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
+    historial = Dec.cargar()
+    with st.container(key="estado-filtros"):
+        b1, b2 = st.columns([2, 1], vertical_alignment="bottom")
+        texto = b1.text_input(
+            "Buscar en este estado", key="estado-q", placeholder="Identificador, municipio, propietario o archivo",
+            icon=":material/search:",
+        )
+        est = b2.selectbox("Estatus", [""] + [e.value for e in Dec.Estatus], key="estado-est", format_func=lambda v: v or "Todos")
+    filtrados = [
+        e for e in del_estado
+        if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
+        and (not est or Dec.estatus(historial, e.clave).value == est)
+        and L.coincide(e.dictamen, None, None, texto or "")
+    ]
     filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
     filtro = f" · {rec}" if rec else ""
     html(f'<h2 class="lista-titulo">Expedientes{C.txt(filtro)} <small>{len(filtrados)}</small></h2>')
     if filtrados:
-        html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+        _tabla(filtrados, historial, dict(params, rec=rec or ""))
     else:
-        st.info("Ningún expediente de este estado con esa recomendación.")
+        st.info("Ningún expediente de este estado coincide con la búsqueda y los filtros.")
 
 
 def t_estado(rec: Optional[Recomendacion]) -> str:
@@ -275,7 +315,8 @@ def _volver_inicio(clave: Optional[str]) -> None:
 
 
 def _quitar_filtros() -> None:
-    for nombre in ("entidad", "rec", "q"):
+    st.query_params.pop("pag", None)
+    for nombre in ("entidad", "rec", "est", "q"):
         st.session_state[f"f_{nombre}"] = None if nombre == "rec" else ""
         st.query_params.pop(nombre, None)
 
@@ -518,6 +559,9 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
     # 1. El dictamen
     html(C.tarjeta_dictamen(d, entrada.es_ejemplo, pend))
 
+    # 1b. Decisión de la abogada: estatus vigente en tarjeta y cambio con comentario obligatorio.
+    seccion_decision(entrada)
+
     # 2. Qué hay que resolver: una sola lista, priorizada
     html(C.seccion(f"Qué hay que resolver ({len(pend[0])})", "resolver"))
     html(C.lista_pendientes(d, pend))
@@ -534,6 +578,36 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
         "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
         mime="application/json", type="tertiary", key="detalle-descargar",
     )
+
+
+def seccion_decision(entrada: store.Entrada) -> None:
+    historial = Dec.cargar()
+    hist = historial.get(entrada.clave, [])
+    html(C.seccion("Decisión", "decision", "El sistema recomienda; la decisión final la marca la abogada."))
+    with st.container(key="decision"):
+        html(C.tarjeta_decision(hist[-1] if hist else None))
+        n = st.session_state.get("dec-version", 0)  # cambia tras guardar: el formulario vuelve vacío
+        with st.form("form-decision", border=False):
+            nuevo = st.segmented_control("Marcar como", [e.value for e in Dec.ELEGIBLES], key=f"dec-estatus-{n}")
+            comentario = st.text_area(
+                "Comentario (obligatorio)", key=f"dec-comentario-{n}", max_chars=Dec.LIMITE_COMENTARIO,
+                placeholder="Explica el porqué: qué falta, por qué se rechaza o qué se debe revisar.",
+            )
+            enviado = st.form_submit_button("Guardar decisión", type="primary")
+        if enviado:
+            if not nuevo:
+                st.error("Elige Aprobado, En revisión o Rechazado.")
+            else:
+                try:
+                    Dec.registrar(entrada.clave, Dec.Estatus(nuevo), comentario, USUARIO[0])
+                except ValueError as err:
+                    st.error(str(err))
+                else:
+                    st.session_state["dec-version"] = n + 1
+                    st.rerun()
+        if len(hist) > 1:
+            with st.expander(f"Historial de decisiones ({len(hist)})", key="dec-historial"):
+                html(C.historial_decisiones(hist))
 
 
 def host_permitido(host: Optional[str], puerto: int) -> bool:
