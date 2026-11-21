@@ -5,10 +5,11 @@ primaryColor = "#C0141B"
 backgroundColor = "#F4F5F1"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#16201F"
+borderColor = "#7D8783"
 font = "sans serif"
 
 [theme.sidebar]
-backgroundColor = "#04211F"
+backgroundColor = "#D9161E"
 textColor = "#FFFFFF"
 
 [client]

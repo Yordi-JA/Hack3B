@@ -92,7 +92,7 @@ def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
 def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
     with st.sidebar:
         html(
-            f'<div class="lateral-marca">{C.logo_3b()}<div><b>Revisión de expedientes</b>'
+            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}<div><b>Revisión de expedientes</b>'
             "<small>Tiendas 3B · Expansión</small></div></div>"
         )
         html('<div class="lateral-grupo">Expedientes</div>')
@@ -121,7 +121,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
 def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoInvalido]) -> None:
     cab, buscador = st.columns([3, 2], vertical_alignment="bottom")
     with cab:
-        html(C.encabezado("Bandeja de expedientes", "Lo que requiere atención aparece primero."))
+        html(C.encabezado("Bandeja de expedientes", "Primero los que no cumplen, luego los que requieren revisión."))
     with buscador:
         _filtro("q")
         st.text_input(
@@ -406,10 +406,8 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
         return
 
     d: Dictamen = entrada.dictamen
-    volver, descargar = st.columns([1, 1])
-    with volver:
+    with st.container(horizontal=True, horizontal_alignment="distribute"):
         st.button("Volver a la bandeja", on_click=ir, args=("bandeja",))
-    with descargar:
         st.download_button(
             "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
             mime="application/json",
@@ -447,12 +445,10 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
     html(C.seccion("Criterios y validaciones", "criterios",
                    "Cada regla evaluada, con su explicación y la cita del documento que la sustenta."))
     pestañas = [("Expediente", d.hallazgos_expediente)]
-    tipos = [doc.tipo for doc in d.documentos]
     for doc in d.documentos:
-        nombre = L.NOMBRE_TIPO_CORTO[doc.tipo]
-        if tipos.count(doc.tipo) > 1:
-            nombre = f"{nombre}: {seguro(doc.archivo)[:28]}"
-        pestañas.append((nombre, doc.hallazgos))
+        raiz = seguro(Path(doc.archivo).stem)
+        corto = raiz if len(raiz) <= 22 else raiz[:21].rstrip() + "…"
+        pestañas.append((f"{L.NOMBRE_TIPO_CORTO[doc.tipo]} · {corto}", doc.hallazgos))
     etiquetas = [f"{n} ({len(h)})" for n, h in pestañas]
     for tab, (_, hallazgos) in zip(st.tabs(etiquetas), pestañas):
         with tab:

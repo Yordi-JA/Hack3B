@@ -5,7 +5,9 @@ Marca (muestreados con Pillow de las referencias de Tiendas 3B):
 - VERDE_3B  #4BD811: subrayado verde de "Iconografia, colores.png".
 - TINTA_3B  #04211F: titular casi negro con tinte verde de la misma imagen.
 
-El rojo de marca es identidad (logo, navegación activa, acción principal). Los estados del
+Dirección "Rojo 3B + blanco": barra lateral y marco de la app en rojo, contenido en blanco. La
+tinta es solo color de texto. El rojo de marca es identidad (logo, navegación, acción principal,
+tarjeta del dictamen). Los estados del
 dictamen usan otra familia de tonos para no confundir "No cumple" con la marca, y siempre
 van con texto; el color nunca es la única señal.
 """
@@ -16,39 +18,35 @@ from typing import Optional
 
 from expedientes.schemas import EstadoRegla, Legibilidad, Recomendacion, Severidad
 
-ROJO_3B = "#EB1C24"
-ROJO_3B_OSCURO = "#C0141B"  # hover y texto rojo sobre claro (contraste AA con texto chico)
-VERDE_3B = "#4BD811"
-TINTA_3B = "#04211F"
+ROJO_3B = "#EB1C24"           # logo y línea del marco del dictamen (no lleva texto encima)
+ROJO_3B_SIDEBAR = "#D9161E"   # barra lateral y marco de la app: el rojo de marca apenas más hondo
+                              # para que el texto blanco pase AA (5.1:1; sobre #EB1C24 sería 4.45)
+ROJO_3B_OSCURO = "#C0141B"    # botón principal, título DICTAMEN, KPI principal, texto rojo sobre blanco
+TINTA_3B = "#04211F"          # solo texto y líneas finas; nunca como superficie
 
-# Superficies
-FONDO_APP = TINTA_3B          # detrás del panel principal y en la barra lateral
+# Superficies: rojo de marca alrededor, blanco y gris muy claro adentro.
+FONDO_APP = ROJO_3B_SIDEBAR   # detrás del panel principal y en la barra lateral
 PANEL = "#F4F5F1"             # panel principal redondeado
 TARJETA = "#FFFFFF"
-TARJETA_OSCURA = "#0A2C29"    # tarjeta enmarcada
-TARJETA_OSCURA_2 = "#163D39"  # botón secundario y separadores dentro de la tarjeta oscura
 BORDE = "#DEE2DC"
 TEXTO = "#16201F"
 TEXTO_2 = "#4D5A57"
-TEXTO_SOBRE_OSCURO = "#FFFFFF"
-TEXTO_SOBRE_OSCURO_2 = "#B9C9C5"
+TEXTO_SOBRE_ROJO = "#FFFFFF"  # blanco puro: con transparencia baja a ~3:1 sobre el rojo
 MAPA_VACIO = "#DCE1DB"
-MAPA_VECINO = "#1D4641"
 
 
 @dataclass(frozen=True)
 class Tono:
-    texto: str      # texto de la etiqueta sobre `fondo`
+    texto: str      # texto de la etiqueta sobre `fondo`; también el fondo del sello del dictamen
     fondo: str      # fondo suave de la etiqueta
-    oscuro: str     # el mismo estado sobre la tarjeta oscura (titular, mapa del detalle)
-    mapa: str       # relleno de la entidad en el mapa de la bandeja
+    mapa: str       # relleno de la entidad en los mapas
 
 
-VERDE = Tono(texto="#1B6A2C", fondo="#E2F3DC", oscuro="#7FE36A", mapa="#9FD88F")
-AMBAR = Tono(texto="#844A00", fondo="#FCEFD2", oscuro="#FFC857", mapa="#F2C463")
-VINO = Tono(texto="#9E1239", fondo="#FBE4EA", oscuro="#FF9DB4", mapa="#E494A8")
-AZUL = Tono(texto="#2B5275", fondo="#E3ECF4", oscuro="#A9CBEA", mapa="#B5CDE3")
-GRIS = Tono(texto="#47524F", fondo="#E9ECE7", oscuro="#C9D3D0", mapa=MAPA_VACIO)
+VERDE = Tono(texto="#1B6A2C", fondo="#E2F3DC", mapa="#9FD88F")
+AMBAR = Tono(texto="#844A00", fondo="#FCEFD2", mapa="#F2C463")
+VINO = Tono(texto="#9E1239", fondo="#FBE4EA", mapa="#E494A8")
+AZUL = Tono(texto="#2B5275", fondo="#E3ECF4", mapa="#B5CDE3")
+GRIS = Tono(texto="#47524F", fondo="#E9ECE7", mapa=MAPA_VACIO)
 
 ESTADO: dict[Optional[Recomendacion], Tono] = {
     Recomendacion.CUMPLE: VERDE,

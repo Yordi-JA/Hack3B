@@ -1,4 +1,8 @@
-"""CSS de la app. Los valores salen de `tokens`; aquí solo hay estructura."""
+"""CSS de la app. Los valores salen de `tokens`; aquí solo hay estructura.
+
+Dirección "Rojo 3B + blanco": la barra lateral y el marco de la app son rojo de marca; todo el
+contenido va sobre blanco o gris muy claro. La tinta solo se usa como color de texto y líneas finas.
+"""
 from __future__ import annotations
 
 from . import tokens as t
@@ -14,8 +18,10 @@ def _css_tonos() -> str:
     reglas = []
     for nombre, tono in TONOS.items():
         reglas.append(f".tono-{nombre}{{color:{tono.texto};background:{tono.fondo};}}")
-        reglas.append(f".marco .tono-{nombre}{{color:{t.TARJETA_OSCURA};background:{tono.oscuro};}}")
-        reglas.append(f".txt-{nombre}{{color:{tono.oscuro};}}")
+        # Sello del dictamen: blanco sobre el color fuerte del estado (6.7:1 a 8.1:1).
+        reglas.append(f".sello-{nombre}{{color:#fff;background:{tono.texto};}}")
+        # Sobre la tarjeta roja del dictamen el sello se invierte: bloque blanco, texto del estado.
+        reglas.append(f".marco-dictamen .sello-{nombre}{{color:{tono.texto};background:#fff;}}")
     return "".join(reglas)
 
 
@@ -23,66 +29,78 @@ def css() -> str:
     return f"""
 <style>
 :root {{
-  --rojo: {t.ROJO_3B}; --rojo-osc: {t.ROJO_3B_OSCURO}; --verde3b: {t.VERDE_3B}; --tinta: {t.TINTA_3B};
-  --panel: {t.PANEL}; --tarjeta: {t.TARJETA}; --oscura: {t.TARJETA_OSCURA}; --oscura2: {t.TARJETA_OSCURA_2};
-  --borde: {t.BORDE}; --texto: {t.TEXTO}; --texto2: {t.TEXTO_2};
-  --claro: {t.TEXTO_SOBRE_OSCURO}; --claro2: {t.TEXTO_SOBRE_OSCURO_2};
+  --rojo: {t.ROJO_3B}; --rojo-lat: {t.ROJO_3B_SIDEBAR}; --rojo-osc: {t.ROJO_3B_OSCURO}; --tinta: {t.TINTA_3B};
+  --panel: {t.PANEL}; --tarjeta: {t.TARJETA}; --borde: {t.BORDE}; --texto: {t.TEXTO}; --texto2: {t.TEXTO_2};
+  --blanco: {t.TEXTO_SOBRE_ROJO}; --mapa-vacio: {t.MAPA_VACIO};
   --f-texto: {t.FUENTE_TEXTO}; --f-titular: {t.FUENTE_TITULAR};
 }}
 
-/* ---- armazón: fondo oscuro, barra lateral y panel principal redondeado ---- */
-.stApp, [data-testid="stAppViewContainer"] {{ background: var(--tinta); }}
+/* ---- armazón: rojo de marca alrededor, panel principal claro y redondeado ---- */
+.stApp, [data-testid="stAppViewContainer"] {{ background: var(--rojo-lat); }}
 html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp button {{ font-family: var(--f-texto); }}
 [data-testid="stHeader"] {{ background: transparent; }}
 [data-testid="stToolbarActions"], [data-testid="stAppDeployButton"], [data-testid="stMainMenu"],
 [data-testid="stDecoration"], footer {{ display: none !important; }}
-[data-testid="stExpandSidebarButton"] {{ color: var(--claro); }}
+[data-testid="stExpandSidebarButton"] {{ color: var(--blanco); }}
 [data-testid="stMain"] {{
   background: var(--panel); margin: 12px 12px 12px 0; border-radius: 20px;
   max-height: calc(100dvh - 24px); overflow-y: auto;
 }}
 [data-testid="stMainBlockContainer"] {{ max-width: 1360px; padding: 28px 36px 64px; }}
-[data-testid="stSidebar"] {{ background: var(--tinta); border-right: 0; }}
+[data-testid="stSidebar"] {{ background: var(--rojo-lat); border-right: 0; color: var(--blanco); }}
 [data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {{ padding: 4px 0 24px 16px; }}
-[data-testid="stSidebar"] {{ color: var(--claro2); }}
+[data-testid="stSidebarCollapseButton"] button {{ color: var(--blanco); }}
 
 .lateral-marca {{ display: flex; gap: 12px; align-items: center; padding: 4px 16px 20px 4px;
-  border-bottom: 1px solid var(--oscura2); margin-bottom: 8px; }}
+  border-bottom: 1px solid rgba(255,255,255,.35); margin-bottom: 8px; }}
 .lateral-marca svg {{ width: 46px; height: 46px; flex: none; }}
-.lateral-marca b {{ display: block; color: var(--claro); font-size: 15px; line-height: 1.2; }}
-.lateral-marca small {{ color: var(--claro2); font-size: 12px; }}
-.lateral-grupo {{ color: var(--claro2); font-size: 11px; font-weight: 600; letter-spacing: .06em;
+.lateral-marca b {{ display: block; color: var(--blanco); font-size: 15px; line-height: 1.2; }}
+.lateral-marca small {{ color: var(--blanco); font-size: 12px; }}
+.lateral-grupo {{ color: var(--blanco); font-size: 11px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; margin: 18px 0 6px 6px; }}
-[data-testid="stSidebar"] p.lateral-nota {{ color: var(--claro2); font-size: 13px; line-height: 1.5; margin: 28px 16px 0 6px; }}
+[data-testid="stSidebar"] p.lateral-nota {{ color: var(--blanco); font-size: 13px; line-height: 1.5; margin: 28px 16px 0 6px;
+  padding-top: 14px; border-top: 1px solid rgba(255,255,255,.35); }}
 
-/* navegación: botones de Streamlit con forma de pestaña que se une al panel */
-[data-testid="stSidebar"] [class*="st-key-nav-"] {{ width: calc(100% + 32px) !important; }}
+/* navegación: botones de Streamlit con forma de pestaña blanca que se une al panel */
+[data-testid="stSidebar"] [class*="st-key-nav-"] {{ width: calc(100% + 30px) !important; max-width: none !important; }}
 [data-testid="stSidebar"] [class*="st-key-nav-"] button {{
   width: 100%; justify-content: flex-start; min-height: 44px; border: 0; border-radius: 22px 0 0 22px;
-  background: transparent; color: var(--claro2); padding: 10px 16px; box-shadow: none;
+  background: transparent; color: var(--blanco); padding: 10px 16px; box-shadow: none;
 }}
 [data-testid="stSidebar"] [class*="st-key-nav-"] button > div {{ justify-content: flex-start; width: 100%; }}
 [data-testid="stSidebar"] [class*="st-key-nav-"] button p {{ font-size: 15px; color: inherit; text-align: left; }}
-[data-testid="stSidebar"] [class*="st-key-nav-"] button:hover {{ color: var(--claro); background: var(--oscura2); }}
+[data-testid="stSidebar"] [class*="st-key-nav-"] button:hover {{ color: var(--blanco); background: rgba(255,255,255,.14); }}
 [data-testid="stSidebar"] [class*="st-key-nav-"] [data-testid="stBaseButton-primary"],
 [data-testid="stSidebar"] [class*="st-key-nav-"] [data-testid="stBaseButton-primary"]:hover {{
   background: var(--panel); color: var(--rojo-osc); font-weight: 700;
 }}
 [data-testid="stSidebar"] [class*="st-key-nav-"] [data-testid="stBaseButton-primary"] p {{ font-weight: 700; }}
 
-/* foco visible en todo lo que se puede usar con teclado */
-.stApp a:focus-visible, .stApp button:focus-visible, .mx-enlace:focus-visible path {{
-  outline: 3px solid var(--verde3b); outline-offset: 2px;
+/* foco visible: tinta sobre superficies claras, blanco sobre el rojo de la barra lateral */
+.stApp a:focus-visible, .stApp button:focus-visible, .stApp summary:focus-visible, .mx-enlace:focus-visible path {{
+  outline: 3px solid var(--tinta); outline-offset: 2px;
+}}
+[data-testid="stSidebar"] a:focus-visible, [data-testid="stSidebar"] button:focus-visible {{
+  outline: 3px solid var(--blanco); outline-offset: 2px;
 }}
 
 /* acción principal: rojo de marca (versión oscura, contraste AA con texto blanco) */
-.stApp [data-testid="stBaseButton-primary"] {{ background: var(--rojo-osc); border-color: var(--rojo-osc); color: #fff; }}
-.stApp [data-testid="stBaseButton-primary"]:hover {{ background: #A51118; border-color: #A51118; color: #fff; }}
+.stApp [data-testid="stMain"] [data-testid="stBaseButton-primary"] {{ background: var(--rojo-osc); border-color: var(--rojo-osc); color: #fff; }}
+.stApp [data-testid="stMain"] [data-testid="stBaseButton-primary"]:hover {{ background: #A51118; border-color: #A51118; color: #fff; }}
+
+/* cargador de archivos en español (Streamlit no deja cambiar estos textos) */
+[data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p {{ font-size: 0; }}
+[data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p::after {{ content: "Elegir archivos"; font-size: 14px; }}
+[data-testid="stFileUploaderDropzoneInstructions"] span {{ font-size: 0; }}
+[data-testid="stFileUploaderDropzoneInstructions"] span::after {{
+  content: "PDF, PNG, JPG o TIF · hasta 50 MB por archivo"; font-size: 14px; color: var(--texto2);
+}}
 
 /* ---- tipografía del panel ---- */
 .encabezado {{ display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 24px; margin-bottom: 4px; }}
-.encabezado h1 {{ font-family: var(--f-titular); font-size: 30px; line-height: 1.1; color: var(--tinta); margin: 0; padding: 0; }}
-.encabezado p {{ color: var(--texto2); margin: 6px 0 0; font-size: 14px; }}
+.encabezado h1 {{ font-family: var(--f-titular); font-size: 30px; line-height: 1.25; color: var(--tinta); margin: 0; padding: 0;
+  text-decoration: underline 5px var(--rojo); text-underline-offset: 9px; text-decoration-skip-ink: none; }}
+.encabezado p {{ color: var(--texto2); margin: 14px 0 0; font-size: 14px; }}
 .seccion {{ font-family: var(--f-titular); font-size: 19px; color: var(--tinta); margin: 36px 0 4px; scroll-margin-top: 24px; }}
 .ancla {{ scroll-margin-top: 16px; height: 0; }}
 .seccion-sub {{ color: var(--texto2); font-size: 14px; margin: 0 0 14px; }}
@@ -93,23 +111,22 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .etq-borde {{ background: transparent; border: 1px solid currentColor; }}
 {_css_tonos()}
 
-/* ---- indicadores ---- */
+/* ---- indicadores: el total en banda roja, el resto en blanco ---- */
 .kpis {{ display: grid; grid-template-columns: 1.3fr repeat(4, 1fr); gap: 12px; margin: 18px 0 8px; }}
 .kpi {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 14px 16px; min-width: 0; }}
 .kpi span {{ color: var(--texto2); font-size: 13px; }}
 .kpi b {{ display: block; font-family: var(--f-titular); font-size: 30px; color: var(--tinta); line-height: 1.2; margin-top: 4px; }}
 .kpi small {{ color: var(--texto2); font-size: 12px; }}
-.kpi-principal {{ background: var(--tinta); border-color: var(--tinta); }}
-.kpi-principal span, .kpi-principal small {{ color: var(--claro2); }}
-.kpi-principal b {{ color: var(--claro); }}
+.kpi-principal {{ background: var(--rojo-osc); border-color: var(--rojo-osc); }}
+.kpi-principal span, .kpi-principal small, .kpi-principal b {{ color: var(--blanco); }}
 
 /* ---- tarjeta de expediente en la bandeja (versión ligera del marco) ---- */
-.lista {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr)); gap: 22px 14px; margin-top: 18px; }}
+.lista {{ display: grid; grid-template-columns: 1fr; gap: 22px; margin-top: 18px; }}
 a.exp {{ position: relative; display: block; text-decoration: none; color: var(--texto); background: var(--tarjeta);
-  border-radius: 12px; padding: 26px 20px 16px; border: 1px solid var(--borde); }}
+  border-radius: 12px; padding: 26px 20px 16px; border: 1px solid transparent; }}
 a.exp::before {{ content: ""; position: absolute; inset: 12px 8px 8px; border: 1.5px solid var(--tinta);
   border-radius: 4px; pointer-events: none; }}
-a.exp:hover {{ border-color: var(--tinta); }}
+a.exp:hover {{ border-color: var(--borde); }}
 a.exp:hover::before {{ border-color: var(--rojo); }}
 .exp-titulo {{ position: absolute; top: 12px; left: 18px; transform: translateY(-50%); background: var(--tarjeta);
   padding: 0 8px; font-family: var(--f-titular); font-size: 15px; color: var(--tinta); text-transform: uppercase;
@@ -121,6 +138,7 @@ a.exp:hover::before {{ border-color: var(--rojo); }}
 .exp-meta {{ font-size: 12px; color: var(--texto2); display: flex; flex-wrap: wrap; gap: 4px 12px; }}
 
 /* ---- mapa ---- */
+[data-testid="stColumn"]:has(.mapa-caja) {{ position: sticky; top: 16px; align-self: flex-start; }}
 .mapa-caja {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 16px 16px 10px; }}
 .mapa-caja h3 {{ font-size: 15px; color: var(--tinta); margin: 0; padding: 0; font-weight: 700; }}
 .mapa-caja p {{ font-size: 12px; color: var(--texto2); margin: 4px 0 8px; }}
@@ -134,33 +152,54 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .mx-num {{ font: 700 14px var(--f-texto); fill: var(--tinta); stroke: #fff; stroke-width: 3px; paint-order: stroke; pointer-events: none; }}
 .sin-entidad {{ font-size: 12px; color: var(--texto2); margin-top: 4px; }}
 
-/* ---- marco: tarjeta oscura con línea blanca y título sobre la línea ---- */
-.marco {{ position: relative; background: var(--oscura); color: var(--claro); border-radius: 6px;
-  padding: 58px 40px 36px; margin: 34px 0 10px; }}
-.marco::before {{ content: ""; position: absolute; inset: 28px 14px 14px; border: 2px solid var(--claro); pointer-events: none; }}
-.marco-titulo {{ position: absolute; top: 28px; left: 30px; transform: translateY(-50%); background: var(--oscura);
-  padding: 0 14px; margin: 0; font-family: var(--f-titular); font-size: 34px; line-height: 1; color: var(--claro);
+/* ---- marco: tarjeta con línea fina y título que interrumpe la línea ----
+   Base (documentos): blanca con línea y título en tinta. Dictamen: bloque rojo sólido con línea y
+   título blancos; es el único bloque rojo del contenido. */
+.marco {{ position: relative; background: var(--tarjeta); color: var(--texto); border-radius: 6px;
+  padding: 58px 40px 36px; margin: 34px 0 10px; border: 1px solid var(--borde); }}
+.marco::before {{ content: ""; position: absolute; inset: 28px 14px 14px; border: 1.5px solid var(--tinta); pointer-events: none; }}
+.marco-titulo {{ position: absolute; top: 28px; left: 30px; transform: translateY(-50%); background: var(--tarjeta);
+  padding: 0 14px; margin: 0; font-family: var(--f-titular); font-size: 34px; line-height: 1; color: var(--tinta);
   text-transform: uppercase; letter-spacing: -.01em; max-width: calc(100% - 60px);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 .marco-cuerpo {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px; align-items: center; }}
-.marco-ceja {{ font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--claro2); margin: 0 0 6px; }}
+.marco-ceja {{ font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--texto2); margin: 0 0 10px; }}
 .marco-titular {{ font-family: var(--f-titular); font-size: 44px; line-height: 1.05; margin: 0 0 14px; }}
-.marco-texto p.marco-resumen {{ color: var(--claro); font-size: 16px; line-height: 1.55; margin: 0 0 14px; max-width: 62ch; }}
-.marco-datos {{ display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; color: var(--claro2); margin: 0 0 20px; }}
-.marco-datos b {{ color: var(--claro); }}
-.marco-botones {{ display: flex; flex-wrap: wrap; gap: 10px; }}
-.marco-botones a {{ display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; font-weight: 700;
+.nobr {{ white-space: nowrap; }}
+.sello {{ display: inline-block; padding: .06em .28em .1em; border-radius: 2px; }}
+.marco-texto p.marco-resumen {{ color: var(--texto); font-size: 16px; line-height: 1.55; margin: 0 0 14px; max-width: 62ch; }}
+.marco-datos {{ display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; color: var(--texto2); margin: 0 0 20px; }}
+.marco-datos b {{ color: var(--tinta); }}
+.marco-botones {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
+.marco-botones a, .marco-botones span {{ display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; font-weight: 700;
   font-size: 14px; text-transform: uppercase; text-decoration: none; border-radius: 2px; }}
 .btn-acento {{ background: var(--rojo-osc); color: #fff !important; }}
 .btn-acento:hover {{ background: #A51118; }}
-.btn-oscuro {{ background: var(--oscura2); color: var(--claro) !important; }}
-.btn-oscuro:hover {{ background: #21504B; }}
+.btn-linea {{ background: var(--tarjeta); color: var(--tinta) !important; border: 1.5px solid var(--tinta); }}
+.btn-linea:hover {{ border-color: var(--rojo-osc); color: var(--rojo-osc) !important; }}
+.marco-botones span.btn-nada {{ color: var(--texto2); text-transform: none; font-weight: 600; padding: 0 4px; }}
 .marco-media {{ align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: center;
-  background: #06231F; border-radius: 2px; padding: 12px; min-height: 220px; }}
+  background: var(--panel); border-radius: 2px; padding: 12px; min-height: 220px; }}
 .marco-media svg {{ width: 100%; max-height: 300px; }}
-.marco-media figcaption {{ font-size: 12px; color: var(--claro2); margin-top: 8px; text-align: center; }}
-.mx-vecino {{ fill: {t.MAPA_VECINO}; stroke: var(--oscura); stroke-width: 1; vector-effect: non-scaling-stroke; }}
-.mx-resaltado {{ stroke: var(--claro); stroke-width: 2; vector-effect: non-scaling-stroke; }}
+.marco-media figcaption {{ font-size: 13px; color: var(--tinta); font-weight: 600; margin-top: 8px; text-align: center; }}
+.mx-vecino {{ fill: var(--mapa-vacio); stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
+.mx-resaltado {{ stroke: var(--tinta); stroke-width: 2; vector-effect: non-scaling-stroke; }}
+
+/* dictamen: bloque rojo, todo el texto en blanco puro (6.26:1) */
+.marco-dictamen {{ background: var(--rojo-osc); border-color: var(--rojo-osc); color: #fff; }}
+.marco-dictamen::before {{ border: 2px solid #fff; }}
+.marco-dictamen .marco-titulo {{ background: var(--rojo-osc); color: #fff; }}
+.marco-dictamen .marco-ceja, .marco-dictamen .marco-texto p.marco-resumen, .marco-dictamen .marco-datos,
+.marco-dictamen .marco-datos b, .marco-dictamen .marco-media figcaption {{ color: #fff; }}
+.marco-dictamen .btn-acento {{ background: #fff; color: var(--rojo-osc) !important; }}
+.marco-dictamen .btn-acento:hover {{ background: {t.PANEL}; }}
+.marco-dictamen .btn-linea {{ background: transparent; color: #fff !important; border: 1.5px solid #fff; }}
+.marco-dictamen .btn-linea:hover {{ background: rgba(255,255,255,.14); color: #fff !important; border-color: #fff; }}
+.marco-dictamen .marco-botones span.btn-nada {{ color: #fff; }}
+.stApp .marco-dictamen a:focus-visible {{ outline: 3px solid #fff; outline-offset: 2px; }}
+.marco-dictamen .marco-media {{ background: transparent; }}
+.marco-dictamen .mx-vecino {{ fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.5); }}
+.marco-dictamen .mx-resaltado {{ fill: #fff; stroke: #fff; }}
 
 .razones {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 16px 20px; margin-top: 12px; }}
 .razones h3 {{ font-size: 14px; margin: 0 0 8px; padding: 0; color: var(--tinta); }}
@@ -174,19 +213,19 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .tipo small {{ display: block; font-size: 12px; color: var(--texto2); overflow-wrap: anywhere; }}
 .tipo-falta {{ border: 1.5px dashed {t.VINO.texto}; }}
 
-/* tarjetas por documento: mismo marco, más chico */
+/* tarjetas por documento: marco claro, línea y título en tinta */
 .docs {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr)); gap: 6px 16px; }}
 .docs .marco {{ padding: 46px 26px 26px; margin: 26px 0 4px; }}
 .docs .marco::before {{ inset: 22px 10px 10px; }}
 .docs .marco-titulo {{ top: 22px; left: 22px; font-size: 21px; padding: 0 10px; }}
-.doc-archivo {{ font-size: 12px; color: var(--claro2); margin: 0 0 10px; overflow-wrap: anywhere; }}
+.doc-archivo {{ font-size: 12px; color: var(--texto2); margin: 0 0 10px; overflow-wrap: anywhere; }}
 .doc-etiquetas {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }}
 .doc-campos {{ display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; margin: 0 0 12px; }}
-.doc-campos dt {{ color: var(--claro2); }}
-.doc-campos dd {{ margin: 0; color: var(--claro); overflow-wrap: anywhere; }}
-.doc-conteo {{ font-size: 13px; color: var(--claro2); border-top: 1px solid var(--oscura2); padding-top: 10px; }}
-.doc-conteo b {{ color: var(--claro); }}
-.doc-aviso {{ font-size: 13px; line-height: 1.5; color: var(--claro); background: var(--oscura2); padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }}
+.doc-campos dt {{ color: var(--texto2); }}
+.doc-campos dd {{ margin: 0; color: var(--texto); overflow-wrap: anywhere; }}
+.doc-conteo {{ font-size: 13px; color: var(--texto2); border-top: 1px solid var(--borde); padding-top: 10px; }}
+.doc-conteo b {{ color: var(--tinta); }}
+.doc-aviso {{ font-size: 13px; line-height: 1.5; color: var(--texto); background: {t.AMBAR.fondo}; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }}
 
 /* ---- tablas: datos extraídos, requisitos, inconsistencias ---- */
 .tabla-caja {{ overflow-x: auto; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; }}
@@ -199,7 +238,6 @@ table.tabla {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
 .tabla td.difiere {{ background: {t.AMBAR.fondo}; }}
 .tabla .vacio {{ color: var(--texto2); }}
 .tabla details summary {{ cursor: pointer; color: var(--texto2); font-size: 12px; margin-top: 4px; }}
-.tabla details summary:focus-visible {{ outline: 3px solid var(--verde3b); }}
 q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; color: var(--texto); background: #F3F5F0;
   border-left: 3px solid var(--borde); padding: 6px 10px; margin: 4px 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }}
 .fuente {{ font-size: 12px; color: var(--texto2); }}
@@ -226,6 +264,12 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .stApp h2.seccion {{ font-size: 21px; padding: 0; margin: 40px 0 4px; letter-spacing: 0; }}
 .stApp .doc-campos dt, .stApp .doc-campos dd {{ font-size: 14px; line-height: 1.4; }}
 .stApp .inc h3, .stApp .razones h3, .stApp .mapa-caja h3 {{ font-family: var(--f-texto); font-weight: 700; }}
+
+/* escritorio angosto (1280): más aire para el texto del dictamen */
+@media (max-width: 1400px) {{
+  .marco-cuerpo {{ grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }}
+  .marco-botones a {{ padding: 0 16px; }}
+}}
 
 @media (max-width: 900px) {{
   .stApp .marco .marco-titulo {{ font-size: 26px; }}

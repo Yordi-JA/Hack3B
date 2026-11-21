@@ -86,14 +86,19 @@ def etq_legibilidad(leg: Legibilidad) -> str:
 ETQ_EJEMPLO = etiqueta("Ejemplo", t.AZUL)
 
 
-def logo_3b() -> str:
-    """Círculo rojo con B sobre BB, dibujado aquí porque las imágenes de marca no se versionan."""
+def logo_3b(invertido: bool = False) -> str:
+    """Círculo con B sobre BB, dibujado aquí porque las imágenes de marca no se versionan.
+
+    Normal: círculo rojo, letras blancas. Invertido (sobre la barra lateral roja): círculo blanco,
+    letras rojas; un círculo rojo sobre rojo desaparecería.
+    """
+    fondo, letra = ("#fff", t.ROJO_3B) if invertido else (t.ROJO_3B, "#fff")
     return (
         '<svg viewBox="0 0 100 100" role="img" aria-label="Tiendas 3B" xmlns="http://www.w3.org/2000/svg">'
-        f'<circle cx="50" cy="50" r="49" fill="{t.ROJO_3B}"/>'
-        f'<text x="50" y="45" text-anchor="middle" fill="#fff" font-family={t.FUENTE_TITULAR!r} '
+        f'<circle cx="50" cy="50" r="49" fill="{fondo}"/>'
+        f'<text x="50" y="45" text-anchor="middle" fill="{letra}" font-family={t.FUENTE_TITULAR!r} '
         'font-weight="900" font-size="38">B</text>'
-        f'<text x="50" y="80" text-anchor="middle" fill="#fff" font-family={t.FUENTE_TITULAR!r} '
+        f'<text x="50" y="80" text-anchor="middle" fill="{letra}" font-family={t.FUENTE_TITULAR!r} '
         'font-weight="900" font-size="38" letter-spacing="-1">BB</text></svg>'
     )
 
@@ -118,7 +123,7 @@ def cita(ev: Evidencia) -> str:
 
 def texto_ubicacion(u: L.Ubicacion) -> str:
     """Texto plano: 'Ixmiquilpan, Hidalgo', con aviso si los documentos no coinciden."""
-    municipio = u.municipio.title() if u.municipio else None
+    municipio = u.municipio_valor or (u.municipio.title() if u.municipio else None)
     if not u.valores:
         return ", ".join(filter(None, [municipio, "sin entidad federativa"]))
     if u.confirmada:
@@ -175,8 +180,7 @@ def caja_mapa(svg: str, sin_entidad: int) -> str:
         )
     return (
         '<div class="mapa-caja"><h3>Expedientes por entidad</h3>'
-        "<p>Cada estado toma el color de su recomendación más grave; el número es la cantidad de expedientes. "
-        "La vista se centra en las entidades con expedientes. Haz clic en un estado para filtrar la lista.</p>"
+        "<p>El color es la recomendación más grave del estado y el número, cuántos expedientes tiene. Haz clic en un estado para filtrar.</p>"
         f'<div class="leyenda">{leyenda}</div>{svg}{pie}</div>'
     )
 
@@ -186,14 +190,19 @@ def caja_mapa(svg: str, sin_entidad: int) -> str:
 def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
     u = L.consolidar_ubicacion(d)
     tono = t.ESTADO[d.recomendacion]
-    ceja = " · ".join([d.expediente_id, texto_ubicacion(u)] + (["datos de ejemplo"] if es_ejemplo else []))
+    # Cada parte de la ceja se queda en una pieza: si no cabe, el corte cae entre partes.
+    partes_ceja = [d.expediente_id, texto_ubicacion(u)] + (["datos de ejemplo"] if es_ejemplo else [])
+    ceja = " · ".join(f'<span class="nobr">{txt(p)}</span>' for p in partes_ceja)
     n_inc = len(d.inconsistencias)
     reqs = L.consolidar_requisitos(d)
     no_cumplidos = sum(1 for r in reqs if r.estado == EstadoRegla.NO_CUMPLE)
-    botones = (
-        f'<a class="btn-acento" href="#requisitos" target="_self">Ver requisitos ({no_cumplidos} sin cumplir)</a>'
-        f'<a class="btn-oscuro" href="#inconsistencias" target="_self">Ver inconsistencias ({n_inc})</a>'
-    )
+    cumplidos = sum(1 for r in reqs if r.estado == EstadoRegla.CUMPLE)
+    req = f"{no_cumplidos} sin cumplir" if no_cumplidos else f"{cumplidos} cumplidos"
+    botones = f'<a class="btn-acento" href="#requisitos" target="_self">Ver requisitos ({req})</a>'
+    if n_inc:
+        botones += f'<a class="btn-linea" href="#inconsistencias" target="_self">Ver inconsistencias ({n_inc})</a>'
+    else:
+        botones += '<span class="btn-nada">Sin inconsistencias</span>'
     if u.entidad:
         pie = f"{mapa.nombre_entidad(u.entidad)}" + ("" if u.confirmada else " (los documentos no coinciden)")
     elif u.valores:
@@ -201,18 +210,18 @@ def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
     else:
         pie = "Ningún documento indica la entidad federativa"
     return (
-        '<section class="marco" aria-labelledby="titulo-dictamen">'
+        '<section class="marco marco-dictamen" aria-labelledby="titulo-dictamen">'
         '<h2 class="marco-titulo" id="titulo-dictamen">Dictamen</h2>'
         '<div class="marco-cuerpo"><div class="marco-texto">'
-        f'<p class="marco-ceja">{txt(ceja)}</p>'
-        f'<p class="marco-titular txt-{clase_tono(tono)}">{txt(d.recomendacion.value)}</p>'
+        f'<p class="marco-ceja">{ceja}</p>'
+        f'<p class="marco-titular"><span class="sello sello-{clase_tono(tono)}">{txt(d.recomendacion.value)}</span></p>'
         f'<p class="marco-resumen">{txt(d.resumen)}</p>'
         '<div class="marco-datos">'
         f"<span>Confianza del análisis <b>{pct(d.confianza)}</b></span>"
         f"<span>Analizado <b>{fecha(d.fecha_analisis)}</b></span>"
         f"<span>Vigencias evaluadas al <b>{fecha(d.fecha_referencia)}</b></span></div>"
         f'<div class="marco-botones">{botones}</div></div>'
-        f'<figure class="marco-media" style="margin:0">{mapa.svg_detalle(u.entidad, tono.oscuro)}'
+        f'<figure class="marco-media" style="margin:0">{mapa.svg_detalle(u.entidad, "#FFFFFF")}'
         f"<figcaption>{txt(pie)}</figcaption></figure>"
         "</div></section>"
     )
