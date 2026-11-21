@@ -257,6 +257,7 @@ def _correr_con_estado(etiqueta: str, funcion, *args):
 
 
 def _mostrar_error(error: BaseException) -> None:
+    logging.getLogger(__name__).error("Falló el análisis desde la UI", exc_info=error)
     if isinstance(error, NotImplementedError):
         st.error(
             "El análisis automático todavía no está disponible en esta versión: falta implementar alguno de "
