@@ -12,6 +12,8 @@ Datos del set:
 - El expediente con sufijo "..." está borroso a propósito: debe salir `Legibilidad.ILEGIBLE`
   y NO inventar texto.
 - Hay un predial en .jpeg.
+- Saltar todo lo que esté bajo `__MACOSX` o empiece con `._`: son metadatos de macOS, no PDFs.
+- Llenar `DocumentoLeido.archivo` con `cache.nombre_archivo(ruta)` (normaliza a NFC).
 - Un expediente real trae Alineamiento y Número Oficial en dos archivos distintos: ambos son
   TipoDocumento.ALINEAMIENTO.
 

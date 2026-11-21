@@ -9,7 +9,7 @@ langchain-anthropic
 # langchain-google-genai
 
 # Observabilidad. PENDIENTE Juan Pablo: confirmar versión
-langfuse
+langfuse>=3,<4           # langfuse.langchain.CallbackHandler existe desde la v3
 
 # Documentos
 pymupdf

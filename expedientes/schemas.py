@@ -12,6 +12,15 @@ Flujo de datos:
                        └─ dictamen.dictaminar() -> Dictamen           (Juan Pablo)
     orquestador.analizar_expediente() encadena todo                    (Carlos)
     La UI solo consume `Dictamen`                                      (Yordi)
+
+Reglas que todos respetan:
+- Un dato ausente en un archivo da NO_EVALUABLE, nunca NO_CUMPLE. Puede haber dos archivos del
+  mismo tipo (ej. Alineamiento y Número Oficial separados) y a cada uno le faltan datos del otro.
+- `cruce` ignora los campos con `normalizado is None`.
+- `dictamen` consolida por tipo: un requisito se cumple si algún archivo de ese tipo lo cumple.
+- Los documentos se identifican por `archivo`, no por `tipo`.
+- Documentos tipo OTRO o con agente fallido llegan como DocumentoAnalizado con datos vacíos y un
+  hallazgo EXP-TIPO / EXP-ERROR; cruce y dictamen deben tolerarlos.
 """
 from __future__ import annotations
 
@@ -167,7 +176,7 @@ class DocumentoAnalizado(BaseModel):
 class ValorEncontrado(BaseModel):
     archivo: str
     tipo: TipoDocumento
-    valor: Optional[str]
+    valor: Optional[str] = None
     evidencia: Optional[Evidencia] = None
 
 

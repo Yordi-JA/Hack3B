@@ -10,8 +10,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RAIZ = Path(__file__).resolve().parent.parent
-DOCUMENTOS_DIR = Path(os.getenv("DOCUMENTOS_DIR", RAIZ / "Documentos"))
-CACHE_DIR = Path(os.getenv("CACHE_DIR", RAIZ / "cache"))
+# Relativas a la raíz del repo, no al cwd (una ruta absoluta en el .env también funciona).
+DOCUMENTOS_DIR = RAIZ / os.getenv("DOCUMENTOS_DIR", "Documentos")
+CACHE_DIR = RAIZ / os.getenv("CACHE_DIR", "cache")
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-opus-5-5")
@@ -36,7 +37,7 @@ def get_callbacks() -> list:
 
     PENDIENTE (Juan Pablo): confirmar la versión de Langfuse y su import del CallbackHandler.
     """
-    if not os.getenv("LANGFUSE_PUBLIC_KEY"):
+    if not (os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY")):
         return []
     from langfuse.langchain import CallbackHandler
     return [CallbackHandler()]
