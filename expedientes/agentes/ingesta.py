@@ -55,6 +55,10 @@ PARALELO = int(os.getenv("OCR_PARALELO", "6"))       # el README pide 5-10 llama
 EXTENSIONES = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 MIN_CARACTERES_CAPA = 80   # menos que esto en la capa de texto = página escaneada
 LADO_MAX_PX = 1800         # resolución de la imagen que se manda a OCR
+# Nitidez medida localmente (intensidad media de bordes). Calibrada con el set: los sintéticos
+# borrosos dan 2.3-3.1 y el documento real más bajo 8.3. Por debajo del umbral la página se
+# marca ILEGIBLE y se descarta el texto: un modelo con visión "lee" páginas borrosas inventando datos.
+UMBRAL_NITIDEZ = float(os.getenv("UMBRAL_NITIDEZ", "5.0"))
 DIR_PAGINAS = CACHE_DIR / "_paginas"
 
 
@@ -83,8 +87,12 @@ tablas (una fila por línea, columnas separadas por " | "), sellos, firmas con n
    - Copia nombres, direcciones, claves, folios, superficies, montos y fechas EXACTAMENTE como aparecen.
    - No corrijas, no completes, no resumas y no agregues nada que no esté en la imagen.
    - Si una palabra o cifra no se alcanza a leer, escribe [ilegible] en su lugar. Nunca la adivines.
+   - Si el texto está borroso o desvanecido, NO lo reconstruyas por contexto: transcribe solo los \
+caracteres que ves con certeza y marca el resto como [ilegible].
 2. Clasifica la página en un tipo:
-   - escritura: instrumento notarial (escritura pública, compraventa, protocolo, notario, apéndice).
+   - escritura: documento que acredita la propiedad: escritura pública o instrumento notarial, \
+testimonio, título de propiedad (RAN, regularización de la tenencia, CORETT/INSUS), sentencia o \
+inmatriculación judicial, con sus planos y apéndices.
    - predial: boleta, recibo, estado de cuenta o constancia de impuesto predial / catastro.
    - alineamiento_numero_oficial: constancia de alineamiento y/o asignación de número oficial.
    - uso_de_suelo: licencia, constancia, dictamen o certificado de uso de suelo / zonificación.
@@ -193,39 +201,85 @@ def _leer_pagina_guardada(ruta: Path, indice: int, motor: str) -> _Lectura | Non
 _Pendiente = Union[_Lectura, Future]
 
 
-def _preparar(ruta: Path, pool: ThreadPoolExecutor, motor: str, max_paginas: int) -> tuple[int, list[_Pendiente]]:
-    """Rasteriza en el hilo principal (pymupdf no es thread-safe) y manda el OCR al pool."""
+def _nitidez(pagina) -> float:
+    """Intensidad media de bordes en escala de grises a 1000 px. Baja = borrosa o desvanecida."""
+    from PIL import Image, ImageFilter, ImageStat
+
+    zoom = 1000 / max(pagina.rect.width, pagina.rect.height)
+    pix = pagina.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csGRAY)
+    img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+    return ImageStat.Stat(img.filter(ImageFilter.FIND_EDGES)).mean[0]
+
+
+def _preparar(
+    ruta: Path, pool: ThreadPoolExecutor, motor: str, max_paginas: int
+) -> tuple[int, list[_Pendiente], list[float | None]]:
+    """Rasteriza en el hilo principal (pymupdf no es thread-safe) y manda el OCR al pool.
+
+    Devuelve también la nitidez de cada página (None si vino de la capa de texto).
+    """
     pendientes: list[_Pendiente] = []
+    nitideces: list[float | None] = []
     with pymupdf.open(ruta) as doc:
         total = doc.page_count
         for i in range(min(total, max_paginas)):
+            pagina = doc[i]
             guardada = _leer_pagina_guardada(ruta, i, motor)
             if guardada:
                 pendientes.append(guardada)
+                nitideces.append(None if guardada.origen == "capa_texto" else _nitidez(pagina))
                 continue
-            pagina = doc[i]
             capa = pagina.get_text().strip()
             if len(capa) >= MIN_CARACTERES_CAPA:
                 tipo, _ = clasificar_por_texto(capa)
                 lectura = _Lectura(texto=capa, tipo=tipo, legibilidad=Legibilidad.BUENA, origen="capa_texto")
                 _guardar_pagina(ruta, i, motor, lectura)
                 pendientes.append(lectura)
+                nitideces.append(None)
                 continue
+            nitideces.append(_nitidez(pagina))
             zoom = LADO_MAX_PX / max(pagina.rect.width, pagina.rect.height)
             jpeg = pagina.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("jpeg", jpg_quality=80)
             pendientes.append(pool.submit(_ocr_y_guardar, ruta, i, jpeg, motor))
-    return total, pendientes
+    return total, pendientes, nitideces
 
 
-def _ensamblar(ruta: Path, total: int, lecturas: list[_Lectura], max_paginas: int) -> DocumentoLeido:
+def _rangos(paginas: list[int]) -> str:
+    """[2, 3, 4, 7] -> 'p2-p4, p7'"""
+    partes, inicio = [], None
+    for k, p in enumerate(paginas):
+        if inicio is None:
+            inicio = p
+        if k + 1 == len(paginas) or paginas[k + 1] != p + 1:
+            partes.append(f"p{inicio}" if inicio == p else f"p{inicio}-p{p}")
+            inicio = None
+    return ", ".join(partes)
+
+
+def _ensamblar(
+    ruta: Path, total: int, lecturas: list[_Lectura], max_paginas: int, nitideces: list[float | None]
+) -> DocumentoLeido:
+    borrosas = []
+    for i, n in enumerate(nitideces):
+        if n is not None and n < UMBRAL_NITIDEZ:
+            borrosas.append(i + 1)
+            lecturas[i] = lecturas[i].model_copy(update={"texto": "", "legibilidad": Legibilidad.ILEGIBLE})
+
     legibles = [l for l in lecturas if l.legibilidad != Legibilidad.ILEGIBLE]
     base = legibles or lecturas
-    votos = Counter(l.tipo for l in base if l.tipo != TipoDocumento.OTRO)
-    if votos:
-        tipo, n = votos.most_common(1)[0]
+    # El tipo lo define la primera página legible (la carátula del documento); si es OTRO,
+    # el voto mayoritario. Así un predial con la escritura anexa sigue siendo predial.
+    primera = next((l.tipo for l in base if l.tipo != TipoDocumento.OTRO), None)
+    if primera is None:
+        tipo = TipoDocumento.OTRO
+    elif base[0].tipo == primera:
+        tipo = primera
     else:
-        tipo, n = TipoDocumento.OTRO, len(base)
-    confianza = round(n / len(base), 2) if base else 0.0
+        tipo = Counter(l.tipo for l in base if l.tipo != TipoDocumento.OTRO).most_common(1)[0][0]
+    # Las páginas OTRO (planos, anexos, hojas en blanco) no cuentan ni a favor ni en contra.
+    clasificadas = [l for l in base if l.tipo != TipoDocumento.OTRO] or base
+    n = sum(1 for l in clasificadas if l.tipo == tipo)
+    confianza = round(n / len(clasificadas), 2) if clasificadas else 0.0
     if not legibles:
         confianza = min(confianza, 0.3)  # tipo adivinado sobre páginas ilegibles
 
@@ -242,9 +296,18 @@ def _ensamblar(ruta: Path, total: int, lecturas: list[_Lectura], max_paginas: in
         notas.append(f"Solo se leyeron las primeras {len(lecturas)} de {total} páginas (tope MAX_PAGINAS={max_paginas}).")
     origenes = Counter(l.origen for l in lecturas)
     notas.append("Origen del texto: " + ", ".join(f"{k} {v} pág." for k, v in sorted(origenes.items())))
+    if borrosas:
+        notas.append(f"Páginas borrosas (nitidez < {UMBRAL_NITIDEZ}): {_rangos(borrosas)}; "
+                     "se descartó su texto para no usar datos adivinados.")
     ilegibles = [i + 1 for i, l in enumerate(lecturas) if l.legibilidad == Legibilidad.ILEGIBLE]
     if ilegibles:
-        notas.append(f"Páginas ilegibles: {ilegibles}.")
+        notas.append(f"Páginas ilegibles: {_rangos(ilegibles)}.")
+    otros_tipos: dict[TipoDocumento, list[int]] = {}
+    for i, l in enumerate(lecturas):
+        if l.legibilidad != Legibilidad.ILEGIBLE and l.tipo not in (tipo, TipoDocumento.OTRO):
+            otros_tipos.setdefault(l.tipo, []).append(i + 1)
+    for t, pags in otros_tipos.items():
+        notas.append(f"Contiene páginas de tipo {t.value}: {_rangos(pags)}.")
 
     return DocumentoLeido(
         archivo=nombre_archivo(ruta),
@@ -268,8 +331,8 @@ def leer_documento(ruta: Path) -> DocumentoLeido:
     if cacheado:
         return cacheado
     with ThreadPoolExecutor(max_workers=PARALELO) as pool:
-        total, pendientes = _preparar(ruta, pool, MOTOR, MAX_PAGINAS)
-        doc = _ensamblar(ruta, total, _resolver(pendientes), MAX_PAGINAS)
+        total, pendientes, nitideces = _preparar(ruta, pool, MOTOR, MAX_PAGINAS)
+        doc = _ensamblar(ruta, total, _resolver(pendientes), MAX_PAGINAS, nitideces)
     guardar_cache(doc)
     return doc
 
@@ -320,9 +383,9 @@ def construir_cache(
                 print(f"  ERROR al abrir {ruta.name}: {e}", file=sys.stderr)
                 fallidos.append(nombre_archivo(ruta))
 
-        for k, (ruta, total, pendientes) in enumerate(trabajos, 1):
+        for k, (ruta, total, pendientes, nitideces) in enumerate(trabajos, 1):
             try:
-                doc = _ensamblar(ruta, total, _resolver(pendientes), max_paginas)
+                doc = _ensamblar(ruta, total, _resolver(pendientes), max_paginas, nitideces)
             except Exception as e:
                 print(f"  [{k}/{len(trabajos)}] ERROR {ruta.name}: {type(e).__name__}: {e}", file=sys.stderr)
                 fallidos.append(nombre_archivo(ruta))
