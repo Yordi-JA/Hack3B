@@ -113,7 +113,8 @@ uno ("Josefa Ortiz de Domínguez, número 24"), usa ese con confianza menor. Si 
 
 
 def _paginas_como_texto(doc: DocumentoLeido) -> str:
-    return "\n\n".join(f"=== PÁGINA {p.numero} ===\n{p.texto}" for p in doc.paginas)
+    # Regla 8 del README: solo páginas con texto (la ingesta vacía las borrosas).
+    return "\n\n".join(f"=== PÁGINA {p.numero} ===\n{p.texto}" for p in doc.paginas if p.texto.strip())
 
 
 # La salida estructurada de Claude admite como máximo 16 campos anulables por esquema. Al LLM se le
@@ -465,7 +466,7 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
 
 
 def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
-    if doc.legibilidad == Legibilidad.ILEGIBLE:
+    if doc.legibilidad == Legibilidad.ILEGIBLE or not any(p.texto.strip() for p in doc.paginas):
         return _vacio(doc, [_h("ALI-LEG", "Documento legible", EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                                "La constancia es ilegible: no se extrajo ningún dato para no inventar información. "
                                "Solicitar una copia legible.")])

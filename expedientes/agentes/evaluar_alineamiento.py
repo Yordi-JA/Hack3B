@@ -1,6 +1,7 @@
 """Mide qué tan bien extrae el agente de Alineamiento contra datos anotados a mano. Dueño: Diego.
 
-    python -m expedientes.agentes.evaluar_alineamiento                    # corre el agente (gasta API)
+    python -m expedientes.agentes.evaluar_alineamiento                    # dice cuántas llamadas haría
+    python -m expedientes.agentes.evaluar_alineamiento --confirmar        # las hace (gasta saldo; avisar antes)
     python -m expedientes.agentes.evaluar_alineamiento --reusar           # compara la última corrida, sin API
     python -m expedientes.agentes.evaluar_alineamiento --solo "Tepeji"    # solo archivos que contengan el texto
 
@@ -92,7 +93,9 @@ def main(argv=None) -> int:
     ap.add_argument("--reusar", action="store_true", help="comparar outputs/pred_alineamiento.json sin llamar al LLM")
     ap.add_argument("--solo", default="", help="filtrar archivos que contengan este texto")
     ap.add_argument("--fecha", default=None, help="fecha de referencia AAAA-MM-DD")
+    ap.add_argument("--confirmar", action="store_true", help="autoriza llamadas nuevas a la API (gasta saldo)")
     a = ap.parse_args(argv)
+    from ..cache import leer_cache
 
     if not VERDAD.exists():
         print(f"Falta {VERDAD}")
@@ -104,8 +107,23 @@ def main(argv=None) -> int:
     if PRED.exists():
         previas = {_nfc(p["archivo"]): p for p in json.loads(PRED.read_text(encoding="utf-8"))}
 
-    from ..cache import leer_cache
     from .alineamiento import analizar
+
+    # Reglas de créditos: avisar cuántas llamadas nuevas haría y pedir confirmación explícita.
+    if not a.reusar:
+        from .alineamiento import _paginas_como_texto, _ruta_respuesta
+        nuevas = []
+        for v in verdades:
+            leido = leer_cache(_nfc(v["archivo"]))
+            if leido is None or not any(p.texto.strip() for p in leido.paginas):
+                continue
+            ruta, huella = _ruta_respuesta(leido, f"Archivo: {leido.archivo}\n\n{_paginas_como_texto(leido)}")
+            if not (ruta.exists() and json.loads(ruta.read_text(encoding="utf-8")).get("huella") == huella):
+                nuevas.append(leido.archivo)
+        if nuevas and not a.confirmar:
+            print(f"Haría {len(nuevas)} llamadas nuevas a la API (el resto sale del disco). "
+                  f"Avisa en el grupo y vuelve a correr con --confirmar, o usa --reusar.")
+            return 2
 
     preds: dict[str, DocumentoAnalizado] = {}
     for v in verdades:
