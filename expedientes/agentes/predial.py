@@ -21,8 +21,10 @@ Reglas (las definitivas dependen de las guías oficiales del reto, decisión 5):
     PRE-05  Coherencia entre fecha de pago y sello de caja
     PRE-06  Superficie de terreno registrada (la usa la validación cruzada)
     PRE-07  El documento ampara un solo predio
-    PRE-08  Uso del predio registrado (informativo)
+    PRE-08  Uso registrado compatible (baldío, agropecuario, rústico o ejidal piden revisión)
     PRE-09  Datos descartados por no tener evidencia literal (informativo)
+    PRE-10  Embargo o procedimiento administrativo de ejecución (rechazo directo)
+    PRE-11  Construcción registrada (0 m² pide revisión)
     PRE-ILEG Documento ilegible: no se extrae nada
 """
 from __future__ import annotations
@@ -60,6 +62,20 @@ DIR_ANALISIS = CACHE_DIR / "analisis" / "predial"
 # Un adeudo de predial se puede regularizar antes de firmar: por defecto pide revisión, no descarta
 # el expediente. Cambiar a BLOQUEANTE si las guías oficiales lo exigen.
 SEVERIDAD_ADEUDO = Severidad.REVISION
+# Criterio compartido por Juan Pablo: embargo o procedimiento de ejecución = rechazo directo;
+# baldío / agropecuario / ejidal y construcción en 0 m² = revisión.
+SEVERIDAD_EMBARGO = Severidad.BLOQUEANTE
+SEVERIDAD_USO_RIESGO = Severidad.REVISION
+SEVERIDAD_SIN_CONSTRUCCION = Severidad.REVISION
+_EMBARGO = re.compile(r"EMBARG|EJECUCION|REQUERIMIENTO DE PAGO|CREDITO FISCAL")
+# Uso registrado en catastro que no corresponde a un local comercial urbano construido.
+_USOS_DE_RIESGO = [
+    (r"EJID|COMUNAL", "Tierra ejidal o comunal: no puede venderse ni rentarse a largo plazo sin dominio pleno; "
+                      "revisar el régimen de propiedad."),
+    (r"AGRO|AGRIC|RUSTIC|FORESTAL|PECUARI", "Uso no urbano (rústico o agropecuario): confirmar que la licencia "
+                                           "de uso de suelo autorice el uso comercial."),
+    (r"BALDIO", "Registrado como baldío: confirmar contra la construcción actual y la licencia de uso de suelo."),
+]
 CONF_CITA, CONF_SOLO_VALOR, FACTOR_PARCIAL = 0.9, 0.7, 0.85
 
 
@@ -92,6 +108,11 @@ class _PredialLLM(BaseModel):
     adeudos: _Dato = Field(
         description="Texto que mencione adeudos, ejercicios pendientes de pago o rezagos, o al contrario que NO "
         "presenta adeudo. null si el documento no dice nada al respecto"
+    )
+    embargo: _Dato = Field(
+        description="Solo si el documento AFIRMA que este predio tiene embargo, procedimiento administrativo de "
+        "ejecución, requerimiento de pago o crédito fiscal en cobro. null si no, y también si solo es una leyenda "
+        "genérica (ej. 'el pago extemporáneo dará lugar al procedimiento administrativo de ejecución')"
     )
     otras_cuentas: _Dato = Field(
         description="Solo si el documento ampara MÁS DE UN predio: SOLO la otra clave o cuenta, copiada literal "
@@ -405,10 +426,34 @@ def _reglas(d: DatosInmueble, ctx: Contexto, descartados: list[str]) -> list[Hal
 
     uso = esp.get("uso_del_predio", vacio)
     if uso.valor:
-        nota = " Registrado como baldío: confirmar contra uso de suelo y construcción actual." \
-            if "BALDIO" in _norm(uso.valor) else ""
-        h.append(_h("PRE-08", "Uso del predio registrado en catastro", E.CUMPLE, S.INFO,
-                    f"Uso registrado: {uso.valor}.{nota}", uso))
+        riesgo = next((msg for patron, msg in _USOS_DE_RIESGO if re.search(patron, _norm(uso.valor))), None)
+        if riesgo:
+            h.append(_h("PRE-08", "Uso del predio registrado compatible con un local comercial", E.NO_CUMPLE,
+                        SEVERIDAD_USO_RIESGO, f"Uso registrado en catastro: {uso.valor}. {riesgo}", uso))
+        else:
+            h.append(_h("PRE-08", "Uso del predio registrado compatible con un local comercial", E.CUMPLE, S.INFO,
+                        f"Uso registrado en catastro: {uso.valor}.", uso))
+
+    # Embargo o PAE: solo cuenta si el documento lo afirma del predio (campo `embargo`) o el texto de
+    # adeudos lo menciona. No se busca en todo el texto: hay leyendas genéricas ("...procedimiento
+    # administrativo de ejecución") que darían rechazos falsos.
+    embargo = esp.get("embargo", vacio)
+    if not embargo.valor and _EMBARGO.search(texto_adeudo):
+        embargo = adeudos
+    if embargo.valor:
+        h.append(_h("PRE-10", "Sin embargo ni procedimiento administrativo de ejecución", E.NO_CUMPLE,
+                    SEVERIDAD_EMBARGO, f"El predial indica embargo o ejecución fiscal: \"{embargo.valor}\". "
+                    "El inmueble está sujeto a un crédito fiscal exigible.", embargo))
+
+    construccion = esp.get("superficie_construccion_m2", vacio)
+    if construccion.valor and _numero(construccion.valor) == 0:
+        h.append(_h("PRE-11", "Construcción registrada en catastro", E.NO_CUMPLE, SEVERIDAD_SIN_CONSTRUCCION,
+                    f"El predial registra {construccion.valor} m² de construcción: catastro lo tiene como terreno "
+                    "sin construir. Si existe un local, la construcción no está dada de alta; si no, habría que "
+                    "construir. Confirmar contra el inmueble y la licencia de uso de suelo.", construccion))
+    elif construccion.normalizado:
+        h.append(_h("PRE-11", "Construcción registrada en catastro", E.CUMPLE, S.INFO,
+                    f"Construcción registrada: {construccion.normalizado} m².", construccion))
 
     if descartados:
         h.append(_h("PRE-09", "Datos sin evidencia literal", E.NO_EVALUABLE, S.INFO,
@@ -436,7 +481,7 @@ _NORMALIZADORES: dict[str, Callable[[Optional[str]], Optional[str]]] = {
     "clave_catastral": _clave, "numero_cuenta": _cuenta, "municipio": _municipio,
     "entidad_federativa": _entidad, "autoridad_emisora": _texto, "fecha_pago": _fecha_iso,
     "fecha_sello": _fecha_iso, "ejercicio_pagado": _anio_ejercicio, "total_pagado": _dinero,
-    "valor_catastral": _dinero, "uso_del_predio": _texto, "folio": _texto, "adeudos": _texto,
+    "valor_catastral": _dinero, "uso_del_predio": _texto, "folio": _texto, "adeudos": _texto, "embargo": _texto,
     "otras_cuentas": _texto,
 }
 _COMUNES = ("propietario", "direccion", "numero_oficial", "superficie_terreno_m2", "clave_catastral",
@@ -444,7 +489,8 @@ _COMUNES = ("propietario", "direccion", "numero_oficial", "superficie_terreno_m2
 _IDENTIFICADORES = {"numero_cuenta", "otras_cuentas"}
 _IDENTIFICADOR = re.compile(r"\b[A-Z]{0,3}[- ]?\d[\d -]{2,}\d\b", re.IGNORECASE)
 _ESPECIFICOS = ("numero_cuenta", "folio", "ejercicio_pagado", "fecha_pago", "fecha_sello", "total_pagado",
-                "valor_catastral", "uso_del_predio", "superficie_construccion_m2", "adeudos", "otras_cuentas")
+                "valor_catastral", "uso_del_predio", "superficie_construccion_m2", "adeudos", "embargo",
+                "otras_cuentas")
 
 
 def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
