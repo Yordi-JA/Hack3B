@@ -67,10 +67,6 @@ def etiqueta(texto: str, tono: t.Tono, borde: bool = False) -> str:
     return f'<span class="etq tono-{clase_tono(tono)}{extra}">{txt(texto)}</span>'
 
 
-def etq_recomendacion(r: Recomendacion) -> str:
-    return etiqueta(r.value, t.ESTADO[r])
-
-
 def etq_regla(e: EstadoRegla) -> str:
     return etiqueta(L.NOMBRE_ESTADO_REGLA[e], t.REGLA[e])
 
@@ -83,7 +79,6 @@ def etq_legibilidad(leg: Legibilidad) -> str:
     return etiqueta(NOMBRE_LEGIBILIDAD[leg], t.LEGIBILIDAD[leg])
 
 
-ETQ_EJEMPLO = etiqueta("Ejemplo", t.AZUL)
 
 
 def logo_3b(invertido: bool = False) -> str:
@@ -134,32 +129,37 @@ def texto_ubicacion(u: L.Ubicacion) -> str:
 
 # ------------------------------------------------------------------ bandeja
 
-def kpis(ind: L.Indicadores) -> str:
-    nota = f"{ind.ejemplos} de ejemplo" if ind.ejemplos else "Todos son análisis reales"
-    conf = pct(ind.confianza_promedio) if ind.confianza_promedio is not None else "Sin datos"
-    celdas = [
-        f'<div class="kpi kpi-principal"><span>Expedientes analizados</span><b>{ind.total}</b><small>{nota}</small></div>'
-    ]
-    for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE):
-        celdas.append(f'<div class="kpi">{etq_recomendacion(r)}<b>{ind.por_recomendacion[r]}</b></div>')
-    celdas.append(f'<div class="kpi"><span>Confianza promedio</span><b>{conf}</b></div>')
-    return f'<div class="kpis">{"".join(celdas)}</div>'
+def resumen_bandeja(ind: L.Indicadores) -> str:
+    """Una línea de texto bajo el subtítulo: total, confianza promedio y cuántos son de ejemplo."""
+    if not ind.total:
+        return '<p class="resumen-bandeja">Ningún expediente con estos filtros</p>'
+    partes = [f"{ind.total} expediente{'s' if ind.total != 1 else ''}"]
+    if ind.confianza_promedio is not None:
+        partes.append(f"confianza promedio {pct(ind.confianza_promedio)}")
+    if ind.ejemplos:
+        partes.append(f"{ind.ejemplos} de ejemplo")
+    return f'<p class="resumen-bandeja">{" · ".join(partes)}</p>'
 
 
 def tarjeta_expediente(clave: str, d: Dictamen, es_ejemplo: bool) -> str:
+    """Tarjeta de la bandeja: solo la línea del marco sobre el fondo de la página, sin etiquetas
+    de color; el estado va en texto, en su color, al final de la ceja."""
     u = L.consolidar_ubicacion(d)
     recibidos = sum(1 for tr in L.documentos_por_tipo(d) if tr.recibido)
     n_inc = len(d.inconsistencias)
     inc = "Sin inconsistencias" if not n_inc else f"{n_inc} inconsistencia{'s' if n_inc > 1 else ''}"
-    etiquetas = etq_recomendacion(d.recomendacion) + (ETQ_EJEMPLO if es_ejemplo else "")
+    tono = clase_tono(t.ESTADO[d.recomendacion])
+    meta = [f"{recibidos} de 4 tipos de documento", inc, f"Confianza {pct(d.confianza)}"]
+    if es_ejemplo:
+        meta.append("Ejemplo")
+    meta.append(fecha(d.fecha_analisis))
     return (
         f'<a class="exp" href="{escape(url(vista="detalle", exp=clave))}" target="_self">'
         f'<span class="exp-titulo">{txt(d.expediente_id)}</span>'
-        f'<div class="exp-lugar">{txt(texto_ubicacion(u))}</div>'
-        f'<div class="exp-etiquetas">{etiquetas}</div>'
+        f'<div class="exp-lugar">{txt(texto_ubicacion(u))} · '
+        f'<b class="exp-estado est-{tono}">{txt(d.recomendacion.value)}</b></div>'
         f'<p class="exp-resumen">{txt(d.resumen)}</p>'
-        f'<div class="exp-meta"><span>{recibidos} de 4 tipos de documento</span><span>{inc}</span>'
-        f"<span>Confianza {pct(d.confianza)}</span><span>{fecha(d.fecha_analisis)}</span></div></a>"
+        f'<div class="exp-meta">{" · ".join(meta)}</div></a>'
     )
 
 
@@ -179,8 +179,8 @@ def caja_mapa(svg: str, sin_entidad: int) -> str:
             "federativa identificada: aparecen en la lista, no en el mapa.</div>"
         )
     return (
-        '<div class="mapa-caja"><h3>Expedientes por entidad</h3>'
-        "<p>El color es la recomendación más grave del estado y el número, cuántos expedientes tiene. Haz clic en un estado para filtrar.</p>"
+        '<div class="mapa-bloque"><h3>Expedientes por entidad</h3>'
+        "<p>Color: recomendación más grave. Número: expedientes. Clic para filtrar.</p>"
         f'<div class="leyenda">{leyenda}</div>{svg}{pie}</div>'
     )
 
