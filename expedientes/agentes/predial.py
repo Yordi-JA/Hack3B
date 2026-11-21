@@ -16,7 +16,7 @@ Diseño:
 Reglas (las definitivas dependen de las guías oficiales del reto, decisión 5):
     PRE-01  Contribuyente identificado
     PRE-02  Predio identificado (clave catastral o cuenta predial)
-    PRE-03  Pago del ejercicio vigente respecto a ctx.fecha_referencia
+    PRE-03  Fecha de pago identificada (el predial no tiene vigencia: solo se reporta la fecha)
     PRE-04  Adeudos o ejercicios pendientes
     PRE-05  Coherencia entre fecha de pago y sello de caja
     PRE-06  Superficie de terreno registrada (la usa la validación cruzada)
@@ -365,23 +365,19 @@ def _reglas(d: DatosInmueble, ctx: Contexto, descartados: list[str]) -> list[Hal
                     S.REVISION, "No se encontró clave catastral ni cuenta predial en el documento: no se puede "
                     "vincular con certeza al inmueble."))
 
+    # Criterio de los organizadores: el predial NO tiene vigencia; solo se reporta su fecha y el
+    # ejercicio que cubre. No se evalúa contra ctx.fecha_referencia.
     ejercicio = esp.get("ejercicio_pagado", vacio)
-    anio_ref = ctx.fecha_referencia.year
-    if ejercicio.normalizado:
-        pagado = int(ejercicio.normalizado)
-        if pagado >= anio_ref:
-            h.append(_h("PRE-03", "Pago del impuesto predial del ejercicio vigente", E.CUMPLE, S.INFO,
-                        f"Acredita el pago del ejercicio {pagado} (fecha de referencia {ctx.fecha_referencia}).",
-                        ejercicio))
-        else:
-            hueco = f" Tampoco se acreditan los ejercicios {pagado + 1}-{anio_ref - 1}." if anio_ref - pagado > 1 else ""
-            h.append(_h("PRE-03", "Pago del impuesto predial del ejercicio vigente", E.NO_CUMPLE, S.REVISION,
-                        f"El último ejercicio pagado que acredita el documento es {pagado}; a la fecha de "
-                        f"referencia ({ctx.fecha_referencia}) corresponde el ejercicio {anio_ref}.{hueco} "
-                        f"Solicitar el comprobante del ejercicio {anio_ref}.", ejercicio))
+    fecha = esp.get("fecha_pago", vacio)
+    if fecha.normalizado or ejercicio.normalizado:
+        partes = [f"fecha de pago {fecha.valor}" if fecha.valor else None,
+                  f"ejercicio {ejercicio.normalizado}" if ejercicio.normalizado else None]
+        h.append(_h("PRE-03", "Fecha del pago de predial identificada", E.CUMPLE, S.INFO,
+                    "Comprobante de predial con " + " y ".join(p for p in partes if p)
+                    + ". El predial no tiene vigencia: se reporta su fecha.", fecha, ejercicio))
     else:
-        h.append(_h("PRE-03", "Pago del impuesto predial del ejercicio vigente", E.NO_EVALUABLE, S.REVISION,
-                    "No se identificó qué ejercicio fiscal cubre el pago."))
+        h.append(_h("PRE-03", "Fecha del pago de predial identificada", E.NO_EVALUABLE, S.REVISION,
+                    "No se encontró la fecha de pago ni el ejercicio que cubre el comprobante."))
 
     adeudos = esp.get("adeudos", vacio)
     texto_adeudo = _norm(adeudos.valor)
@@ -519,15 +515,10 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
         campos[nombre] = Campo(valor=dato.valor.strip(), normalizado=_NORMALIZADORES[nombre](dato.valor),
                                evidencia=evidencia, confianza=round(conf * factor, 2))
 
-    # El pago cubre hasta el 31 de diciembre del último ejercicio pagado.
-    ejercicio = campos["ejercicio_pagado"]
-    vigencia = Campo(valor=ejercicio.valor, normalizado=f"{ejercicio.normalizado}-12-31",
-                     evidencia=ejercicio.evidencia, confianza=ejercicio.confianza) if ejercicio.normalizado else Campo()
-
     datos = DatosInmueble(
         **{n: campos[n] for n in _COMUNES},
         fecha_emision=campos["fecha_pago"],
-        vigencia_hasta=vigencia,
+        vigencia_hasta=Campo(),  # el predial no tiene vigencia (criterio de los organizadores)
         especificos={n: campos[n] for n in _ESPECIFICOS if campos[n].valor},
     )
     poblados = [c.confianza for c in campos.values() if c.valor]
