@@ -332,6 +332,22 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
   text-underline-offset: 3px; }}
 .st-key-subir-abrir-ejemplo button:hover p {{ color: var(--rojo-osc); }}
 
+/* ---- Pie: paisaje 3B fundido con el panel ----
+   Ocupa todo el ancho del panel y llega a su borde inferior: los márgenes negativos cancelan el relleno
+   lateral e inferior del contenedor, y el recorte redondeado del panel le da las esquinas. El cielo de la
+   ilustración es más claro que el panel; multiply lo deja casi igual al panel y la máscara funde el borde
+   superior para que no se vea un rectángulo. */
+.paisaje {{ margin: 56px -36px -64px; line-height: 0; pointer-events: none; user-select: none; }}
+/* En vistas cortas el contenido no llena el panel: el contenedor ocupa toda la altura y el paisaje se
+   va al fondo con margin-top: auto. */
+[data-testid="stMainBlockContainer"]:has(.paisaje) {{ min-height: 100%; display: flex; flex-direction: column; }}
+[data-testid="stMainBlockContainer"]:has(.paisaje) > [data-testid="stVerticalBlock"] {{ flex: 1 0 auto; }}
+[data-testid="stElementContainer"]:has(> .paisaje), [data-testid="stElementContainer"]:has(.paisaje) {{ margin-top: auto; }}
+.paisaje img {{ display: block; width: 100%; height: auto; max-height: 280px; object-fit: cover;
+  object-position: center bottom; mix-blend-mode: multiply;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 40%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); }}
+
 /* Streamlit da estilo propio a h1-h3 y p dentro de Markdown; estas reglas ganan por especificidad. */
 .stApp .marco .marco-titulo, .stApp .encabezado h1, .stApp h2.seccion {{ font-family: var(--f-titular); font-weight: 900; }}
 .stApp .marco .marco-titulo {{ font-size: 34px; line-height: 1; padding: 0 14px; margin: 0; }}

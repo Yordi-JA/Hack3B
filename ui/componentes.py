@@ -6,7 +6,10 @@ o una sangría de 4 espacios harían que el Markdown de Streamlit lo convierta e
 """
 from __future__ import annotations
 
+import base64
+from functools import lru_cache
 from html import escape
+from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import urlencode
 
@@ -543,4 +546,19 @@ def detalle_completo(d: Dictamen) -> str:
     return (
         '<h3 class="dc-titulo">Datos extraídos</h3>' + tabla_datos(d)
         + '<h3 class="dc-titulo">Todos los requisitos</h3>' + tabla_requisitos(L.consolidar_requisitos(d))
+    )
+
+
+# ------------------------------------------------------------------ pie de página
+
+PAISAJE = Path(__file__).resolve().parent / "assets" / "paisaje.webp"
+
+
+@lru_cache(maxsize=1)
+def paisaje() -> str:
+    """Ilustración 3B al pie de cada vista. Decorativa: sin texto alternativo y oculta a lectores de pantalla."""
+    datos = base64.b64encode(PAISAJE.read_bytes()).decode("ascii")
+    return (
+        '<div class="paisaje" aria-hidden="true">'
+        f'<img src="data:image/webp;base64,{datos}" alt="" draggable="false"></div>'
     )
