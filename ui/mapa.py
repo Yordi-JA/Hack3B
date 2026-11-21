@@ -149,8 +149,6 @@ def punto_etiqueta(clave: Optional[str]) -> Optional[tuple[float, float]]:
     estado = _geometria()["estados"].get(ENTIDADES[clave][0])
     if not estado:
         return None
-    if clave in LLAMADAS:
-        return LLAMADAS[clave]
     x, y = estado.get("etiqueta", [0, 0])
     return (float(x), float(y))
 
@@ -194,10 +192,11 @@ def _bajo_llamada(x: float, y: float, radio: float = 30) -> bool:
 
 def svg_bandeja(
     conteos: dict[str, ConteoEntidad], seleccion: Optional[str], params_base: dict[str, str],
-    criterio: str = "predominante", abreviaturas: bool = True,
+    criterio: str = "predominante", abreviaturas: bool = True, numeros: bool = True,
 ) -> str:
     """Mapa de todo el país. Cada estado con expedientes es un enlace que filtra la bandeja y abre
-    su ventana con los porcentajes. Con `abreviaturas`, cada estado grande lleva su clave (BCN, SON...)."""
+    su ventana con los porcentajes. Con `abreviaturas`, cada estado grande lleva su clave (BCN, SON...).
+    Con `numeros=False` no se dibujan conteos ni burbujas: solo el color (el detalle va en la ventana)."""
     geo = _geometria()
     rellenos = relleno_por_entidad(conteos, criterio)
     partes = [
@@ -223,7 +222,13 @@ def svg_bandeja(
                 f'aria-label="{escape(etiqueta_accesible(clave, conteo))}">{trazo}</a>'
             )
             x, y = estado.get("etiqueta", [0, 0])
-            if clave in LLAMADAS:
+            if not numeros:
+                if abreviaturas and clave not in LLAMADAS:
+                    etiquetas.append(
+                        f'<text class="mx-abr" x="{x}" y="{y}" text-anchor="middle" '
+                        f'dominant-baseline="central">{abreviatura(clave)}</text>'
+                    )
+            elif clave in LLAMADAS:
                 lx, ly = LLAMADAS[clave]
                 # Enlace duplicado solo para el mouse; el lector de pantalla ya tiene el del estado.
                 etiquetas.append(
@@ -244,7 +249,7 @@ def svg_bandeja(
                     f'<text class="mx-num mx-num-halo" x="{x}" y="{y}" text-anchor="middle" '
                     f'dominant-baseline="central">{conteo.total}</text>'
                 )
-        elif abreviaturas and clave not in LLAMADAS and not _bajo_llamada(*estado.get("etiqueta", [0, 0])):
+        elif abreviaturas and clave not in LLAMADAS and not (numeros and _bajo_llamada(*estado.get("etiqueta", [0, 0]))):
             x, y = estado.get("etiqueta", [0, 0])
             etiquetas.append(
                 f'<text class="mx-abr" x="{x}" y="{y}" text-anchor="middle" '

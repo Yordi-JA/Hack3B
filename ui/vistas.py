@@ -178,7 +178,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     seleccion = st.session_state.get("f_entidad") or None
     ventana = C.ventana_entidad(seleccion, conteos[seleccion], enlace) if seleccion in conteos else ""
     with st.container(key="b-mapa"):
-        html(C.caja_mapa_tablero(mapa.svg_bandeja(conteos, seleccion, enlace), ventana, sin_entidad))
+        html(C.caja_mapa_tablero(mapa.svg_bandeja(conteos, seleccion, enlace, numeros=False), ventana, sin_entidad))
 
     filtros = st.container(key="b-filtros")
     f1, f2, f3 = filtros.columns([1, 1.6, 1.2], vertical_alignment="bottom")

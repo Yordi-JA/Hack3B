@@ -52,7 +52,11 @@ def test_mapa_con_abreviaturas_sin_tapar_burbujas():
     svg = mapa.svg_bandeja({"QUERETARO": ConteoEntidad(1, {R.CUMPLE: 1})}, None, {"vista": "bandeja"})
     assert ">BCN<" in svg and ">SON<" in svg
     assert ">SLP<" not in svg  # quedaría bajo la burbuja de Querétaro
-    assert mapa.punto_etiqueta("QUERETARO") == mapa.LLAMADAS["QUERETARO"]
+    # en la bandeja: solo color, sin números ni burbujas; la ventana se ancla al estado
+    sin = mapa.svg_bandeja({"QUERETARO": ConteoEntidad(1, {R.CUMPLE: 1})}, None, {"vista": "bandeja"}, numeros=False)
+    assert "mx-llamada" not in sin and "mx-num" not in sin and ">SLP<" in sin
+    assert 'class="mx-enlace"' in sin
+    assert mapa.punto_etiqueta("QUERETARO") != mapa.LLAMADAS["QUERETARO"]
 
 
 def test_recorrido_css_solo_style_y_objetivos_existen():
