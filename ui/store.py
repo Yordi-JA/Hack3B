@@ -59,8 +59,10 @@ def _leer(ruta: Path, origen: Origen) -> Entrada | ArchivoInvalido:
 
 
 def cargar(
-    dir_resultados: Path = DIR_RESULTADOS, dir_ejemplos: Path = DIR_EJEMPLOS
+    dir_resultados: Optional[Path] = None, dir_ejemplos: Optional[Path] = None
 ) -> tuple[list[Entrada], list[ArchivoInvalido]]:
+    dir_resultados = dir_resultados or DIR_RESULTADOS
+    dir_ejemplos = dir_ejemplos or DIR_EJEMPLOS
     entradas: list[Entrada] = []
     invalidos: list[ArchivoInvalido] = []
     for carpeta, origen in ((dir_resultados, "resultado"), (dir_ejemplos, "ejemplo")):
@@ -76,11 +78,12 @@ def buscar(entradas: list[Entrada], clave: Optional[str]) -> Optional[Entrada]:
     return next((e for e in entradas if e.clave == clave), None)
 
 
-def guardar(dictamen: Dictamen, dir_resultados: Path = DIR_RESULTADOS) -> Entrada:
+def guardar(dictamen: Dictamen, dir_resultados: Optional[Path] = None) -> Entrada:
     """Escribe `resultados/<id>.json`. Si ya existe un expediente con ese id, lo reemplaza.
 
     Se escribe a un temporal y luego se renombra, para que la bandeja nunca lea un archivo a medias.
     """
+    dir_resultados = dir_resultados or DIR_RESULTADOS
     dir_resultados.mkdir(parents=True, exist_ok=True)
     destino = dir_resultados / nombre_archivo(dictamen.expediente_id)
     fd, tmp = tempfile.mkstemp(dir=dir_resultados, suffix=".tmp")

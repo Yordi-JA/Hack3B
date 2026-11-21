@@ -257,11 +257,18 @@ def _correr_con_estado(etiqueta: str, funcion, *args):
 
 
 def _mostrar_error(error: BaseException) -> None:
-    st.error(
-        f"No se pudo analizar el expediente. {type(error).__name__}: {error}\n\n"
-        "Revisa que los archivos sean PDF o imágenes legibles y vuelve a intentarlo. Si el error se repite, "
-        "comparte el detalle técnico con quien mantiene los agentes."
-    )
+    if isinstance(error, NotImplementedError):
+        st.error(
+            "El análisis automático todavía no está disponible en esta versión: falta implementar alguno de "
+            "los agentes. Mientras tanto puedes abrir el dictamen de ejemplo."
+        )
+    else:
+        detalle = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+        st.error(
+            f"No se pudo analizar el expediente ({detalle}).\n\n"
+            "Revisa que los archivos sean PDF o imágenes legibles y vuelve a intentarlo. Si el error se repite, "
+            "comparte el detalle técnico con quien mantiene los agentes."
+        )
     with st.expander("Detalle técnico"):
         st.code("".join(traceback.format_exception(error)), language=None)
 

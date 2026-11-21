@@ -101,3 +101,26 @@ def test_contraste_de_etiquetas_cumple_aa():
         assert t.contraste(tono.oscuro, t.TARJETA_OSCURA) >= 4.5
     assert t.contraste("#FFFFFF", t.ROJO_3B_OSCURO) >= 4.5
     assert t.contraste(t.TEXTO_SOBRE_OSCURO_2, t.TARJETA_OSCURA) >= 4.5
+
+
+# ------------------------------------------------------------------ flujo de análisis (sin Streamlit en pantalla)
+
+def test_analizar_guarda_subidas_con_nombre_original_y_persiste(tmp_path, monkeypatch):
+    import expedientes.orquestador as orq
+    from ui import vistas
+
+    vistos = {}
+    original = orq.analizar_expediente
+
+    def falso(rutas, ctx=None, expediente_id=None, usar_ejemplo=False):
+        vistos["nombres"] = [r.name for r in rutas]
+        vistos["contenido"] = [r.read_bytes() for r in rutas]
+        return original([], usar_ejemplo=True).model_copy(update={"expediente_id": expediente_id})
+
+    monkeypatch.setattr(orq, "analizar_expediente", falso)
+    monkeypatch.setattr(store, "DIR_RESULTADOS", tmp_path / "resultados")
+    entrada = vistas._analizar([("01 Escritura Tepeji ñ.pdf", b"%PDF"), ("../predial.jpg", b"img")], "TEPEJI-05")
+    assert vistos["nombres"] == ["01 Escritura Tepeji ñ.pdf", "predial.jpg"]
+    assert vistos["contenido"] == [b"%PDF", b"img"]
+    assert entrada.ruta == tmp_path / "resultados" / "TEPEJI-05.json"
+    assert entrada.clave == "resultado:TEPEJI-05" and entrada.dictamen.expediente_id == "TEPEJI-05"

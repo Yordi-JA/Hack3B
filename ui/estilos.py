@@ -84,6 +84,7 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .encabezado h1 {{ font-family: var(--f-titular); font-size: 30px; line-height: 1.1; color: var(--tinta); margin: 0; padding: 0; }}
 .encabezado p {{ color: var(--texto2); margin: 6px 0 0; font-size: 14px; }}
 .seccion {{ font-family: var(--f-titular); font-size: 19px; color: var(--tinta); margin: 36px 0 4px; scroll-margin-top: 24px; }}
+.ancla {{ scroll-margin-top: 16px; height: 0; }}
 .seccion-sub {{ color: var(--texto2); font-size: 14px; margin: 0 0 14px; }}
 
 /* ---- etiquetas de estado: fondo suave, texto siempre presente ---- */

@@ -91,7 +91,8 @@ def encabezado(titulo: str, subtitulo: str = "") -> str:
 
 def seccion(titulo: str, ancla: str, sub: str = "") -> str:
     extra = f'<p class="seccion-sub">{escape(sub)}</p>' if sub else ""
-    return f'<h2 class="seccion" id="{ancla}">{escape(titulo)}</h2>{extra}'
+    # Streamlit reescribe el id de los encabezados con el texto; el ancla va en un elemento aparte.
+    return f'<div class="ancla" id="{ancla}"></div><h2 class="seccion">{escape(titulo)}</h2>{extra}'
 
 
 def cita(ev: Evidencia) -> str:
