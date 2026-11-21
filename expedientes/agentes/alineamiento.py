@@ -201,7 +201,7 @@ def extraer(doc: DocumentoLeido) -> ExtraccionAlineamiento:
 
     # json_schema = salida estructurada nativa de Claude: el JSON siempre cumple el esquema.
     # El modo por defecto (tool calling) no puede forzarse en Opus 5.5 / Sonnet 5.5.
-    llm = get_llm(effort="low", max_tokens=4000).with_structured_output(_ExtraccionLLM, method="json_schema")
+    llm = get_llm(effort="low", max_tokens=6000).with_structured_output(_ExtraccionLLM, method="json_schema")
     r = llm.invoke([("system", INSTRUCCIONES), ("human", entrada)],
                    config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
     ruta.parent.mkdir(parents=True, exist_ok=True)

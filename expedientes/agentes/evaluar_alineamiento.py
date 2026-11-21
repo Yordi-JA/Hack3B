@@ -89,7 +89,7 @@ def comparar(verdad: dict, d: DocumentoAnalizado) -> dict[str, dict]:
     for campo in CAMPOS:
         esp, obt = verdad.get(campo), _obtenido(d, campo)
         if campo == "alineamiento":  # en la verdad solo está anotado si la constancia lo trae (sí/no)
-            esp = "sí" if verdad.get("contiene_alineamiento") else None
+            esp = "sí" if verdad.get("contiene_alineamiento") and not verdad.get("alineamiento_sin_datos") else None
         if esp in (None, "") and obt in (None, ""):
             estado = "ok"
         elif esp in (None, ""):
