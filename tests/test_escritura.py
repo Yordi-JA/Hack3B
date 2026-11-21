@@ -552,3 +552,76 @@ class TestFormatearPaginas:
         assert "[P3]" in salida
         assert "hola" in salida
         assert "mundo" in salida
+
+
+# ============================================================ correcciones de Julián (sin API)
+
+def _vacio_llm():
+    return {n: _CampoLLM(valor=None, cita=None, pagina=None, confianza=0.0) for n in escritura._CAMPOS_ESCRITURA_LLM}
+
+
+def _doc_con_anexo() -> DocumentoLeido:
+    return DocumentoLeido(
+        archivo="ESCRITURA ANEXO.pdf", tipo=TipoDocumento.ESCRITURA, confianza_tipo=0.9,
+        legibilidad=Legibilidad.BUENA, paginas_totales=3,
+        notas="Origen del texto: llm 3 pág. Contiene páginas de tipo predial: p2.",
+        paginas=[
+            Pagina(numero=1, texto="ESCRITURA NÚMERO 27,418. Inmueble en Nogal S/N, Estado de México."),
+            Pagina(numero=2, texto="RECIBO PREDIAL. CLAVE CATASTRAL 207 15 088 06 00 0000. SUPERFICIE 245.00 M2"),
+            Pagina(numero=3, texto=""),  # borrosa: la ingesta descartó su texto
+        ],
+    )
+
+
+class TestCorreccionesJulian:
+    def test_entidad_y_municipio_en_formato_del_contrato(self):
+        assert escritura._normalizar_entidad("Estado de México") == "MEXICO"
+        assert escritura._normalizar_entidad("Edo. de Méx.") == "MEXICO"
+        assert escritura._normalizar_entidad("Hidalgo") == "HIDALGO"
+        assert escritura._normalizar_entidad("Hgo.") == "HIDALGO"
+        assert escritura._normalizar_entidad("Ciudad de México") == "CIUDAD DE MEXICO"
+        assert escritura._normalizar_municipio("Municipio de Tultepec") == "TULTEPEC"
+
+    def test_sin_numero_no_se_pierde(self):
+        assert escritura._normalizar_numero_oficial("S/N") == "SN"
+        assert escritura._normalizar_numero_oficial("sin número") == "SN"
+        assert escritura._normalizar_numero_oficial("No. 120") == "120"
+
+    def test_numero_de_escritura_con_miles(self):
+        assert escritura._normalizar_instrumento("27,418") == "27418"
+        assert escritura._normalizar_instrumento("Escritura número 41,906") == "41906"
+        assert escritura._normalizar_instrumento("4521") == "4521"
+
+    def test_persona_moral_no_se_reordena(self):
+        assert _normalizar_nombre("Inmobiliaria XYZ, S.A. de C.V.") == "INMOBILIARIA XYZ S A DE C V"
+        assert _normalizar_nombre("Claudia Alejandra Méndez Salazar") == "MENDEZ SALAZAR CLAUDIA ALEJANDRA"
+
+    def test_no_manda_anexos_ni_paginas_vacias_al_modelo(self):
+        assert [p.numero for p in _seleccionar_paginas(_doc_con_anexo())] == [1]
+
+    def test_dato_del_predial_anexo_no_cuenta_como_de_la_escritura(self, monkeypatch):
+        vistas = {}
+
+        def falso(doc, paginas):
+            vistas["paginas"] = [p.numero for p in paginas]
+            d = _vacio_llm()
+            # El modelo "encuentra" la clave del predial anexo: no debe pasar la verificación.
+            d["clave_catastral"] = _CampoLLM(valor="207 15 088 06 00 0000", cita="CLAVE CATASTRAL 207 15 088 06 00 0000",
+                                             pagina=2, confianza=0.9)
+            d["entidad_federativa"] = _CampoLLM(valor="Estado de México", cita="Estado de México", pagina=1, confianza=0.9)
+            d["numero_oficial"] = _CampoLLM(valor="S/N", cita="Nogal S/N", pagina=1, confianza=0.9)
+            d["numero_escritura"] = _CampoLLM(valor="27,418", cita="ESCRITURA NÚMERO 27,418", pagina=1, confianza=0.9)
+            return escritura._EscrituraLLM(**d)
+
+        monkeypatch.setattr(escritura, "_extraer", falso)
+        r = escritura.analizar(_doc_con_anexo(), Contexto())
+        assert vistas["paginas"] == [1]
+        assert r.datos.clave_catastral.normalizado is None and r.datos.clave_catastral.evidencia is None
+        assert r.datos.entidad_federativa.normalizado == "MEXICO"
+        assert r.datos.numero_oficial.normalizado == "SN"
+        assert r.datos.especificos["numero_escritura"].normalizado == "27418"
+
+    def test_sin_paginas_propias_con_texto_es_ilegible(self, monkeypatch):
+        monkeypatch.setattr(escritura, "_extraer", lambda *a: (_ for _ in ()).throw(AssertionError("no debe llamar")))
+        doc = _doc_con_anexo().model_copy(update={"paginas": [Pagina(numero=1, texto="  ")]})
+        assert escritura.analizar(doc, Contexto()).hallazgos[0].id_regla == "ESC-ILEG"
