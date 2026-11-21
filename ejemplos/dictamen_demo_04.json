@@ -1,0 +1,647 @@
+{
+  "expediente_id": "EXP-DEMO-004",
+  "fecha_analisis": "2026-11-20T17:25:00",
+  "fecha_referencia": "2026-11-21",
+  "documentos": [
+    {
+      "archivo": "Escritura Tultepec DEMO.pdf",
+      "tipo": "escritura",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Comercializadora Cedros de Tultepec, S.A. de C.V.",
+          "normalizado": "COMERCIALIZADORA CEDROS DE TULTEPEC SA DE CV",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 2,
+            "cita": "COMERCIALIZADORA CEDROS DE TULTEPEC, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE, representada en este acto"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Avenida Pirules número 15, Colonia San Agustín",
+          "normalizado": "AV PIRULES 15, COL SAN AGUSTIN, TULTEPEC, MEX",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 2,
+            "cita": "inmueble marcado con el número 15 de la Avenida Pirules, Colonia San Agustín"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Estado de México",
+          "normalizado": "MEXICO",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "TULTEPEC, ESTADO DE MÉXICO"
+          },
+          "confianza": 0.94
+        },
+        "municipio": {
+          "valor": "Tultepec",
+          "normalizado": "TULTEPEC",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 2,
+            "cita": "Municipio de Tultepec, Estado de México"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "520.00 m²",
+          "normalizado": "520.00",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 3,
+            "cita": "con una superficie de 520.00 metros cuadrados"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "118 05 076 11 00 0000",
+          "normalizado": "1180507611000000",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 3,
+            "cita": "clave catastral 118 05 076 11 00 0000"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "15",
+          "normalizado": "15",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 2,
+            "cita": "marcado con el número 15"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "9 de mayo de 2018",
+          "normalizado": "2018-05-09",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "a nueve de mayo de dos mil dieciocho"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "autoridad_emisora": {
+          "valor": "Notaría Pública No. 96 del Estado de México",
+          "normalizado": "NOTARIA PUBLICA 96 MEX",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "Notario Público número 96 del Estado de México"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "tipo_acto": {
+            "valor": "Compraventa",
+            "normalizado": "COMPRAVENTA",
+            "evidencia": {
+              "archivo": "Escritura Tultepec DEMO.pdf",
+              "pagina": 1,
+              "cita": "CONTRATO DE COMPRAVENTA"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ESC-01",
+          "descripcion": "La escritura identifica al titular del inmueble",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "La titular es Comercializadora Cedros de Tultepec, S.A. de C.V.",
+          "evidencias": [
+            {
+              "archivo": "Escritura Tultepec DEMO.pdf",
+              "pagina": 2,
+              "cita": "COMERCIALIZADORA CEDROS DE TULTEPEC, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE, representada en este acto"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.94
+    },
+    {
+      "archivo": "Predial Tultepec 2026 DEMO.pdf",
+      "tipo": "predial",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "COMERCIALIZADORA CEDROS DE TULTEPEC SA DE CV",
+          "normalizado": "COMERCIALIZADORA CEDROS DE TULTEPEC SA DE CV",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "PROPIETARIO: COMERCIALIZADORA CEDROS DE TULTEPEC SA DE CV"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "AV PIRULES 15 SAN AGUSTIN",
+          "normalizado": "AV PIRULES 15, COL SAN AGUSTIN, TULTEPEC, MEX",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "DOMICILIO DEL PREDIO: AV PIRULES 15 SAN AGUSTIN"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Estado de México",
+          "normalizado": "MEXICO",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "GOBIERNO DEL ESTADO DE MÉXICO"
+          },
+          "confianza": 0.94
+        },
+        "municipio": {
+          "valor": "Tultepec",
+          "normalizado": "TULTEPEC",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "H. AYUNTAMIENTO DE TULTEPEC 2025-2027"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "520",
+          "normalizado": "520.00",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUP. TERRENO 520 M2"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "118 05 076 11 00 0000",
+          "normalizado": "1180507611000000",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE CATASTRAL 1180507611000000"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "15",
+          "normalizado": "15",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "AV PIRULES 15"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "28/02/2026",
+          "normalizado": "2026-02-28",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "FECHA DE EMISIÓN 28/02/2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "Bimestre 1 de 2026",
+          "normalizado": "2026-02-28",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "PERIODO PAGADO: 2026 BIM 1 A 2026 BIM 1"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Tesorería Municipal de Tultepec",
+          "normalizado": "TESORERIA MUNICIPAL TULTEPEC",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "TESORERÍA MUNICIPAL"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "adeudo": {
+            "valor": "$14,862.00",
+            "normalizado": "14862.00",
+            "evidencia": {
+              "archivo": "Predial Tultepec 2026 DEMO.pdf",
+              "pagina": 1,
+              "cita": "ADEUDO DE EJERCICIOS ANTERIORES: $14,862.00"
+            },
+            "confianza": 0.93
+          },
+          "ejercicio_pagado": {
+            "valor": "2026, bimestre 1",
+            "normalizado": "2026-1",
+            "evidencia": {
+              "archivo": "Predial Tultepec 2026 DEMO.pdf",
+              "pagina": 1,
+              "cita": "PERIODO PAGADO: 2026 BIM 1 A 2026 BIM 1"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "PRE-01",
+          "descripcion": "Predial pagado del ejercicio vigente",
+          "estado": "no_cumple",
+          "severidad": "revision",
+          "explicacion": "Solo está pagado el primer bimestre de 2026; faltan los bimestres 2 a 6.",
+          "evidencias": [
+            {
+              "archivo": "Predial Tultepec 2026 DEMO.pdf",
+              "pagina": 1,
+              "cita": "PERIODO PAGADO: 2026 BIM 1 A 2026 BIM 1"
+            }
+          ]
+        },
+        {
+          "id_regla": "PRE-02",
+          "descripcion": "Sin adeudos de impuesto predial",
+          "estado": "no_cumple",
+          "severidad": "bloqueante",
+          "explicacion": "El recibo reporta adeudo de ejercicios anteriores por $14,862.00.",
+          "evidencias": [
+            {
+              "archivo": "Predial Tultepec 2026 DEMO.pdf",
+              "pagina": 1,
+              "cita": "ADEUDO DE EJERCICIOS ANTERIORES: $14,862.00"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.92
+    },
+    {
+      "archivo": "Predial Tultepec 2024 DEMO.pdf",
+      "tipo": "predial",
+      "confianza_tipo": 0.95,
+      "legibilidad": "parcial",
+      "datos": {
+        "propietario": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "direccion": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "entidad_federativa": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "municipio": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "superficie_terreno_m2": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "clave_catastral": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "numero_oficial": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "fecha_emision": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "vigencia_hasta": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "autoridad_emisora": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "especificos": {}
+      },
+      "hallazgos": [
+        {
+          "id_regla": "EXP-ERROR",
+          "descripcion": "Documento recibido sin análisis",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "Falló el análisis automático: TimeoutError: el modelo no respondió en 120 s.",
+          "evidencias": []
+        }
+      ],
+      "confianza": 0.0
+    },
+    {
+      "archivo": "Alineamiento Tultepec DEMO.pdf",
+      "tipo": "alineamiento_numero_oficial",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Comercializadora Cedros de Tultepec, S.A. de C.V.",
+          "normalizado": "COMERCIALIZADORA CEDROS DE TULTEPEC SA DE CV",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "A NOMBRE DE: COMERCIALIZADORA CEDROS DE TULTEPEC, S.A. DE C.V."
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Av. Pirules No. 17, Col. San Agustín",
+          "normalizado": "AV PIRULES 17, COL SAN AGUSTIN, TULTEPEC, MEX",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "UBICACIÓN: AV. PIRULES NO. 17, COL. SAN AGUSTÍN"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Estado de México",
+          "normalizado": "MEXICO",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "ESTADO DE MÉXICO"
+          },
+          "confianza": 0.94
+        },
+        "municipio": {
+          "valor": "Tultepec",
+          "normalizado": "TULTEPEC",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "DIRECCIÓN DE DESARROLLO URBANO DE TULTEPEC"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "520.00 m²",
+          "normalizado": "520.00",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUPERFICIE 520.00 M2"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "118 05 076 11 00 0000",
+          "normalizado": "1180507611000000",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE CATASTRAL: 118 05 076 11 00 0000"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "17",
+          "normalizado": "17",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "NÚMERO OFICIAL QUE SE ASIGNA: 17 (DIECISIETE)"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "11 de junio de 2026",
+          "normalizado": "2026-06-11",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "TULTEPEC, MÉX., 11 DE JUNIO DE 2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "11 de junio de 2027",
+          "normalizado": "2027-06-11",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "VIGENCIA: 12 MESES"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Dirección de Desarrollo Urbano de Tultepec",
+          "normalizado": "DIRECCION DE DESARROLLO URBANO TULTEPEC",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "DIRECCIÓN DE DESARROLLO URBANO"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "alineamiento": {
+            "valor": "Restricción de 3.00 m al frente",
+            "normalizado": "RESTRICCION 3.00 M",
+            "evidencia": {
+              "archivo": "Alineamiento Tultepec DEMO.pdf",
+              "pagina": 2,
+              "cita": "SE DEBERÁ RESPETAR UNA RESTRICCIÓN DE 3.00 M AL FRENTE DEL PREDIO"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ALI-01",
+          "descripcion": "Número oficial asignado coincide con la dirección",
+          "estado": "no_cumple",
+          "severidad": "revision",
+          "explicacion": "La constancia asigna el número 17, pero la escritura y el predial ubican el predio en el número 15.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento Tultepec DEMO.pdf",
+              "pagina": 1,
+              "cita": "NÚMERO OFICIAL QUE SE ASIGNA: 17 (DIECISIETE)"
+            }
+          ]
+        },
+        {
+          "id_regla": "ALI-02",
+          "descripcion": "Constancia vigente a la fecha de referencia",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Emitida el 11/06/2026 con vigencia de 12 meses.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento Tultepec DEMO.pdf",
+              "pagina": 1,
+              "cita": "VIGENCIA: 12 MESES"
+            }
+          ]
+        },
+        {
+          "id_regla": "ALI-03",
+          "descripcion": "Afectaciones o restricciones al predio",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Hay una restricción de 3.00 m al frente; no afecta el uso, pero reduce el área construible.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento Tultepec DEMO.pdf",
+              "pagina": 2,
+              "cita": "SE DEBERÁ RESPETAR UNA RESTRICCIÓN DE 3.00 M AL FRENTE DEL PREDIO"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.9
+    }
+  ],
+  "documentos_faltantes": [
+    "uso_de_suelo"
+  ],
+  "hallazgos_expediente": [
+    {
+      "id_regla": "EXP-01",
+      "descripcion": "El expediente trae los 4 tipos documentales requeridos",
+      "estado": "no_cumple",
+      "severidad": "bloqueante",
+      "explicacion": "Falta la Licencia de Uso de Suelo; sin ella no se puede confirmar que el predio admita una tienda.",
+      "evidencias": []
+    }
+  ],
+  "inconsistencias": [
+    {
+      "id_regla": "CRU-NUM",
+      "campo": "numero_oficial",
+      "descripcion": "La constancia de alineamiento asigna el número 17; la escritura y el predial dicen 15.",
+      "severidad": "revision",
+      "valores": [
+        {
+          "archivo": "Escritura Tultepec DEMO.pdf",
+          "tipo": "escritura",
+          "valor": "15",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 2,
+            "cita": "marcado con el número 15"
+          }
+        },
+        {
+          "archivo": "Predial Tultepec 2026 DEMO.pdf",
+          "tipo": "predial",
+          "valor": "15",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "AV PIRULES 15"
+          }
+        },
+        {
+          "archivo": "Alineamiento Tultepec DEMO.pdf",
+          "tipo": "alineamiento_numero_oficial",
+          "valor": "17",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "NÚMERO OFICIAL QUE SE ASIGNA: 17 (DIECISIETE)"
+          }
+        }
+      ]
+    },
+    {
+      "id_regla": "CRU-DIR",
+      "campo": "direccion",
+      "descripcion": "La dirección del alineamiento difiere de la de escritura y predial solo en el número oficial.",
+      "severidad": "revision",
+      "valores": [
+        {
+          "archivo": "Escritura Tultepec DEMO.pdf",
+          "tipo": "escritura",
+          "valor": "AV PIRULES 15, COL SAN AGUSTIN, TULTEPEC, MEX",
+          "evidencia": {
+            "archivo": "Escritura Tultepec DEMO.pdf",
+            "pagina": 2,
+            "cita": "inmueble marcado con el número 15 de la Avenida Pirules, Colonia San Agustín"
+          }
+        },
+        {
+          "archivo": "Predial Tultepec 2026 DEMO.pdf",
+          "tipo": "predial",
+          "valor": "AV PIRULES 15, COL SAN AGUSTIN, TULTEPEC, MEX",
+          "evidencia": {
+            "archivo": "Predial Tultepec 2026 DEMO.pdf",
+            "pagina": 1,
+            "cita": "DOMICILIO DEL PREDIO: AV PIRULES 15 SAN AGUSTIN"
+          }
+        },
+        {
+          "archivo": "Alineamiento Tultepec DEMO.pdf",
+          "tipo": "alineamiento_numero_oficial",
+          "valor": "AV PIRULES 17, COL SAN AGUSTIN, TULTEPEC, MEX",
+          "evidencia": {
+            "archivo": "Alineamiento Tultepec DEMO.pdf",
+            "pagina": 1,
+            "cita": "UBICACIÓN: AV. PIRULES NO. 17, COL. SAN AGUSTÍN"
+          }
+        }
+      ]
+    }
+  ],
+  "recomendacion": "No cumple",
+  "confianza": 0.82,
+  "resumen": "No cumple porque falta la Licencia de Uso de Suelo y el predial reporta un adeudo de $14,862.00 de ejercicios anteriores. Además, la constancia de alineamiento asigna el número 17 mientras la escritura y el predial dicen 15; hay que aclarar si es el mismo predio. Un segundo recibo de predial (2024) no se pudo analizar y debe revisarse a mano.",
+  "razones": [
+    "Falta la Licencia de Uso de Suelo (bloqueante).",
+    "Adeudo de predial de ejercicios anteriores por $14,862.00 (bloqueante).",
+    "Número oficial 17 en alineamiento frente a 15 en escritura y predial.",
+    "Solo está pagado el primer bimestre de 2026.",
+    "El análisis automático del predial 2024 falló; requiere revisión manual."
+  ]
+}

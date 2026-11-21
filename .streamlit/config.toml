@@ -1,0 +1,20 @@
+# Tema de la UI. Los colores salen de ui/tokens.py (marca Tiendas 3B).
+[theme]
+base = "light"
+primaryColor = "#C0141B"
+backgroundColor = "#F4F5F1"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#16201F"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#04211F"
+textColor = "#FFFFFF"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = "type"  # sin trazas en pantalla; la traza queda en la consola
+
+[browser]
+gatherUsageStats = false
+

@@ -1,0 +1,701 @@
+{
+  "expediente_id": "EXP-DEMO-002",
+  "fecha_analisis": "2026-11-21T09:12:00",
+  "fecha_referencia": "2026-11-21",
+  "documentos": [
+    {
+      "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+      "tipo": "escritura",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Inmobiliaria La Jacaranda del Bajío, S.A. de C.V.",
+          "normalizado": "INMOBILIARIA LA JACARANDA DEL BAJIO SA DE CV",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 2,
+            "cita": "comparece INMOBILIARIA LA JACARANDA DEL BAJÍO, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Avenida Tamarindos número 418, Colonia Centro",
+          "normalizado": "AV. TAMARINDOS 418, COL. CENTRO, SAN JUAN DEL RIO, QRO",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 2,
+            "cita": "el inmueble ubicado en Avenida Tamarindos número 418, Colonia Centro"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Querétaro",
+          "normalizado": "QUERETARO",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "SANTIAGO DE QUERÉTARO, ESTADO DE QUERÉTARO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "San Juan del Río",
+          "normalizado": "SAN JUAN DEL RIO",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "en el Municipio de San Juan del Río, Querétaro"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "612.40 metros cuadrados",
+          "normalizado": "612.40",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 3,
+            "cita": "con una superficie de 612.40 m2 (seiscientos doce metros cuarenta decímetros cuadrados)"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "0172 0204 0315 0527",
+          "normalizado": "0172020403150527",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 3,
+            "cita": "clave catastral 0172 0204 0315 0527"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "418",
+          "normalizado": "418",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 2,
+            "cita": "número 418"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "4 de julio de 2022",
+          "normalizado": "2022-07-04",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "a los cuatro días del mes de julio de dos mil veintidós"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": null,
+          "normalizado": null,
+          "evidencia": null,
+          "confianza": 0.0
+        },
+        "autoridad_emisora": {
+          "valor": "Notaría Pública No. 7 de San Juan del Río",
+          "normalizado": "NOTARIA PUBLICA 7 SAN JUAN DEL RIO",
+          "evidencia": {
+            "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "Titular de la Notaría Pública número 7 de esta demarcación"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "numero_escritura": {
+            "valor": "23,764",
+            "normalizado": "23764",
+            "evidencia": {
+              "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+              "pagina": 1,
+              "cita": "ESCRITURA PÚBLICA NÚMERO 23,764"
+            },
+            "confianza": 0.93
+          },
+          "tipo_acto": {
+            "valor": "Compraventa",
+            "normalizado": "COMPRAVENTA",
+            "evidencia": {
+              "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+              "pagina": 1,
+              "cita": "se formaliza el CONTRATO DE COMPRAVENTA"
+            },
+            "confianza": 0.93
+          },
+          "folio_registro_publico": {
+            "valor": "Folio inmobiliario 00346129/0002",
+            "normalizado": "00346129/0002",
+            "evidencia": {
+              "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+              "pagina": 6,
+              "cita": "inscrito en el Registro Público bajo el folio inmobiliario 00346129/0002"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ESC-01",
+          "descripcion": "La escritura identifica al titular del inmueble",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "La adquirente y titular actual es Inmobiliaria La Jacaranda del Bajío, S.A. de C.V.",
+          "evidencias": [
+            {
+              "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+              "pagina": 2,
+              "cita": "comparece INMOBILIARIA LA JACARANDA DEL BAJÍO, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE"
+            }
+          ]
+        },
+        {
+          "id_regla": "ESC-02",
+          "descripcion": "Inscripción en el Registro Público de la Propiedad",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "La escritura trae el sello de inscripción con folio inmobiliario.",
+          "evidencias": [
+            {
+              "archivo": "Escritura 23764 San Juan del Rio DEMO.pdf",
+              "pagina": 6,
+              "cita": "inscrito en el Registro Público bajo el folio inmobiliario 00346129/0002"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.95
+    },
+    {
+      "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+      "tipo": "predial",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "INMOBILIARIA LA JACARANDA DEL BAJIO SA DE CV",
+          "normalizado": "INMOBILIARIA LA JACARANDA DEL BAJIO SA DE CV",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "CONTRIBUYENTE: INMOBILIARIA LA JACARANDA DEL BAJIO SA DE CV"
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "AV TAMARINDOS 418 CENTRO",
+          "normalizado": "AV. TAMARINDOS 418, COL. CENTRO, SAN JUAN DEL RIO, QRO",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "UBICACIÓN DEL PREDIO: AV TAMARINDOS 418 CENTRO"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Querétaro",
+          "normalizado": "QUERETARO",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "GOBIERNO DEL ESTADO DE QUERÉTARO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "San Juan del Río",
+          "normalizado": "SAN JUAN DEL RIO",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "MUNICIPIO DE SAN JUAN DEL RÍO · SECRETARÍA DE FINANZAS"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "612.40",
+          "normalizado": "612.40",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUP. TERRENO 612.40 M2"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "0172 0204 0315 0527",
+          "normalizado": "0172020403150527",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE CATASTRAL 0172 0204 0315 0527"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "418",
+          "normalizado": "418",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "AV TAMARINDOS 418"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "09/02/2026",
+          "normalizado": "2026-02-09",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "FECHA DE PAGO 09/02/2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "Ejercicio 2026",
+          "normalizado": "2026-12-31",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "PERIODO 2026-1 A 2026-6"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Secretaría de Finanzas Municipal de San Juan del Río",
+          "normalizado": "SECRETARIA DE FINANZAS SAN JUAN DEL RIO",
+          "evidencia": {
+            "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+            "pagina": 1,
+            "cita": "SECRETARÍA DE FINANZAS"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "adeudo": {
+            "valor": "$0.00",
+            "normalizado": "0",
+            "evidencia": {
+              "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+              "pagina": 1,
+              "cita": "SALDO PENDIENTE $0.00"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "PRE-01",
+          "descripcion": "Predial pagado del ejercicio vigente",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "El recibo cubre los seis bimestres de 2026.",
+          "evidencias": [
+            {
+              "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+              "pagina": 1,
+              "cita": "PERIODO 2026-1 A 2026-6"
+            }
+          ]
+        },
+        {
+          "id_regla": "PRE-02",
+          "descripcion": "Sin adeudos de impuesto predial",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "El recibo marca saldo pendiente en cero.",
+          "evidencias": [
+            {
+              "archivo": "Predial 2026 San Juan del Rio DEMO.pdf",
+              "pagina": 1,
+              "cita": "SALDO PENDIENTE $0.00"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.96
+    },
+    {
+      "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+      "tipo": "alineamiento_numero_oficial",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Inmobiliaria La Jacaranda del Bajío, S.A. de C.V.",
+          "normalizado": "INMOBILIARIA LA JACARANDA DEL BAJIO SA DE CV",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "SOLICITANTE: INMOBILIARIA LA JACARANDA DEL BAJÍO, S.A. DE C.V."
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Av. Tamarindos No. 418, Col. Centro",
+          "normalizado": "AV. TAMARINDOS 418, COL. CENTRO, SAN JUAN DEL RIO, QRO",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "DOMICILIO DEL PREDIO: AV. TAMARINDOS NO. 418, COL. CENTRO"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Querétaro",
+          "normalizado": "QUERETARO",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "ESTADO DE QUERÉTARO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "San Juan del Río",
+          "normalizado": "SAN JUAN DEL RIO",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "H. AYUNTAMIENTO DE SAN JUAN DEL RÍO"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "612.40 m²",
+          "normalizado": "612.40",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUPERFICIE: 612.40 M²"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "0172 0204 0315 0527",
+          "normalizado": "0172020403150527",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE CATASTRAL: 0172 0204 0315 0527"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "418",
+          "normalizado": "418",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "NÚMERO OFICIAL ASIGNADO: 418"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "15 de mayo de 2026",
+          "normalizado": "2026-05-15",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "SAN JUAN DEL RÍO, QRO., A 15 DE MAYO DE 2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "Un año",
+          "normalizado": "2027-05-15",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "VIGENCIA: UN AÑO A PARTIR DE SU EXPEDICIÓN"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Dirección de Desarrollo Urbano",
+          "normalizado": "DIRECCION DE DESARROLLO URBANO",
+          "evidencia": {
+            "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "DIRECCIÓN DE DESARROLLO URBANO Y VIVIENDA"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "alineamiento": {
+            "valor": "Sin afectación por alineamiento",
+            "normalizado": "SIN AFECTACION",
+            "evidencia": {
+              "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "EL PREDIO NO PRESENTA AFECTACIÓN POR ALINEAMIENTO"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ALI-01",
+          "descripcion": "Número oficial asignado coincide con la dirección",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "La constancia asigna el número 418, el mismo de la dirección del predio.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "NÚMERO OFICIAL ASIGNADO: 418"
+            }
+          ]
+        },
+        {
+          "id_regla": "ALI-02",
+          "descripcion": "Constancia vigente a la fecha de referencia",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Emitida el 15/05/2026 con vigencia de un año; vence el 15/05/2027.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "VIGENCIA: UN AÑO A PARTIR DE SU EXPEDICIÓN"
+            }
+          ]
+        },
+        {
+          "id_regla": "ALI-03",
+          "descripcion": "Afectaciones o restricciones al predio",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "La autoridad indica que el predio no tiene afectación por alineamiento.",
+          "evidencias": [
+            {
+              "archivo": "Alineamiento y numero oficial SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "EL PREDIO NO PRESENTA AFECTACIÓN POR ALINEAMIENTO"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.94
+    },
+    {
+      "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+      "tipo": "uso_de_suelo",
+      "confianza_tipo": 0.97,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "Inmobiliaria La Jacaranda del Bajío, S.A. de C.V.",
+          "normalizado": "INMOBILIARIA LA JACARANDA DEL BAJIO SA DE CV",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "A FAVOR DE: INMOBILIARIA LA JACARANDA DEL BAJÍO, S.A. DE C.V."
+          },
+          "confianza": 0.93
+        },
+        "direccion": {
+          "valor": "Av. Tamarindos 418, Centro",
+          "normalizado": "AV. TAMARINDOS 418, COL. CENTRO, SAN JUAN DEL RIO, QRO",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "UBICACIÓN: AV. TAMARINDOS 418, CENTRO"
+          },
+          "confianza": 0.93
+        },
+        "entidad_federativa": {
+          "valor": "Querétaro",
+          "normalizado": "QUERETARO",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "ESTADO DE QUERÉTARO"
+          },
+          "confianza": 0.95
+        },
+        "municipio": {
+          "valor": "San Juan del Río",
+          "normalizado": "SAN JUAN DEL RIO",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "MUNICIPIO DE SAN JUAN DEL RÍO"
+          },
+          "confianza": 0.95
+        },
+        "superficie_terreno_m2": {
+          "valor": "612.40 m²",
+          "normalizado": "612.40",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "SUPERFICIE DEL PREDIO: 612.40 M²"
+          },
+          "confianza": 0.93
+        },
+        "clave_catastral": {
+          "valor": "0172 0204 0315 0527",
+          "normalizado": "0172020403150527",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "CLAVE CATASTRAL 0172 0204 0315 0527"
+          },
+          "confianza": 0.93
+        },
+        "numero_oficial": {
+          "valor": "418",
+          "normalizado": "418",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "AV. TAMARINDOS 418"
+          },
+          "confianza": 0.93
+        },
+        "fecha_emision": {
+          "valor": "3 de agosto de 2026",
+          "normalizado": "2026-08-03",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "FECHA DE EXPEDICIÓN: 03/08/2026"
+          },
+          "confianza": 0.93
+        },
+        "vigencia_hasta": {
+          "valor": "3 de agosto de 2027",
+          "normalizado": "2027-08-03",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "VIGENCIA: 03/08/2027"
+          },
+          "confianza": 0.93
+        },
+        "autoridad_emisora": {
+          "valor": "Dirección de Desarrollo Urbano y Vivienda",
+          "normalizado": "DIRECCION DE DESARROLLO URBANO Y VIVIENDA",
+          "evidencia": {
+            "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+            "pagina": 1,
+            "cita": "DIRECCIÓN DE DESARROLLO URBANO Y VIVIENDA"
+          },
+          "confianza": 0.93
+        },
+        "especificos": {
+          "uso_autorizado": {
+            "valor": "Comercial y de servicios",
+            "normalizado": "COMERCIAL",
+            "evidencia": {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "USO DE SUELO AUTORIZADO: COMERCIAL Y DE SERVICIOS (CS)"
+            },
+            "confianza": 0.93
+          },
+          "giro_autorizado": {
+            "valor": "Tienda de autoservicio hasta 400 m²",
+            "normalizado": "AUTOSERVICIO <=400",
+            "evidencia": {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "GIRO: TIENDA DE AUTOSERVICIO CON SUPERFICIE DE VENTA HASTA 400 M²"
+            },
+            "confianza": 0.93
+          },
+          "condicionantes": {
+            "valor": "4 cajones de estacionamiento",
+            "normalizado": "4 CAJONES",
+            "evidencia": {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 2,
+              "cita": "CONDICIONANTES: DEBERÁ CONTAR CON 4 CAJONES DE ESTACIONAMIENTO"
+            },
+            "confianza": 0.93
+          }
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "USO-01",
+          "descripcion": "Autoriza el uso comercial requerido",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Autoriza uso comercial y de servicios con giro de tienda de autoservicio, compatible con una tienda 3B.",
+          "evidencias": [
+            {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "USO DE SUELO AUTORIZADO: COMERCIAL Y DE SERVICIOS (CS)"
+            },
+            {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "GIRO: TIENDA DE AUTOSERVICIO CON SUPERFICIE DE VENTA HASTA 400 M²"
+            }
+          ]
+        },
+        {
+          "id_regla": "USO-02",
+          "descripcion": "Licencia vigente a la fecha de referencia",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Vigente hasta el 03/08/2027.",
+          "evidencias": [
+            {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 1,
+              "cita": "VIGENCIA: 03/08/2027"
+            }
+          ]
+        },
+        {
+          "id_regla": "USO-03",
+          "descripcion": "Condicionantes de la licencia",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Pide 4 cajones de estacionamiento; el equipo de expansión debe confirmarlo en la visita, pero no impide continuar.",
+          "evidencias": [
+            {
+              "archivo": "Licencia uso de suelo SJR DEMO.pdf",
+              "pagina": 2,
+              "cita": "CONDICIONANTES: DEBERÁ CONTAR CON 4 CAJONES DE ESTACIONAMIENTO"
+            }
+          ]
+        }
+      ],
+      "confianza": 0.95
+    }
+  ],
+  "documentos_faltantes": [],
+  "hallazgos_expediente": [
+    {
+      "id_regla": "EXP-01",
+      "descripcion": "El expediente trae los 4 tipos documentales requeridos",
+      "estado": "cumple",
+      "severidad": "info",
+      "explicacion": "Se recibieron Escritura, Predial, Alineamiento y Número Oficial, y Uso de Suelo.",
+      "evidencias": []
+    }
+  ],
+  "inconsistencias": [],
+  "recomendacion": "Cumple",
+  "confianza": 0.93,
+  "resumen": "Los cuatro documentos corresponden al mismo predio: coinciden propietaria, dirección, clave catastral, superficie (612.40 m²) y número oficial. El predial de 2026 está pagado sin adeudo, el alineamiento no marca afectaciones y la licencia de uso de suelo autoriza tienda de autoservicio hasta el 03/08/2027. La única condicionante es contar con 4 cajones de estacionamiento.",
+  "razones": [
+    "Expediente completo: los 4 tipos documentales requeridos.",
+    "Propietaria, dirección, clave catastral, superficie y número oficial coinciden en los 4 documentos.",
+    "Uso de suelo comercial vigente hasta el 03/08/2027, compatible con tienda de autoservicio.",
+    "Condicionante a verificar en visita: 4 cajones de estacionamiento."
+  ]
+}

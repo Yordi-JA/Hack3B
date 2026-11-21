@@ -1,0 +1,364 @@
+"""Piezas de HTML para `st.markdown(..., unsafe_allow_html=True)`.
+
+Funciones puras que devuelven texto, para poder probarlas sin Streamlit. Todo dato que viene de
+los documentos pasa por `escape`. El HTML sale en una sola línea por bloque: una línea en blanco
+o una sangría de 4 espacios harían que el Markdown de Streamlit lo convierta en párrafo o código.
+"""
+from __future__ import annotations
+
+from html import escape
+from typing import Iterable, Optional
+from urllib.parse import urlencode
+
+from expedientes.schemas import (
+    Campo,
+    Dictamen,
+    DocumentoAnalizado,
+    EstadoRegla,
+    Evidencia,
+    Hallazgo,
+    Inconsistencia,
+    Legibilidad,
+    Recomendacion,
+    Severidad,
+    TipoDocumento,
+)
+
+from . import logica as L
+from . import mapa
+from . import tokens as t
+from .estilos import clase_tono
+
+NOMBRE_LEGIBILIDAD = {
+    Legibilidad.BUENA: "Legible",
+    Legibilidad.PARCIAL: "Legible en parte",
+    Legibilidad.ILEGIBLE: "Ilegible",
+}
+
+
+def url(**params: Optional[str]) -> str:
+    return "?" + urlencode({k: v for k, v in params.items() if v})
+
+
+def pct(valor: float) -> str:
+    return f"{round(valor * 100)} %"
+
+
+def fecha(valor) -> str:
+    return valor.strftime("%d/%m/%Y %H:%M") if hasattr(valor, "hour") else valor.strftime("%d/%m/%Y")
+
+
+def etiqueta(texto: str, tono: t.Tono, borde: bool = False) -> str:
+    extra = " etq-borde" if borde else ""
+    return f'<span class="etq tono-{clase_tono(tono)}{extra}">{escape(texto)}</span>'
+
+
+def etq_recomendacion(r: Recomendacion) -> str:
+    return etiqueta(r.value, t.ESTADO[r])
+
+
+def etq_regla(e: EstadoRegla) -> str:
+    return etiqueta(L.NOMBRE_ESTADO_REGLA[e], t.REGLA[e])
+
+
+def etq_severidad(s: Severidad) -> str:
+    return etiqueta(L.NOMBRE_SEVERIDAD[s], t.SEVERIDAD[s], borde=True)
+
+
+def etq_legibilidad(leg: Legibilidad) -> str:
+    return etiqueta(NOMBRE_LEGIBILIDAD[leg], t.LEGIBILIDAD[leg])
+
+
+ETQ_EJEMPLO = etiqueta("Ejemplo", t.AZUL)
+
+
+def logo_3b() -> str:
+    """Círculo rojo con B sobre BB, dibujado aquí porque las imágenes de marca no se versionan."""
+    return (
+        '<svg viewBox="0 0 100 100" role="img" aria-label="Tiendas 3B" xmlns="http://www.w3.org/2000/svg">'
+        f'<circle cx="50" cy="50" r="49" fill="{t.ROJO_3B}"/>'
+        f'<text x="50" y="45" text-anchor="middle" fill="#fff" font-family={t.FUENTE_TITULAR!r} '
+        'font-weight="900" font-size="38">B</text>'
+        f'<text x="50" y="80" text-anchor="middle" fill="#fff" font-family={t.FUENTE_TITULAR!r} '
+        'font-weight="900" font-size="38" letter-spacing="-1">BB</text></svg>'
+    )
+
+
+def encabezado(titulo: str, subtitulo: str = "") -> str:
+    sub = f"<p>{escape(subtitulo)}</p>" if subtitulo else ""
+    return f'<div class="encabezado"><div><h1>{escape(titulo)}</h1>{sub}</div></div>'
+
+
+def seccion(titulo: str, ancla: str, sub: str = "") -> str:
+    extra = f'<p class="seccion-sub">{escape(sub)}</p>' if sub else ""
+    # Streamlit reescribe el id de los encabezados con el texto; el ancla va en un elemento aparte.
+    return f'<div class="ancla" id="{ancla}"></div><h2 class="seccion">{escape(titulo)}</h2>{extra}'
+
+
+def cita(ev: Evidencia) -> str:
+    return (
+        f'<q class="cita">{escape(" ".join(ev.cita.split()))}</q>'
+        f'<span class="fuente">{escape(ev.archivo)}, página {ev.pagina}</span>'
+    )
+
+
+def texto_ubicacion(u: L.Ubicacion) -> str:
+    """Texto plano: 'Ixmiquilpan, Hidalgo', con aviso si los documentos no coinciden."""
+    municipio = u.municipio.title() if u.municipio else None
+    if not u.valores:
+        return ", ".join(filter(None, [municipio, "sin entidad federativa"]))
+    if u.confirmada:
+        return ", ".join(filter(None, [municipio, mapa.nombre_entidad(u.entidad)]))
+    nombres = " o ".join(mapa.nombre_entidad(v) for v in u.valores)
+    return ", ".join(filter(None, [municipio, f"{nombres} (sin confirmar)"]))
+
+
+# ------------------------------------------------------------------ bandeja
+
+def kpis(ind: L.Indicadores) -> str:
+    nota = f"{ind.ejemplos} de ejemplo" if ind.ejemplos else "Todos son análisis reales"
+    conf = pct(ind.confianza_promedio) if ind.confianza_promedio is not None else "Sin datos"
+    celdas = [
+        f'<div class="kpi kpi-principal"><span>Expedientes analizados</span><b>{ind.total}</b><small>{nota}</small></div>'
+    ]
+    for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE):
+        celdas.append(f'<div class="kpi">{etq_recomendacion(r)}<b>{ind.por_recomendacion[r]}</b></div>')
+    celdas.append(f'<div class="kpi"><span>Confianza promedio</span><b>{conf}</b></div>')
+    return f'<div class="kpis">{"".join(celdas)}</div>'
+
+
+def tarjeta_expediente(clave: str, d: Dictamen, es_ejemplo: bool) -> str:
+    u = L.consolidar_ubicacion(d)
+    recibidos = sum(1 for tr in L.documentos_por_tipo(d) if tr.recibido)
+    n_inc = len(d.inconsistencias)
+    inc = "Sin inconsistencias" if not n_inc else f"{n_inc} inconsistencia{'s' if n_inc > 1 else ''}"
+    etiquetas = etq_recomendacion(d.recomendacion) + (ETQ_EJEMPLO if es_ejemplo else "")
+    return (
+        f'<a class="exp" href="{escape(url(vista="detalle", exp=clave))}" target="_self">'
+        f'<span class="exp-titulo">{escape(d.expediente_id)}</span>'
+        f'<div class="exp-lugar">{escape(texto_ubicacion(u))}</div>'
+        f'<div class="exp-etiquetas">{etiquetas}</div>'
+        f'<p class="exp-resumen">{escape(d.resumen)}</p>'
+        f'<div class="exp-meta"><span>{recibidos} de 4 tipos de documento</span><span>{inc}</span>'
+        f"<span>Confianza {pct(d.confianza)}</span><span>{fecha(d.fecha_analisis)}</span></div></a>"
+    )
+
+
+def lista_expedientes(items: Iterable[tuple[str, Dictamen, bool]]) -> str:
+    return '<div class="lista">' + "".join(tarjeta_expediente(*i) for i in items) + "</div>"
+
+
+def caja_mapa(svg: str, sin_entidad: int) -> str:
+    leyenda = "".join(
+        f'<span><i style="background:{t.ESTADO[r].mapa}"></i>{escape(r.value)}</span>'
+        for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE)
+    ) + f'<span><i style="background:{t.MAPA_VACIO}"></i>Sin expedientes</span>'
+    pie = ""
+    if sin_entidad:
+        pie = (
+            f'<div class="sin-entidad">{sin_entidad} expediente{"s" if sin_entidad > 1 else ""} sin entidad '
+            "federativa identificada: aparecen en la lista, no en el mapa.</div>"
+        )
+    return (
+        '<div class="mapa-caja"><h3>Expedientes por entidad</h3>'
+        "<p>Cada estado toma el color de su recomendación más grave; el número es la cantidad de expedientes. "
+        "La vista se centra en las entidades con expedientes. Haz clic en un estado para filtrar la lista.</p>"
+        f'<div class="leyenda">{leyenda}</div>{svg}{pie}</div>'
+    )
+
+
+# ------------------------------------------------------------------ detalle: tarjeta del dictamen
+
+def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
+    u = L.consolidar_ubicacion(d)
+    tono = t.ESTADO[d.recomendacion]
+    ceja = " · ".join([d.expediente_id, texto_ubicacion(u)] + (["datos de ejemplo"] if es_ejemplo else []))
+    n_inc = len(d.inconsistencias)
+    reqs = L.consolidar_requisitos(d)
+    no_cumplidos = sum(1 for r in reqs if r.estado == EstadoRegla.NO_CUMPLE)
+    botones = (
+        f'<a class="btn-acento" href="#requisitos" target="_self">Ver requisitos ({no_cumplidos} sin cumplir)</a>'
+        f'<a class="btn-oscuro" href="#inconsistencias" target="_self">Ver inconsistencias ({n_inc})</a>'
+    )
+    if u.entidad:
+        pie = f"{mapa.nombre_entidad(u.entidad)}" + ("" if u.confirmada else " (los documentos no coinciden)")
+    else:
+        pie = "Ningún documento indica la entidad federativa"
+    return (
+        '<section class="marco" aria-labelledby="titulo-dictamen">'
+        '<h2 class="marco-titulo" id="titulo-dictamen">Dictamen</h2>'
+        '<div class="marco-cuerpo"><div class="marco-texto">'
+        f'<p class="marco-ceja">{escape(ceja)}</p>'
+        f'<p class="marco-titular txt-{clase_tono(tono)}">{escape(d.recomendacion.value)}</p>'
+        f'<p class="marco-resumen">{escape(d.resumen)}</p>'
+        '<div class="marco-datos">'
+        f"<span>Confianza del análisis <b>{pct(d.confianza)}</b></span>"
+        f"<span>Analizado <b>{fecha(d.fecha_analisis)}</b></span>"
+        f"<span>Vigencias evaluadas al <b>{fecha(d.fecha_referencia)}</b></span></div>"
+        f'<div class="marco-botones">{botones}</div></div>'
+        f'<figure class="marco-media" style="margin:0">{mapa.svg_detalle(u.entidad, tono.oscuro)}'
+        f"<figcaption>{escape(pie)}</figcaption></figure>"
+        "</div></section>"
+    )
+
+
+def razones(d: Dictamen) -> str:
+    if not d.razones:
+        return ""
+    items = "".join(f"<li>{escape(r)}</li>" for r in d.razones)
+    return f'<div class="razones"><h3>Razones de la recomendación</h3><ol>{items}</ol></div>'
+
+
+# ------------------------------------------------------------------ detalle: documentos
+
+def tipos_recibidos(d: Dictamen) -> str:
+    faltan = set(L.faltantes(d))
+    celdas = []
+    for tr in L.documentos_por_tipo(d):
+        if tr.recibido and tr.tipo not in faltan:
+            archivos = "".join(f"<small>{escape(a)}</small>" for a in tr.archivos)
+            celdas.append(f'<div class="tipo">{etiqueta("Recibido", t.VERDE)}<b>{L.NOMBRE_TIPO[tr.tipo]}</b>{archivos}</div>')
+        else:
+            celdas.append(
+                f'<div class="tipo tipo-falta">{etiqueta("Falta", t.VINO)}<b>{L.NOMBRE_TIPO[tr.tipo]}</b>'
+                "<small>No se recibió ningún archivo de este tipo.</small></div>"
+            )
+    otros = [doc for doc in d.documentos if doc.tipo == TipoDocumento.OTRO]
+    for doc in otros:
+        celdas.append(
+            f'<div class="tipo">{etiqueta("No reconocido", t.GRIS)}<b>Otro documento</b>'
+            f"<small>{escape(doc.archivo)}</small></div>"
+        )
+    return f'<div class="tipos">{"".join(celdas)}</div>'
+
+
+def tarjeta_documento(doc: DocumentoAnalizado) -> str:
+    titulo = L.NOMBRE_TIPO_CORTO[doc.tipo] if doc.tipo != TipoDocumento.OTRO else "Otro"
+    etiquetas = (
+        etq_legibilidad(doc.legibilidad)
+        + etiqueta(f"Tipo detectado con {pct(doc.confianza_tipo)}", t.GRIS)
+        + etiqueta(f"Confianza {pct(doc.confianza)}", t.GRIS)
+    )
+    avisos = "".join(f'<div class="doc-aviso">{escape(h.explicacion)}</div>' for h in L.avisos_de_proceso(doc))
+    if doc.legibilidad == Legibilidad.ILEGIBLE and not avisos:
+        avisos = '<div class="doc-aviso">El archivo es ilegible: sus reglas quedan sin evaluar. Pide una copia legible.</div>'
+    campos = L.campos_clave(doc)
+    lista = "".join(f"<dt>{escape(L.nombre_campo(c))}</dt><dd>{escape(campo.valor or '')}</dd>" for c, campo in campos)
+    datos = f'<dl class="doc-campos">{lista}</dl>' if lista else ""
+    reglas = [h for h in doc.hallazgos if h.id_regla not in L.REGLAS_DE_PROCESO]
+    conteo = L.contar_por_estado(reglas)
+    if reglas:
+        partes = [f"<b>{conteo[e]}</b> {L.NOMBRE_ESTADO_REGLA[e].lower()}" for e in EstadoRegla]
+        pie = f'<div class="doc-conteo">Reglas revisadas: {" · ".join(partes)}</div>'
+    else:
+        pie = '<div class="doc-conteo">Sin reglas evaluadas en este archivo.</div>'
+    return (
+        f'<section class="marco"><h3 class="marco-titulo">{escape(titulo)}</h3>'
+        f'<p class="doc-archivo">{escape(doc.archivo)}</p>'
+        f'<div class="doc-etiquetas">{etiquetas}</div>{avisos}{datos}{pie}</section>'
+    )
+
+
+def tarjetas_documentos(d: Dictamen) -> str:
+    if not d.documentos:
+        return '<p class="vacio-msg">El dictamen no trae documentos.</p>'
+    return f'<div class="docs">{"".join(tarjeta_documento(doc) for doc in d.documentos)}</div>'
+
+
+# ------------------------------------------------------------------ detalle: tablas
+
+def _celda_campo(campo: Optional[Campo], difiere: bool) -> str:
+    if campo is None:
+        return '<td class="vacio">No encontrado</td>'
+    marca = " " + etiqueta("Difiere", t.AMBAR) if difiere else ""
+    evid = ""
+    if campo.evidencia:
+        evid = (
+            f"<details><summary>Evidencia, página {campo.evidencia.pagina}</summary>"
+            f'<q class="cita">{escape(" ".join(campo.evidencia.cita.split()))}</q></details>'
+        )
+    clase = ' class="difiere"' if difiere else ""
+    return f"<td{clase}>{escape(campo.valor or '')}{marca}{evid}</td>"
+
+
+def tabla_datos(d: Dictamen) -> str:
+    filas = L.filas_datos(d)
+    if not filas:
+        return '<p class="vacio-msg">Ningún documento tiene datos extraídos.</p>'
+    cab = "".join(
+        f"<th>{L.NOMBRE_TIPO_CORTO[doc.tipo]}<br><span style='font-weight:400'>{escape(doc.archivo)}</span></th>"
+        for doc in d.documentos
+    )
+    cuerpo = []
+    for clave, celdas in filas:
+        difieren = L.valores_discrepantes(celdas) if clave in L.CAMPOS_COMPARABLES else set()
+        tds = "".join(_celda_campo(c, i in difieren) for i, c in enumerate(celdas))
+        cuerpo.append(f'<tr><td class="campo">{escape(L.nombre_campo(clave))}</td>{tds}</tr>')
+    return (
+        f'<div class="tabla-caja"><table class="tabla"><thead><tr><th>Dato</th>{cab}</tr></thead>'
+        f'<tbody>{"".join(cuerpo)}</tbody></table></div>'
+    )
+
+
+def tabla_requisitos(reqs: list[L.Requisito]) -> str:
+    if not reqs:
+        return '<p class="vacio-msg">El dictamen no trae reglas evaluadas.</p>'
+    filas = []
+    for r in reqs:
+        archivos = ", ".join(r.archivos) if r.archivos else "Expediente completo"
+        filas.append(
+            f"<tr><td>{etq_regla(r.estado)}</td><td><b>{escape(r.descripcion)}</b><br>"
+            f'<span class="fuente">{escape(r.id_regla)}</span></td>'
+            f"<td>{etq_severidad(r.severidad)}</td><td>{escape(archivos)}</td></tr>"
+        )
+    return (
+        '<div class="tabla-caja"><table class="tabla"><thead><tr><th>Estado</th><th>Requisito</th>'
+        f'<th>Severidad</th><th>Dónde se evaluó</th></tr></thead><tbody>{"".join(filas)}</tbody></table></div>'
+    )
+
+
+def resumen_requisitos(reqs: list[L.Requisito]) -> str:
+    por_estado = {e: sum(1 for r in reqs if r.estado == e) for e in EstadoRegla}
+    partes = [
+        etiqueta(f"{por_estado[EstadoRegla.CUMPLE]} cumplidos", t.VERDE),
+        etiqueta(f"{por_estado[EstadoRegla.NO_CUMPLE]} no cumplidos", t.VINO),
+        etiqueta(f"{por_estado[EstadoRegla.NO_EVALUABLE]} sin evaluar", t.AZUL),
+    ]
+    return f'<div class="resumen-req">{"".join(partes)}</div>'
+
+
+def hallazgo(h: Hallazgo) -> str:
+    evid = "".join(cita(e) for e in h.evidencias)
+    if not evid:
+        evid = '<span class="fuente">Sin cita en el documento.</span>'
+    return (
+        f'<div class="hallazgo"><div class="hallazgo-cab">{etq_regla(h.estado)}{etq_severidad(h.severidad)}'
+        f'<b>{escape(h.descripcion)}</b><span class="hallazgo-id">{escape(h.id_regla)}</span></div>'
+        f"<p>{escape(h.explicacion)}</p>{evid}</div>"
+    )
+
+
+def lista_hallazgos(hallazgos: list[Hallazgo]) -> str:
+    if not hallazgos:
+        return '<p class="vacio-msg">Sin hallazgos para este archivo.</p>'
+    return "".join(hallazgo(h) for h in hallazgos)
+
+
+def inconsistencia(inc: Inconsistencia) -> str:
+    discrepan = L.valores_inconsistencia_discrepantes([v.valor for v in inc.valores])
+    filas = []
+    for i, v in enumerate(inc.valores):
+        marca = " " + etiqueta("Difiere", t.AMBAR) if i in discrepan else ""
+        evid = cita(v.evidencia) if v.evidencia else '<span class="fuente">Sin evidencia</span>'
+        clase = ' class="difiere"' if i in discrepan else ""
+        filas.append(
+            f"<tr><td><b>{L.NOMBRE_TIPO_CORTO[v.tipo]}</b><br><span class='fuente'>{escape(v.archivo)}</span></td>"
+            f"<td{clase}>{escape(v.valor or 'Sin dato')}{marca}</td><td>{evid}</td></tr>"
+        )
+    return (
+        f'<div class="inc"><div class="hallazgo-cab">{etq_severidad(inc.severidad)}'
+        f'<b>{escape(L.nombre_campo(inc.campo))}</b><span class="hallazgo-id">{escape(inc.id_regla)}</span></div>'
+        f"<p>{escape(inc.descripcion)}</p>"
+        '<div class="tabla-caja"><table class="tabla"><thead><tr><th>Documento</th><th>Valor encontrado</th>'
+        f'<th>Evidencia</th></tr></thead><tbody>{"".join(filas)}</tbody></table></div></div>'
+    )
