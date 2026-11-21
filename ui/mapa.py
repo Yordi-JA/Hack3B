@@ -190,7 +190,7 @@ def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], par
                 etiquetas.append(
                     f'<line class="mx-guia" x1="{x}" y1="{y}" x2="{lx}" y2="{ly}"/>'
                     f'<a href="{href}" target="_self" class="mx-llamada" tabindex="-1" aria-hidden="true">'
-                    f'<circle cx="{lx}" cy="{ly}" r="28" fill="{rellenos[id_svg]}"/>'
+                    f'<circle cx="{lx}" cy="{ly}" r="15" fill="{rellenos[id_svg]}"/>'
                     f'<text class="mx-num" x="{lx}" y="{ly}" text-anchor="middle" dominant-baseline="central">'
                     f"{conteo.total}</text></a>"
                 )

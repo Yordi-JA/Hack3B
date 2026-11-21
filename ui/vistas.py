@@ -157,47 +157,45 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     conteos = L.conteo_por_entidad(e.dictamen for e in visibles)
     sin_entidad = sum(1 for e in visibles if L.consolidar_ubicacion(e.dictamen).entidad is None)
 
-    izq, der = st.columns([1.45, 1], gap="large")
-    with izq:
-        f1, f2 = st.columns([0.8, 1.9], vertical_alignment="bottom")
-        opciones = [""] + sorted(conteos, key=mapa.nombre_entidad)
-        if sin_entidad:
-            opciones.append(L.SIN_ENTIDAD)
-        if entidad_actual and entidad_actual not in opciones:
-            opciones.append(entidad_actual)
-        with f1:
-            st.selectbox(
-                "Entidad federativa", opciones, key="f_entidad", on_change=_sincronizar, args=("entidad",),
-                format_func=lambda v: "Todas" if not v else ("Sin entidad" if v == L.SIN_ENTIDAD else mapa.nombre_entidad(v)),
-            )
-        with f2:
-            st.segmented_control(
-                "Recomendación", [r.value for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE)],
-                key="f_rec", on_change=_sincronizar, args=("rec",),
-                format_func=lambda v: f"{v} {ind.por_recomendacion[Recomendacion(v)]}",
-            )
+    # El mapa va al centro y a todo lo ancho; debajo, los filtros y las tarjetas.
+    seleccion = st.session_state.get("f_entidad") or None
+    enlace = dict(params_filtros(), vista="bandeja")
+    html(C.caja_mapa(mapa.svg_bandeja(conteos, seleccion, enlace), sin_entidad))
+
+    f1, f2, f3 = st.columns([1, 1.6, 1.2], vertical_alignment="bottom")
+    opciones = [""] + sorted(conteos, key=mapa.nombre_entidad)
+    if sin_entidad:
+        opciones.append(L.SIN_ENTIDAD)
+    if entidad_actual and entidad_actual not in opciones:
+        opciones.append(entidad_actual)
+    with f1:
+        st.selectbox(
+            "Entidad federativa", opciones, key="f_entidad", on_change=_sincronizar, args=("entidad",),
+            format_func=lambda v: "Todas" if not v else ("Sin entidad" if v == L.SIN_ENTIDAD else mapa.nombre_entidad(v)),
+        )
+    with f2:
+        st.segmented_control(
+            "Recomendación", [r.value for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE)],
+            key="f_rec", on_change=_sincronizar, args=("rec",),
+            format_func=lambda v: f"{v} {ind.por_recomendacion[Recomendacion(v)]}",
+        )
+    with f3:
         st.toggle(
             "Incluir expedientes de ejemplo", key="f_ej", on_change=_sincronizar, args=("ej",),
             help="Los ejemplos son dictámenes inventados para probar la pantalla. Ocúltalos cuando haya resultados reales.",
         )
 
-        rec = st.session_state.get("f_rec")
-        filtrados = [e for e in base if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
-        filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
+    rec = st.session_state.get("f_rec")
+    filtrados = [e for e in base if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
+    filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
-        if not visibles:
-            st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
-        elif not filtrados:
-            st.info("Ningún expediente coincide con los filtros.")
-            st.button("Quitar filtros", on_click=_quitar_filtros)
-        else:
-            st.caption(f"{len(filtrados)} de {len(visibles)} expedientes")
-            html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
-
-    with der:
-        seleccion = st.session_state.get("f_entidad") or None
-        enlace = dict(params_filtros(), vista="bandeja")
-        html(C.caja_mapa(mapa.svg_bandeja(conteos, seleccion, enlace), sin_entidad))
+    if not visibles:
+        st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
+    elif not filtrados:
+        st.info("Ningún expediente coincide con los filtros.")
+        st.button("Quitar filtros", on_click=_quitar_filtros)
+    else:
+        html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
 
 
 def _quitar_filtros() -> None:
@@ -345,7 +343,7 @@ def vista_nuevo() -> None:
             "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
             help="PDF o imagen. No hace falta renombrarlos: el sistema reconoce el tipo de cada archivo.",
         )
-        enviar = st.form_submit_button("Analizar expediente", type="primary", disabled=pendiente)
+        enviar = st.form_submit_button("Analizar expediente", type="primary", disabled=pendiente, key="analizar")
 
     if pendiente:
         st.info("Hay un análisis en curso; su avance se ve en la barra lateral. Puedes ir a la bandeja "
