@@ -115,6 +115,12 @@ presenta afectación", ampliación de calle o avenida sobre el predio, alineamie
 vial: una restricción de construcción al frente ("la restricción para este predio es de 3.00 m": eso va en \
 `restricciones_construccion`), mencionar el derecho de vía o su ancho, el frente al derecho de vía, ni la frase \
 "no constituye autorización".
+- `alineamiento`: si el documento es de alineamiento, SIEMPRE trae lo que determinó la autoridad; búscalo en: \
+"alineamiento oficial: X m de frente a ...", "se encuentra correctamente alineado con respecto a ...", o las medidas \
+del croquis o de la sección vial (banqueta, arroyo vehicular, frente a la calle). Resume eso en `valor` y cita el \
+texto. No copies solo un título como "ALINEAMIENTO AUTORIZADO".
+- `autoridad_emisora`: la DEPENDENCIA que expide (Dirección de Desarrollo Urbano, Obras Públicas, Catastro, \
+Secretaría de Desarrollo Urbano...) y el municipio. No pongas solo "H. Ayuntamiento" ni el nombre de quien firma.
 - `restricciones_construccion`: los metros al frente (o laterales) donde no se puede construir, aunque vengan en \
 notas o en el croquis: "Restricción de construcción al frente: 0.00 m", "LA RESTRICCIÓN PARA ESTE PREDIO ES DE \
 3.00 MTS". Cópialo siempre que aparezca.
