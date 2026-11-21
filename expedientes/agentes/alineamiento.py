@@ -419,8 +419,17 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
                             f"No se encontró en el texto la cita de: {', '.join(no_verificados)}. "
                             "Esos datos tienen confianza reducida; confirmarlos contra el original."))
     if doc.legibilidad == Legibilidad.PARCIAL:
-        hallazgos.append(_h("ALI-LEG", "Documento legible", EstadoRegla.NO_CUMPLE, Severidad.REVISION,
-                            "El documento es parcialmente legible: algunos datos pueden faltar o estar incompletos."))
+        # Solo pide revisión si la ilegibilidad se comió datos clave; si no, es una nota (evita falsas alarmas).
+        faltan = [n for n, d in (("propietario", ext.propietario), ("dirección", ext.direccion),
+                                 ("fecha de emisión", ext.fecha_emision)) if d is None]
+        if not (ext.numero_oficial or ext.alineamiento):
+            faltan.append("número oficial o alineamiento")
+        if faltan:
+            hallazgos.append(_h("ALI-LEG", "Documento legible", EstadoRegla.NO_CUMPLE, Severidad.REVISION,
+                                f"El documento es parcialmente legible y no se pudo extraer: {', '.join(faltan)}."))
+        else:
+            hallazgos.append(_h("ALI-LEG", "Documento legible", EstadoRegla.CUMPLE, Severidad.INFO,
+                                "El documento es parcialmente legible, pero se extrajeron todos los datos clave."))
 
     confs = [c.confianza for c in (datos.propietario, datos.direccion, datos.clave_catastral, datos.numero_oficial,
                                    datos.fecha_emision, datos.autoridad_emisora) if c.valor is not None]
