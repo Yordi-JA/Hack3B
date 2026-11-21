@@ -95,9 +95,15 @@ Reglas estrictas:
 - `pagina` es el número de la página donde está la cita.
 - `confianza` baja (< 0.6) si el texto está cortado, dudoso o con errores de OCR.
 - El documento puede ser solo de Alineamiento, solo de Número Oficial, o ambos.
-- `afectaciones`: solo si el documento dice que el predio está afectado (ampliación de calle, derecho de vía, \
-franja donde no se permite construir). Una restricción de 0.00 m o la frase "no constituye autorización" NO son afectaciones.
-- `numero_oficial`: el número asignado al predio. Si dice "sin número", "S/N" o "SN", normalizado = "SN".
+- `propietario`: la persona o empresa a cuyo favor se expide. Suele aparecer como "C. NOMBRE" justo antes de \
+"Esta Dirección en contestación a su solicitud", o en un campo "Nombre del propietario / poseedor".
+- `afectaciones`: si el documento dice que el predio está afectado o restringido: ampliación de calle, derecho de vía, \
+franja donde no se permite construir, o una restricción de construcción MAYOR a 0 m. Una restricción de 0.00 m o la \
+frase "no constituye autorización" NO son afectaciones.
+- `numero_oficial`: el número asignado al predio. Si el documento no asigna número pero la dirección del predio trae \
+uno ("Josefa Ortiz de Domínguez, número 24"), usa ese con confianza menor. Si dice "sin número", "S/N" o "SN", normalizado = "SN".
+- `clave_catastral`: la clave catastral; si no hay, la cuenta predial o el número de boleta predial (ej. "U-04817").
+- `vigencia_texto`: cópialo aunque sea un plazo ("365 días a partir de su expedición", "seis meses").
 - Fechas escritas con letra ("Veinticuatro de Enero del año dos mil Ocho") se normalizan igual a AAAA-MM-DD."""
 
 
@@ -105,15 +111,56 @@ def _paginas_como_texto(doc: DocumentoLeido) -> str:
     return "\n\n".join(f"=== PÁGINA {p.numero} ===\n{p.texto}" for p in doc.paginas)
 
 
+# La salida estructurada de Claude admite como máximo 16 campos anulables por esquema. Al LLM se le
+# pide una versión sin nulos (cada dato con `encontrado`) y luego se convierte a ExtraccionAlineamiento.
+
+class _DatoLLM(BaseModel):
+    encontrado: bool = Field(description="false si el dato no aparece en el documento; entonces deja los demás vacíos")
+    valor: str = Field(description="Tal como aparece en el documento; '' si no se encontró")
+    normalizado: str = Field(description="Forma comparable (ver la descripción del campo); '' si no aplica")
+    pagina: int = Field(description="Página donde aparece; 0 si no se encontró")
+    cita: str = Field(description="Fragmento LITERAL copiado del texto que contiene el dato, máx. 200 caracteres; '' si no se encontró")
+    confianza: float = Field(description="0 a 1")
+
+
+def _modelo_llm() -> type[BaseModel]:
+    from pydantic import create_model
+    campos = {}
+    for nombre, f in ExtraccionAlineamiento.model_fields.items():
+        if f.annotation is bool:
+            campos[nombre] = (bool, Field(description=f.description))
+        else:
+            campos[nombre] = (_DatoLLM, Field(description=f.description or nombre))
+    return create_model("ExtraccionAlineamientoLLM", **campos)
+
+
+_ExtraccionLLM = _modelo_llm()
+
+
+def _desde_llm(r: BaseModel) -> ExtraccionAlineamiento:
+    datos = {}
+    for nombre, valor in r:
+        if isinstance(valor, _DatoLLM):
+            if valor.encontrado and valor.valor.strip():
+                datos[nombre] = DatoExtraido(
+                    valor=valor.valor, normalizado=valor.normalizado or None, pagina=max(valor.pagina, 1),
+                    cita=valor.cita or valor.valor, confianza=min(max(valor.confianza, 0.0), 1.0),
+                )
+        else:
+            datos[nombre] = valor
+    return ExtraccionAlineamiento(**datos)
+
+
 def extraer(doc: DocumentoLeido) -> ExtraccionAlineamiento:
     # json_schema = salida estructurada nativa de Claude: el JSON siempre cumple el esquema.
     # El modo por defecto (tool calling) no puede forzarse en Opus 5.5 / Sonnet 5.5.
-    llm = get_llm().with_structured_output(ExtraccionAlineamiento, method="json_schema")
+    llm = get_llm(max_tokens=8000).with_structured_output(_ExtraccionLLM, method="json_schema")
     mensajes = [
         ("system", INSTRUCCIONES),
         ("human", f"Archivo: {doc.archivo}\n\n{_paginas_como_texto(doc)}"),
     ]
-    return llm.invoke(mensajes, config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
+    r = llm.invoke(mensajes, config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
+    return _desde_llm(r)
 
 
 # ---------------------------------------------------------------- verificación de citas
@@ -199,6 +246,9 @@ def calcular_vencimiento(ext: ExtraccionAlineamiento) -> tuple[Optional[date], s
             meses = 12 * int(m.group(1))
         if meses and emision:
             return nz.sumar_meses(emision, meses), "calculada"
+        if (m := re.search(r"\b(\d+) DIAS\b", t)) and emision:
+            from datetime import timedelta
+            return emision + timedelta(days=int(m.group(1))), "calculada"
         f = nz.fecha(ext.vigencia_texto.valor)
         if f:
             return f, "explicita"

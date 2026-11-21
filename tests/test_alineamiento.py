@@ -134,3 +134,9 @@ def test_entidad_y_municipio():
     r = ali.construir(ext, _doc(), Contexto())
     assert r.datos.municipio.normalizado == "OCOTLAN DE LAS TORRES"
     assert r.datos.entidad_federativa.normalizado == "MEXICO"
+
+
+def test_vigencia_en_dias():
+    ext = _ext(vigencia_texto=_d("ESTA LICENCIA TENDRA UNA VIGENCIA DE 365 DIAS A PARTIR DE LA FECHA DE SU EXPEDICION"),
+               fecha_emision=_d("5 de noviembre de 2024", normalizado="2024-11-05"))
+    assert ali.calcular_vencimiento(ext) == (date(2025, 11, 5), "calculada")
