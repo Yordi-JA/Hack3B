@@ -243,7 +243,8 @@ class TestConstruirCampo:
         return [Pagina(numero=1, texto="el inmueble se ubica en Calle Nogal 214 Jardines del Lago")]
 
     def test_campo_vacio_si_valor_nulo(self):
-        campo = _construir_campo(_CampoLLM(), "a.pdf", self._paginas())
+        vacio = _CampoLLM(valor=None, cita=None, pagina=None, confianza=0.0)
+        campo = _construir_campo(vacio, "a.pdf", self._paginas())
         assert campo.valor is None
         assert campo.evidencia is None
 
@@ -297,7 +298,10 @@ def _datos_completos():
         "notario": campo("Juan Pérez"),
         "tipo_acto": campo("Compraventa", "COMPRAVENTA"),
         "folio_real": campo("12345"),
+        "inscripcion_rpp": campo("Libro 1 Sección Primera Vol. 100"),
         "gravamenes": campo("libre de gravámenes"),
+        "regimen_propiedad": campo("Privada", "PRIVADA"),
+        # copropiedad, embargo_o_litigio y usufructo quedan ausentes (titular único, limpio).
     }
     return datos
 
@@ -308,7 +312,8 @@ class TestReglasESC:
 
     def test_datos_completos_todas_cumplen(self):
         h = _aplicar_reglas(_datos_completos())
-        for id_regla in ("ESC-01", "ESC-02", "ESC-03", "ESC-04", "ESC-05", "ESC-06", "ESC-07"):
+        for id_regla in ("ESC-01", "ESC-02", "ESC-03", "ESC-04", "ESC-05",
+                         "ESC-06", "ESC-07", "ESC-08", "ESC-09", "ESC-11", "ESC-12"):
             hallazgo = self._hallazgo_de(h, id_regla)
             assert hallazgo is not None, f"Falta {id_regla}"
             assert hallazgo.estado == EstadoRegla.CUMPLE, f"{id_regla} no cumple"
@@ -319,14 +324,15 @@ class TestReglasESC:
         h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-01")
         assert h.estado == EstadoRegla.NO_EVALUABLE
 
-    def test_sin_clave_ni_folio_ESC04_no_cumple(self):
+    def test_sin_clave_catastral_ESC04_no_evaluable(self):
+        """Ausencia de dato va a NO_EVALUABLE según el contrato, no NO_CUMPLE."""
         datos = _datos_completos()
         datos.clave_catastral = Campo()
-        datos.especificos["folio_real"] = Campo()
         h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-04")
-        assert h.estado == EstadoRegla.NO_CUMPLE
+        assert h.estado == EstadoRegla.NO_EVALUABLE
 
     def test_acto_no_traslativo_ESC05_no_cumple(self):
+        """Dato presente pero incompatible SÍ es NO_CUMPLE."""
         datos = _datos_completos()
         datos.especificos["tipo_acto"] = Campo(
             valor="Testamento", normalizado="TESTAMENTO",
@@ -349,6 +355,107 @@ class TestReglasESC:
 
     def test_libre_de_gravamenes_ESC06_cumple(self):
         h = self._hallazgo_de(_aplicar_reglas(_datos_completos()), "ESC-06")
+        assert h.estado == EstadoRegla.CUMPLE
+
+    def test_sin_notario_ni_numero_ESC07_no_evaluable(self):
+        """Ausencia de dato va a NO_EVALUABLE según el contrato."""
+        datos = _datos_completos()
+        datos.especificos["numero_escritura"] = Campo()
+        datos.especificos["notario"] = Campo()
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-07")
+        assert h.estado == EstadoRegla.NO_EVALUABLE
+
+    def test_sin_folio_ni_inscripcion_ESC08_no_evaluable(self):
+        datos = _datos_completos()
+        datos.especificos["folio_real"] = Campo()
+        datos.especificos["inscripcion_rpp"] = Campo()
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-08")
+        assert h.estado == EstadoRegla.NO_EVALUABLE
+
+    def test_solo_catastral_ESC08_no_evaluable(self):
+        """ESC-04 cumple con catastral, pero ESC-08 (inscripción RPP) SIGUE sin evaluarse."""
+        datos = _datos_completos()
+        datos.especificos["folio_real"] = Campo()
+        datos.especificos["inscripcion_rpp"] = Campo()
+        resultado = _aplicar_reglas(datos)
+        esc04 = self._hallazgo_de(resultado, "ESC-04")
+        esc08 = self._hallazgo_de(resultado, "ESC-08")
+        assert esc04.estado == EstadoRegla.CUMPLE
+        assert esc08.estado == EstadoRegla.NO_EVALUABLE
+
+    def test_regimen_ejidal_ESC09_bloqueante(self):
+        datos = _datos_completos()
+        datos.especificos["regimen_propiedad"] = Campo(
+            valor="Ejidal", normalizado="EJIDAL",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="régimen ejidal"),
+            confianza=0.9,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-09")
+        assert h.estado == EstadoRegla.NO_CUMPLE
+        assert h.severidad == Severidad.BLOQUEANTE
+
+    def test_sin_regimen_ESC09_no_evaluable(self):
+        datos = _datos_completos()
+        datos.especificos["regimen_propiedad"] = Campo()
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-09")
+        assert h.estado == EstadoRegla.NO_EVALUABLE
+
+    def test_copropiedad_sin_poder_ESC10_revision(self):
+        datos = _datos_completos()
+        datos.especificos["copropiedad"] = Campo(
+            valor="Son copropietarios Juan y María en partes iguales",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="copropietarios"),
+            confianza=0.9,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-10")
+        assert h is not None
+        assert h.estado == EstadoRegla.NO_CUMPLE
+        assert h.severidad == Severidad.REVISION
+
+    def test_copropiedad_con_poder_ESC10_cumple(self):
+        datos = _datos_completos()
+        datos.especificos["copropiedad"] = Campo(
+            valor="Copropietarios Juan y María, representados por poder notarial a Juan",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="poder"),
+            confianza=0.9,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-10")
+        assert h is not None
+        assert h.estado == EstadoRegla.CUMPLE
+
+    def test_titular_unico_ESC10_no_se_emite(self):
+        """Si no hay copropiedad declarada, la regla ESC-10 no aparece (no aplica)."""
+        resultado = _aplicar_reglas(_datos_completos())
+        assert self._hallazgo_de(resultado, "ESC-10") is None
+
+    def test_embargo_ESC11_bloqueante(self):
+        datos = _datos_completos()
+        datos.especificos["embargo_o_litigio"] = Campo(
+            valor="Anotación preventiva de embargo por el juzgado 5°",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="embargo"),
+            confianza=0.9,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-11")
+        assert h.estado == EstadoRegla.NO_CUMPLE
+        assert h.severidad == Severidad.BLOQUEANTE
+
+    def test_sin_embargo_ESC11_cumple(self):
+        h = self._hallazgo_de(_aplicar_reglas(_datos_completos()), "ESC-11")
+        assert h.estado == EstadoRegla.CUMPLE
+
+    def test_usufructo_ESC12_revision(self):
+        datos = _datos_completos()
+        datos.especificos["usufructo"] = Campo(
+            valor="Usufructo vitalicio a favor de la señora X",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="usufructo"),
+            confianza=0.9,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-12")
+        assert h.estado == EstadoRegla.NO_CUMPLE
+        assert h.severidad == Severidad.REVISION
+
+    def test_sin_usufructo_ESC12_cumple(self):
+        h = self._hallazgo_de(_aplicar_reglas(_datos_completos()), "ESC-12")
         assert h.estado == EstadoRegla.CUMPLE
 
 
