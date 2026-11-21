@@ -33,11 +33,12 @@ PASOS: list[Paso] = [
          "Desde aquí vas al inicio, subes un expediente nuevo para analizarlo o repites este recorrido.",
          "nav-bandeja", lateral=True),
     Paso("Indicadores",
-         "Cuántos expedientes hay y cuántos cumplen, requieren revisión o no cumplen. Haz clic en una "
-         "tarjeta para filtrar la lista.", "b-kpis"),
+         "Cuántos expedientes hay y cuántos cumplen, requieren revisión o tienen posibles motivos de rechazo, "
+         "además de los que la abogada ya rechazó. Haz clic en una tarjeta para filtrar la lista.", "b-kpis"),
     Paso("Mapa por estado",
-         "Cada estado toma el color de la recomendación que predomina en sus expedientes: verde cumple, "
-         "ámbar requiere revisión y rojo no cumple. Los estados en gris no tienen expedientes.", "b-mapa"),
+         "Cada estado toma el color que predomina en sus expedientes: verde si cumplen o la abogada los "
+         "aprobó, ámbar si requieren revisión y vino si la abogada los rechazó. Los estados en gris no tienen "
+         "expedientes.", "b-mapa"),
     Paso("Ventana del estado",
          "Al hacer clic en un estado se abre una ventana sobre el mapa con el porcentaje de cada "
          "recomendación. Desde ahí entras a los expedientes de ese estado.", "b-mapa"),
@@ -45,8 +46,9 @@ PASOS: list[Paso] = [
          "Filtra por estado, por recomendación o busca por expediente, municipio, propietario o archivo.",
          "b-filtros", ancla="expedientes"),
     Paso("Expedientes",
-         "Primero los que no cumplen, luego los que requieren revisión. Abre uno para ver el dictamen, "
-         "las inconsistencias y la evidencia de cada hallazgo.", "b-lista", ancla="expedientes"),
+         "Primero salen los que tienen posibles motivos de rechazo y nadie ha revisado, luego el resto de los "
+         "que requieren revisión. Abre uno para ver el dictamen, lo que hay que resolver y la evidencia de cada "
+         "hallazgo.", "b-lista", ancla="expedientes"),
     Paso("Subir un expediente",
          "Sube los PDF o imágenes de un inmueble: el sistema clasifica cada documento, extrae los datos, "
          "los cruza y emite la recomendación con su evidencia.", "nav-nuevo", lateral=True),

@@ -440,6 +440,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
   font-family: var(--f-titular); font-weight: 900; font-size: 18px; line-height: 1; color: var(--tinta); text-transform: uppercase; }}
 
 .kpis {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 0 0 34px; }}
+.kpis.kpis-5 {{ grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }}
 a.kpi {{ display: block; background: transparent; border: 2px solid var(--tinta); border-radius: 6px; padding: 16px 18px 14px;
   text-decoration: none; color: var(--texto); }}
 a.kpi:hover, a.kpi:focus-visible {{ border-color: var(--rojo-osc); }}
@@ -535,6 +536,17 @@ a.t-motivo:focus-visible {{ outline: 3px solid var(--tinta); outline-offset: 1px
 .filtro-activo {{ font-size: 14px; color: var(--texto); margin: 8px 0 0; }}
 .filtro-activo a {{ color: var(--tinta); text-decoration: underline; }}
 .motivos-resumen {{ font-size: 14px; color: var(--texto); margin: 4px 0; }}
+/* Posibles motivos de rechazo: primer bloque de "Qué hay que resolver", con la cita a la vista. */
+.posibles-rechazo {{ border-left: 4px solid var(--rojo-osc); padding: 2px 0 2px 16px; margin: 14px 0 22px; }}
+.stApp .posibles-rechazo h3, .stApp h3.otros-pendientes {{ font-family: var(--f-texto); font-size: 16px; font-weight: 700;
+  color: var(--tinta); margin: 0; padding: 0; }}
+.posibles-nota {{ font-size: 13px; color: var(--texto2); margin: 2px 0 4px; }}
+.stApp h3.otros-pendientes {{ margin-top: 8px; }}
+.resolver-citas {{ list-style: none; padding: 0; margin: 4px 0 6px; font-size: 13px; }}
+.resolver-citas li {{ margin: 2px 0; }}
+.resolver-citas .fuente {{ margin-left: 6px; }}
+.dec-nota {{ font-size: 14px; color: var(--texto); margin: 8px 0 2px; }}
+.dec-sugerencia {{ font-size: 13px; color: var(--texto2); margin: 0 0 6px; }}
 .t-id {{ font-weight: 700; color: var(--tinta); }}
 .t-ej {{ font-size: 11px; font-weight: 600; color: var(--texto2); border: 1px solid var(--borde); border-radius: 4px; padding: 0 4px; margin-left: 4px; }}
 .t-rec {{ font-weight: 700; }}

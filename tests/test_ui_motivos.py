@@ -40,10 +40,10 @@ def _exp(hallazgos_por_doc, recomendacion=Recomendacion.REQUIERE_REVISION, exped
 
 def test_motivo_principal():
     assert L.motivo_principal(_demo("dictamen_demo_02")) is None  # cumple
-    assert L.motivo_principal(_demo("dictamen_demo_04")) == "Descartado por adeudos de predial"
+    assert L.motivo_principal(_demo("dictamen_demo_04")) == "Posible rechazo por adeudos de predial"
     d = _exp([("u.pdf", TipoDocumento.USO_SUELO, [_h("USO-01"), _h("USO-02", Severidad.BLOQUEANTE)])],
              Recomendacion.NO_CUMPLE)
-    assert L.motivo_principal(d) == "Descartado por documento vencido"  # el bloqueante va primero
+    assert L.motivo_principal(d) == "Posible rechazo por documento vencido"  # el bloqueante va primero
 
 
 def test_coincide_por_categoria_con_cualquier_motivo():
@@ -60,7 +60,7 @@ def test_conteo_por_motivo_cuenta_expedientes_y_no_ejemplos():
                     Recomendacion.NO_CUMPLE, expediente_id="B")
     ejemplo = _exp([("u.pdf", TipoDocumento.USO_SUELO, [_h("USO-01", Severidad.BLOQUEANTE)])], expediente_id="C")
     conteo = L.conteo_por_motivo([(dos_uso, False), (uso_bloq, False), (ejemplo, True)])
-    assert conteo[Categoria.USO_SUELO] == {"descartados": 1, "en_revision": 1}
+    assert conteo[Categoria.USO_SUELO] == {"posible_rechazo": 1, "en_revision": 1}
     assert L.conteo_por_motivo([(ejemplo, True)]) == {}
 
 
@@ -80,7 +80,7 @@ def test_csv_columnas_cumple_e_inyeccion():
     assert cumple[2] == "Querétaro" and cumple[3] == "San Juan del Río"
     fila = filas[2]
     assert fila[0] == "'-EXP-1" and fila[9] == "'=HYPERLINK(1).pdf" and fila[10] == "'+SUMA(A1)"
-    assert fila[5] == "adeudo_fiscal" and fila[6] == "Descartado por adeudos de predial" and fila[7] == "bloqueante"
+    assert fila[5] == "adeudo_fiscal" and fila[6] == "Posible rechazo por adeudos de predial" and fila[7] == "bloqueante"
 
 
 def test_csv_respeta_la_categoria_y_une_archivos():
@@ -114,11 +114,11 @@ def _estatus():
 def test_detalle_resumen_y_etiqueta_por_renglon():
     d = _demo("dictamen_demo_04")
     resumen = C.resumen_motivos(d)
-    assert "Descartado por:</b> adeudos de predial (1) · expediente incompleto (1)" in resumen
+    assert "Posible rechazo por:</b> adeudos de predial (1) · expediente incompleto (1)" in resumen
     assert "En revisión por:" in resumen
     html = C.lista_pendientes(d)
-    assert "Bloqueante</b> · <span class=\"est-vino\">Descartado por expediente incompleto</span>" in html
-    assert "Descartado por adeudos de predial" in html
+    assert "Bloqueante</b> · <span class=\"est-vino\">Posible rechazo por expediente incompleto</span>" in html
+    assert "Posible rechazo por adeudos de predial" in html
 
 
 def test_renglon_sin_motivo_no_inventa():
@@ -129,9 +129,9 @@ def test_renglon_sin_motivo_no_inventa():
 
 
 def test_opcion_del_filtro_lleva_los_conteos():
-    assert L.opcion_motivo(Categoria.VIGENCIA, {"descartados": 6, "en_revision": 0}) == "Documento vencido · 6 descartados"
-    assert L.opcion_motivo(Categoria.USO_SUELO, {"descartados": 2, "en_revision": 1}) == "Uso de suelo · 2 descartados · 1 en revisión"
-    assert L.opcion_motivo(Categoria.ADEUDO_FISCAL, {"descartados": 1, "en_revision": 0}) == "Adeudos de predial · 1 descartado"
+    assert L.opcion_motivo(Categoria.VIGENCIA, {"posible_rechazo": 6, "en_revision": 0}) == "Documento vencido · 6 con posible rechazo"
+    assert L.opcion_motivo(Categoria.USO_SUELO, {"posible_rechazo": 2, "en_revision": 1}) == "Uso de suelo · 2 con posible rechazo · 1 en revisión"
+    assert L.opcion_motivo(Categoria.ADEUDO_FISCAL, {"posible_rechazo": 1, "en_revision": 0}) == "Adeudos de predial · 1 con posible rechazo"
     assert L.opcion_motivo(Categoria.IDENTIFICACION) == "Datos de identificación incompletos"
 
 
@@ -185,7 +185,7 @@ def test_opciones_del_filtro_con_solo_ejemplos():
     # con un real de la misma categoría, el texto lleva solo el conteo de reales
     real = _exp([("p.pdf", TipoDocumento.PREDIAL, [_h("PRE-04", Severidad.BLOQUEANTE)])], Recomendacion.NO_CUMPLE)
     valores, textos = L.opciones_motivo([(ms, True), (L.motivos_ui(real), False)])
-    assert valores[1] == "adeudo_fiscal" and textos["adeudo_fiscal"] == "Adeudos de predial · 1 descartado"
+    assert valores[1] == "adeudo_fiscal" and textos["adeudo_fiscal"] == "Adeudos de predial · 1 con posible rechazo"
     # la categoría activa se conserva aunque ya no haya expedientes
     assert "uso_suelo" in L.opciones_motivo([], Categoria.USO_SUELO)[0]
 
@@ -254,3 +254,75 @@ def test_motivos_se_calculan_una_vez_por_expediente(monkeypatch):
     assert [n for n in nombres if L.coincide(dictamenes[n], categoria=Categoria.ADEUDO_FISCAL, ms=mots[n])] == ["dictamen_demo_04"]
     L.csv_seguimiento([(dictamenes[n], mots[n]) for n in nombres], Categoria.ADEUDO_FISCAL)
     C.tabla_expedientes([(n, dictamenes[n], True, _estatus()) for n in nombres], {}, None, mots)
+
+
+# ---------------------------------------------------------------- el sistema no rechaza (e94a8d4)
+
+def test_decisiones_json_no_se_lee_como_dictamen(tmp_path):
+    from ui import decisiones as Dec
+    from ui import store
+
+    res, ej = tmp_path / "res", tmp_path / "ej"
+    res.mkdir(); ej.mkdir()
+    store.guardar(_demo("dictamen_demo_04"), res)
+    Dec.registrar("resultado:x", Dec.Estatus.RECHAZADO, "Adeudo de predial sin resolver.", "Ana", res)
+    assert (res / Dec.ARCHIVO).exists()
+    entradas, invalidos = store.cargar(res, ej)
+    assert len(entradas) == 1 and invalidos == []
+    # un expediente llamado "decisiones" no pisa el archivo de decisiones
+    d = _demo("dictamen_demo_02").model_copy(update={"expediente_id": "decisiones"})
+    assert store.guardar(d, res).ruta.name != Dec.ARCHIVO
+
+
+def test_posibles_motivos_de_rechazo_salen_de_los_datos():
+    d = _demo("dictamen_demo_04")
+    textos = [p.requisito.id_regla if p.requisito else p.inconsistencia.id_regla for p in L.posibles_motivos_rechazo(d)]
+    assert sorted(textos) == ["EXP-01", "PRE-04"]
+    assert L.posibles_motivos_rechazo(_demo("dictamen_demo_03")) == []   # revisión sin bloqueantes
+    assert L.posibles_motivos_rechazo(_demo("dictamen_demo_02")) == []   # cumple
+    # un bloqueante que otro archivo del mismo tipo sí cumple no cuenta (consolidado como el dictamen)
+    ok = _exp([("a.pdf", TipoDocumento.PREDIAL, [_h("PRE-04", Severidad.BLOQUEANTE)]),
+               ("b.pdf", TipoDocumento.PREDIAL, [_h("PRE-04", Severidad.INFO, EstadoRegla.CUMPLE)])])
+    assert L.posibles_motivos_rechazo(ok) == []
+
+
+def test_bloque_de_posibles_motivos_sin_duplicar_ni_ocultar():
+    d = _demo("dictamen_demo_04")
+    items, _ = L.pendientes(d)
+    html = C.lista_pendientes(d)
+    bloque, resto = html.split('<h3 class="otros-pendientes">')
+    assert "Posibles motivos de rechazo" in bloque
+    assert bloque.count("<li><p class=\"resolver-texto\">") == sum(1 for it in items if L.es_posible_rechazo(it)) == 2
+    assert html.count("<li><p class=\"resolver-texto\">") == len(items)   # cada renglón una vez, ninguno oculto
+    assert 'class="resolver-citas"' in bloque and "ADEUDO DE EJERCICIOS ANTERIORES" in bloque
+    assert "Posibles motivos de rechazo" not in C.lista_pendientes(_demo("dictamen_demo_03"))
+
+
+def test_aviso_de_la_decision_sugiere_sin_elegir():
+    aviso = C.aviso_decision(_demo("dictamen_demo_04"))
+    assert "El sistema no rechaza expedientes" in aviso
+    assert "adeudos de predial" in aviso and "expediente incompleto" in aviso
+    assert "Motivos que podrías citar" not in C.aviso_decision(_demo("dictamen_demo_03"))
+
+
+def test_color_del_mapa_y_filtro_de_recomendacion():
+    R = Recomendacion
+    assert L.color_mapa(R.REQUIERE_REVISION, "Rechazado") == R.NO_CUMPLE   # vino: solo la abogada rechaza
+    assert L.color_mapa(R.REQUIERE_REVISION, "Aprobado") == R.CUMPLE
+    assert L.color_mapa(R.NO_CUMPLE, "Sin revisar") == R.REQUIERE_REVISION  # dictamen viejo sin decisión
+    assert L.color_mapa(R.CUMPLE, None) == R.CUMPLE
+    viejo = _demo("dictamen_demo_04").model_copy(update={"recomendacion": R.NO_CUMPLE})
+    assert L.misma_recomendacion(viejo, R.REQUIERE_REVISION) and not L.misma_recomendacion(viejo, R.CUMPLE)
+
+
+def test_orden_de_la_bandeja():
+    from datetime import timedelta
+
+    pos = _demo("dictamen_demo_04")
+    rev = _demo("dictamen_demo_03").model_copy(update={"fecha_analisis": pos.fecha_analisis + timedelta(days=1)})
+    ok = _demo("dictamen_demo_02").model_copy(update={"fecha_analisis": pos.fecha_analisis + timedelta(days=2)})
+    orden = sorted([ok, rev, pos], key=L.orden_bandeja)
+    assert [d.expediente_id for d in orden] == [pos.expediente_id, rev.expediente_id, ok.expediente_id]
+    # ya revisado por la abogada: baja al grupo de revisión, y ahí va lo más reciente primero
+    orden = sorted([ok, rev, pos], key=lambda d: L.orden_bandeja(d, sin_revisar=d is not pos))
+    assert [d.expediente_id for d in orden] == [rev.expediente_id, pos.expediente_id, ok.expediente_id]

@@ -206,11 +206,11 @@
       ]
     }
   ],
-  "recomendacion": "No cumple",
+  "recomendacion": "Requiere revisión",
   "confianza": 0.86,
-  "resumen": "La Licencia de Uso de Suelo venció el 10/02/2025. Los cuatro documentos corresponden al mismo inmueble (misma clave catastral, propietaria y dirección) y el expediente está completo. Además, el predial registra una superficie menor que el resto de los documentos y la constancia de alineamiento tiene la sección de afectaciones parcialmente ilegible; ambos puntos requieren revisión del equipo legal.",
+  "resumen": "Requiere revisión. La Licencia de Uso de Suelo venció el 10/02/2025, un posible motivo de rechazo que la abogada debe confirmar. Los cuatro documentos corresponden al mismo inmueble (misma clave catastral, propietaria y dirección) y el expediente está completo. El predial registra una superficie menor que el resto de los documentos y la sección de afectaciones de la constancia de alineamiento es parcialmente ilegible. La decisión de rechazar es del equipo legal.",
   "razones": [
-    "Licencia de Uso de Suelo vencida desde el 10/02/2025 (bloqueante).",
+    "Licencia de Uso de Suelo vencida desde el 10/02/2025 (posible motivo de rechazo).",
     "Superficie en predial (432 m²) distinta a la de escritura, alineamiento y uso de suelo (450 m²).",
     "No se pudo confirmar si el alineamiento tiene afectaciones por ilegibilidad parcial.",
     "Propietaria, dirección, clave catastral y número oficial coinciden en los 4 documentos."

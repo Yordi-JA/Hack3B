@@ -639,14 +639,13 @@
       ]
     }
   ],
-  "recomendacion": "No cumple",
+  "recomendacion": "Requiere revisión",
   "confianza": 0.82,
-  "resumen": "Falta la Licencia de Uso de Suelo y el predial reporta un adeudo de $14,862.00 de ejercicios anteriores. Además, la constancia de alineamiento asigna el número 17 mientras la escritura y el predial dicen 15; hay que aclarar si es el mismo predio. Un segundo recibo de predial (2024) no se pudo analizar y debe revisarse a mano.",
+  "resumen": "Requiere revisión. La abogada debe confirmar 2 posibles motivos de rechazo: falta la Licencia de Uso de Suelo y el predial reporta un adeudo de $14,862.00 de ejercicios anteriores. También hay que aclarar el número oficial (17 en la constancia de alineamiento, 15 en la escritura y el predial) y revisar a mano un segundo recibo de predial (2024) que no se pudo analizar. La decisión de rechazar es del equipo legal.",
   "razones": [
-    "Falta la Licencia de Uso de Suelo (bloqueante).",
-    "Adeudo de predial de ejercicios anteriores por $14,862.00 (bloqueante).",
+    "Falta la Licencia de Uso de Suelo (posible motivo de rechazo).",
+    "Adeudo de predial de ejercicios anteriores por $14,862.00; de 2026 solo está pagado el primer bimestre (posible motivo de rechazo).",
     "Número oficial 17 en alineamiento frente a 15 en escritura y predial.",
-    "Solo está pagado el primer bimestre de 2026.",
     "El análisis automático del predial 2024 falló; requiere revisión manual."
   ]
 }

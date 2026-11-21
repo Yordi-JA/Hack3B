@@ -23,6 +23,8 @@ from expedientes.schemas import Dictamen
 RAIZ = Path(__file__).resolve().parent.parent
 DIR_RESULTADOS = RAIZ / "resultados"
 DIR_EJEMPLOS = RAIZ / "ejemplos"
+# Vive en resultados/ pero no es un dictamen: la bandeja no lo lee y ningún análisis lo sobrescribe.
+ARCHIVO_DECISIONES = "decisiones.json"
 
 Origen = Literal["resultado", "ejemplo"]
 
@@ -154,6 +156,8 @@ def cargar(
         if not carpeta.is_dir():
             continue
         for ruta in sorted(carpeta.glob("*.json")):
+            if ruta.name.lower() == ARCHIVO_DECISIONES:
+                continue
             leido = _leer(ruta, origen)
             (entradas if isinstance(leido, Entrada) else invalidos).append(leido)
     return entradas, invalidos
@@ -223,7 +227,7 @@ def _destino_libre(carpeta: Path, expediente_id: str) -> Path:
     """El mismo id reusa su archivo (re-análisis). Si otro id ocupa el mismo nombre, aunque sea solo
     con otras mayúsculas, se agrega -2, -3... Así funciona igual en disco con o sin mayúsculas."""
     base = nombre_archivo(expediente_id)[: -len(".json")]
-    n = 1
+    n = 2 if f"{base}.json".lower() == ARCHIVO_DECISIONES else 1
     while True:
         destino = carpeta / (f"{base}.json" if n == 1 else f"{base}-{n}.json")
         parecidos = _parecidos(destino)

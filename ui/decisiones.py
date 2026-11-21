@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 from . import tokens as t
-from .store import DIR_RESULTADOS
+from .store import ARCHIVO_DECISIONES, DIR_RESULTADOS
 
-ARCHIVO = "decisiones.json"
+ARCHIVO = ARCHIVO_DECISIONES
 LIMITE_COMENTARIO = 2000
 
 

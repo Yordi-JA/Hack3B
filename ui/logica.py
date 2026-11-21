@@ -25,7 +25,6 @@ from expedientes.schemas import (
 )
 
 from expedientes.motivos import MOTIVO, Categoria, Motivo, motivos
-from expedientes.motivos import etiqueta as etiqueta_motivo
 
 from .mapa import ConteoEntidad, nombre_entidad, normalizar_entidad, normalizar_texto
 
@@ -500,16 +499,36 @@ def indicadores(dictamenes: list[tuple[Dictamen, bool]]) -> Indicadores:
     )
 
 
-def conteo_por_entidad(dictamenes: Iterable[Dictamen]) -> dict[str, ConteoEntidad]:
+def conteo_por_entidad(dictamenes: Iterable["Dictamen | tuple[Dictamen, Recomendacion]"]) -> dict[str, ConteoEntidad]:
+    """Expedientes por entidad y por color. Cada elemento es un dictamen (cuenta su recomendación) o un par
+    (dictamen, color ya resuelto con `color_mapa`)."""
     conteos: dict[str, ConteoEntidad] = {}
-    for d in dictamenes:
+    for item in dictamenes:
+        d, rec = item if isinstance(item, tuple) else (item, item.recomendacion)
         entidad = consolidar_ubicacion(d).entidad
         if not entidad:
             continue
         c = conteos.setdefault(entidad, ConteoEntidad())
         c.total += 1
-        c.por_recomendacion[d.recomendacion] = c.por_recomendacion.get(d.recomendacion, 0) + 1
+        c.por_recomendacion[rec] = c.por_recomendacion.get(rec, 0) + 1
     return conteos
+
+
+def color_mapa(recomendacion: Recomendacion, estatus: Optional[str] = None) -> Recomendacion:
+    """Color de un expediente en el mapa: la decisión de la abogada si ya la tomó (Rechazado -> vino,
+    Aprobado -> verde); si no, la recomendación del sistema, que ya no rechaza: un "No cumple" de un
+    dictamen anterior se pinta como revisión. Vino significa siempre "rechazado por la abogada"."""
+    if estatus == "Rechazado":
+        return Recomendacion.NO_CUMPLE
+    if estatus == "Aprobado":
+        return Recomendacion.CUMPLE
+    return Recomendacion.REQUIERE_REVISION if recomendacion == Recomendacion.NO_CUMPLE else recomendacion
+
+
+def misma_recomendacion(dictamen: Dictamen, rec: Recomendacion) -> bool:
+    """Filtro "Recomendación": un "No cumple" de un dictamen anterior entra en "Requiere revisión"."""
+    actual = Recomendacion.REQUIERE_REVISION if dictamen.recomendacion == Recomendacion.NO_CUMPLE else dictamen.recomendacion
+    return actual == rec
 
 
 SIN_ENTIDAD = "SIN_ENTIDAD"
@@ -557,9 +576,20 @@ def coincide(
     return True
 
 
-def orden_bandeja(dictamen: Dictamen) -> tuple:
-    """Primero lo que requiere atención (No cumple, luego revisión), y lo más reciente arriba."""
-    return (-rango_recomendacion(dictamen.recomendacion), -dictamen.fecha_analisis.timestamp())
+def orden_bandeja(dictamen: Dictamen, sin_revisar: bool = True, con_posibles: Optional[bool] = None) -> tuple:
+    """Primero los que tienen posibles motivos de rechazo y nadie ha revisado, luego el resto de los que
+    requieren revisión (y los "No cumple" de dictámenes viejos), al final los que cumplen; lo más reciente
+    arriba dentro de cada grupo. `sin_revisar`: la abogada todavía no decide sobre el expediente.
+    `con_posibles`: si ya se sabe si tiene posibles motivos de rechazo (para no recalcularlos)."""
+    if con_posibles is None:
+        con_posibles = bool(posibles_motivos_rechazo(dictamen))
+    if dictamen.recomendacion == Recomendacion.CUMPLE:
+        grupo = 2
+    elif sin_revisar and con_posibles:
+        grupo = 0
+    else:
+        grupo = 1
+    return (grupo, -dictamen.fecha_analisis.timestamp())
 
 
 # ------------------------------------------------------------------ seguimiento por motivo de descarte
@@ -569,6 +599,42 @@ def nombre_motivo(cat: Categoria) -> str:
     """'Uso de suelo', 'Adeudos de predial'... (MOTIVO con mayúscula inicial)."""
     texto = MOTIVO[cat]
     return texto[:1].upper() + texto[1:]
+
+
+def etiqueta_motivo(cat: Categoria, severidad: Severidad) -> str:
+    """El sistema recomienda y la abogada decide: un hallazgo bloqueante es un *posible* rechazo.
+    "Rechazado" solo lo dice la decisión de la abogada (no `motivos.etiqueta`, que dice "Descartado por")."""
+    inicio = "Posible rechazo por" if severidad == Severidad.BLOQUEANTE else "En revisión por"
+    return f"{inicio} {MOTIVO[cat]}"
+
+
+@dataclass
+class PosibleRechazo:
+    """Un hallazgo o inconsistencia bloqueante: lo que podría justificar un rechazo si la abogada lo confirma."""
+    texto: str
+    requisito: Optional[Requisito] = None
+    inconsistencia: Optional[Inconsistencia] = None
+
+
+def es_posible_rechazo(it: "Pendiente") -> bool:
+    """Un renglón de "Qué hay que resolver" que es posible motivo de rechazo: requisito bloqueante que no se
+    cumple o inconsistencia bloqueante (la misma regla que `posibles_motivos_rechazo`)."""
+    if it.severidad != Severidad.BLOQUEANTE:
+        return False
+    if it.requisito is not None:
+        return it.requisito.estado != EstadoRegla.CUMPLE
+    return it.inconsistencia is not None
+
+
+def posibles_motivos_rechazo(dictamen: Dictamen) -> list[PosibleRechazo]:
+    """Requisitos bloqueantes que no se cumplen (de los documentos y del expediente, consolidados por tipo
+    como en el dictamen) e inconsistencias bloqueantes. Sale de los datos, nunca del texto de `razones`."""
+    salida = [PosibleRechazo(r.decisivo().explicacion or r.descripcion, requisito=r)
+              for r in consolidar_requisitos(dictamen)
+              if r.severidad == Severidad.BLOQUEANTE and r.estado != EstadoRegla.CUMPLE]
+    salida += [PosibleRechazo(i.descripcion, inconsistencia=i) for i in dictamen.inconsistencias
+               if i.severidad == Severidad.BLOQUEANTE]
+    return salida
 
 
 def archivos_sin_evaluar(dictamen: Dictamen) -> set[str]:
@@ -592,7 +658,8 @@ def motivos_ui(dictamen: Dictamen) -> list[Motivo]:
         return (m.estado == EstadoRegla.NO_EVALUABLE and m.severidad != Severidad.BLOQUEANTE
                 and not m.id_regla.startswith("EXP-") and bool(archivos) and all(a in tapados for a in archivos))
 
-    return [m for m in motivos(dictamen) if not descartar(m)]
+    return [m.model_copy(update={"etiqueta": etiqueta_motivo(m.categoria, m.severidad)})
+            for m in motivos(dictamen) if not descartar(m)]
 
 
 def motivos_por_clave(entradas: Iterable[tuple[str, Dictamen]]) -> dict[str, list[Motivo]]:
@@ -611,8 +678,8 @@ def motivo_principal(dictamen: Dictamen, ms: Optional[list[Motivo]] = None) -> O
 
 
 def conteo_por_motivo(dictamenes: Iterable[tuple["Dictamen | list[Motivo]", bool]]) -> dict[Categoria, dict[str, int]]:
-    """Expedientes (no motivos) por categoría: 'descartados' si alguno de sus motivos de esa categoría es
-    bloqueante, si no 'en_revision'. Recibe pares (dictamen o sus motivos ya calculados, es_ejemplo) y no
+    """Expedientes (no motivos) por categoría: 'posible_rechazo' si alguno de sus motivos de esa categoría
+    es bloqueante, si no 'en_revision'. Recibe pares (dictamen o sus motivos ya calculados, es_ejemplo) y no
     cuenta los ejemplos. Ordenado de más a menos expedientes."""
     conteo: dict[Categoria, dict[str, int]] = {}
     for d, es_ejemplo in dictamenes:
@@ -622,18 +689,17 @@ def conteo_por_motivo(dictamenes: Iterable[tuple["Dictamen | list[Motivo]", bool
         for m in _lista(d):
             peor[m.categoria] = peor.get(m.categoria, False) or m.severidad == Severidad.BLOQUEANTE
         for cat, bloquea in peor.items():
-            fila = conteo.setdefault(cat, {"descartados": 0, "en_revision": 0})
-            fila["descartados" if bloquea else "en_revision"] += 1
-    return dict(sorted(conteo.items(), key=lambda kv: (-(kv[1]["descartados"] + kv[1]["en_revision"]), kv[0].value)))
+            fila = conteo.setdefault(cat, {"posible_rechazo": 0, "en_revision": 0})
+            fila["posible_rechazo" if bloquea else "en_revision"] += 1
+    return dict(sorted(conteo.items(), key=lambda kv: (-(kv[1]["posible_rechazo"] + kv[1]["en_revision"]), kv[0].value)))
 
 
 def opcion_motivo(cat: Categoria, cuenta: Optional[dict[str, int]] = None, solo_ejemplos: bool = False) -> str:
-    """Texto de la opción del filtro "Motivo": 'Uso de suelo · 2 descartados · 1 en revisión'.
+    """Texto de la opción del filtro "Motivo": 'Uso de suelo · 2 con posible rechazo · 1 en revisión'.
     Sin cuenta queda solo el nombre, o 'Uso de suelo · solo ejemplos' si solo la tienen ejemplos."""
     partes = [nombre_motivo(cat)]
-    if cuenta and cuenta.get("descartados"):
-        n = cuenta["descartados"]
-        partes.append(f"{n} descartado{'s' if n != 1 else ''}")
+    if cuenta and cuenta.get("posible_rechazo"):
+        partes.append(f"{cuenta['posible_rechazo']} con posible rechazo")
     if cuenta and cuenta.get("en_revision"):
         partes.append(f"{cuenta['en_revision']} en revisión")
     if len(partes) == 1 and solo_ejemplos:

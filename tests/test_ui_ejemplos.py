@@ -14,9 +14,14 @@ def test_ejemplo_valida_contra_dictamen(ruta):
     Dictamen.model_validate_json(ruta.read_text(encoding="utf-8"))
 
 
-def test_ejemplos_cubren_las_tres_recomendaciones_con_ids_unicos():
+def test_ejemplos_cubren_cumple_y_revision_con_y_sin_posible_rechazo_con_ids_unicos():
+    from ui import logica as L
+
     dictamenes = [Dictamen.model_validate_json(p.read_text(encoding="utf-8")) for p in EJEMPLOS]
-    assert {d.recomendacion for d in dictamenes} == set(Recomendacion)
+    # el sistema no rechaza (e94a8d4): ningún ejemplo nuevo dice "No cumple"
+    assert {d.recomendacion for d in dictamenes} == {Recomendacion.CUMPLE, Recomendacion.REQUIERE_REVISION}
+    revision = [d for d in dictamenes if d.recomendacion == Recomendacion.REQUIERE_REVISION]
+    assert {bool(L.posibles_motivos_rechazo(d)) for d in revision} == {True, False}
     ids = [d.expediente_id for d in dictamenes]
     assert len(ids) == len(set(ids))
 

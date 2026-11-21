@@ -104,6 +104,16 @@ def _motivos_cache(huella: tuple) -> dict[str, list[L.Motivo]]:
     return L.motivos_por_clave((e.clave, e.dictamen) for e in _cargar_cache(huella)[0])
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
+def _posibles_cache(huella: tuple) -> dict[str, int]:
+    return {e.clave: len(L.posibles_motivos_rechazo(e.dictamen)) for e in _cargar_cache(huella)[0]}
+
+
+def posibles_por_clave() -> dict[str, int]:
+    """Cuántos posibles motivos de rechazo tiene cada expediente, una vez por versión de los archivos."""
+    return _posibles_cache(_huella())
+
+
 def motivos_por_clave() -> dict[str, list[L.Motivo]]:
     """Motivos de cada expediente (L.motivos_ui), calculados una vez por versión de los archivos."""
     return _motivos_cache(_huella())
@@ -211,9 +221,12 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     entidad_actual = _filtro("entidad")
     if "f_ej" not in st.session_state:
         st.session_state["f_ej"] = st.query_params.get("ej") != "0"
+    if st.query_params.get("rec") and st.query_params.get("rec") not in {r.value for r in C.RECS_TABLERO}:
+        st.query_params.pop("rec", None)  # p. ej. ?rec=No cumple de antes de e94a8d4: se ignora y se quita
     if "f_rec" not in st.session_state:
         rec_url = st.query_params.get("rec")
-        st.session_state["f_rec"] = rec_url if rec_url in {r.value for r in Recomendacion} else None
+        # El sistema ya no recomienda "No cumple": un ?rec=No cumple viejo se ignora.
+        st.session_state["f_rec"] = rec_url if rec_url in {r.value for r in C.RECS_TABLERO} else None
     if st.query_params.get("mot") and not L.categoria_de(st.query_params.get("mot")):
         st.query_params.pop("mot", None)  # ?mot=xyz no es una categoría: se quita en vez de arrastrarlo
     if "f_mot" not in st.session_state:
@@ -240,12 +253,21 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         tour.mostrar(html)
         return
 
-    conteos = L.conteo_por_entidad(e.dictamen for e in visibles)
+    historial = Dec.cargar()
+    # Mapa: color por la decisión de la abogada si ya la hay; si no, por la recomendación (L.color_mapa).
+    conteos = L.conteo_por_entidad(
+        (e.dictamen, L.color_mapa(e.dictamen.recomendacion, Dec.estatus(historial, e.clave).value)) for e in visibles
+    )
+    posibles = posibles_por_clave()
     sin_entidad = sum(1 for e in visibles if L.consolidar_ubicacion(e.dictamen).entidad is None)
     enlace = dict(params_filtros(), vista="bandeja")
 
     with st.container(key="b-kpis"):
-        html(C.kpis_bandeja(ind, enlace))
+        html(C.kpis_bandeja(
+            ind, enlace,
+            posibles=sum(1 for e in base if e.dictamen.recomendacion != Recomendacion.CUMPLE and posibles.get(e.clave)),
+            rechazados=sum(1 for e in base if Dec.estatus(historial, e.clave) == Dec.Estatus.RECHAZADO),
+        ))
 
     # Elegir un estado en el mapa solo abre su recuadro (parámetro `mapa`); no filtra la lista de abajo.
     # Sus expedientes se ven en la vista del estado ("Ver expedientes del estado").
@@ -256,13 +278,12 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         html(C.caja_mapa_tablero(svg, ventana, sin_entidad))
 
     # Repositorio: buscador y filtros justo arriba de la tabla.
-    historial = Dec.cargar()
     est = _filtro("est")
     rec = st.session_state.get("f_rec")
     # Todos los filtros menos el de motivo: de aquí salen las opciones de "Motivo" (regla en L.opciones_motivo).
     sin_motivo = [
         e for e in base
-        if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
+        if (not rec or L.misma_recomendacion(e.dictamen, Recomendacion(rec)))
         and (not est or Dec.estatus(historial, e.clave).value == est)
     ]
     opciones_motivo, textos_motivo = L.opciones_motivo(((mots.get(e.clave, []), e.es_ejemplo) for e in sin_motivo), categoria)
@@ -296,9 +317,9 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         )
     with f2:
         st.segmented_control(
-            "Recomendación", [r.value for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE)],
+            "Recomendación", [r.value for r in (Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE)],
             key="f_rec", on_change=_sincronizar, args=("rec",),
-            format_func=lambda v: f"{v} {ind.por_recomendacion[Recomendacion(v)]}",
+            format_func=lambda v: f"{v} {sum(1 for e in base if L.misma_recomendacion(e.dictamen, Recomendacion(v)))}",
         )
     with f3:
         st.toggle(
@@ -307,7 +328,8 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         )
 
     filtrados = [e for e in sin_motivo if not categoria or L.coincide(e.dictamen, categoria=categoria, ms=mots.get(e.clave))]
-    filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
+    filtrados.sort(key=lambda e: L.orden_bandeja(
+        e.dictamen, Dec.estatus(historial, e.clave) == Dec.Estatus.SIN_REVISAR, bool(posibles.get(e.clave))))
 
     html('<div id="expedientes" class="ancla"></div>')
     with st.container(key="b-lista"):
@@ -366,7 +388,7 @@ def vista_estado(entradas: list[store.Entrada], clave: Optional[str]) -> None:
 
     ind = L.indicadores([(e.dictamen, e.es_ejemplo) for e in del_estado])
     rec = st.query_params.get("rec")
-    rec = rec if rec in {r.value for r in Recomendacion} else None
+    rec = rec if rec in {r.value for r in C.RECS_TABLERO} else None
     params = {"vista": "estado", "entidad": clave or "", "ej": st.query_params.get("ej", "")}
     conteo = L.conteo_por_entidad(e.dictamen for e in del_estado).get(clave)
     color = t_estado(conteo.predominante if conteo else None)
@@ -384,11 +406,13 @@ def vista_estado(entradas: list[store.Entrada], clave: Optional[str]) -> None:
         est = b2.selectbox("Estatus", [""] + [e.value for e in Dec.Estatus], key="estado-est", format_func=lambda v: v or "Todos")
     filtrados = [
         e for e in del_estado
-        if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
+        if (not rec or L.misma_recomendacion(e.dictamen, Recomendacion(rec)))
         and (not est or Dec.estatus(historial, e.clave).value == est)
         and L.coincide(e.dictamen, None, None, texto or "")
     ]
-    filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
+    posibles = posibles_por_clave()
+    filtrados.sort(key=lambda e: L.orden_bandeja(
+        e.dictamen, Dec.estatus(historial, e.clave) == Dec.Estatus.SIN_REVISAR, bool(posibles.get(e.clave))))
     filtro = f" · {rec}" if rec else ""
     html(f'<h2 class="lista-titulo">Expedientes{C.txt(filtro)} <small>{len(filtrados)}</small></h2>')
     if filtrados:
@@ -730,6 +754,7 @@ def seccion_decision(entrada: store.Entrada) -> None:
     html(C.seccion("Decisión", "decision", "El sistema recomienda; la decisión final la marca la abogada."))
     with st.container(key="decision"):
         html(C.tarjeta_decision(hist[-1] if hist else None))
+        html(C.aviso_decision(entrada.dictamen))
         n = st.session_state.get("dec-version", 0)  # cambia tras guardar: el formulario vuelve vacío
         with st.form("form-decision", border=False):
             nuevo = st.segmented_control("Marcar como", [e.value for e in Dec.ELEGIBLES], key=f"dec-estatus-{n}")

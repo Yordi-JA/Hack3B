@@ -18,14 +18,26 @@ def _ind():
     return L.indicadores([(d, True), (d, False), (otro, False), (otro, False)])
 
 
-def test_kpis_cuatro_tarjetas_con_porcentaje_y_filtro():
+def test_kpis_tarjetas_con_porcentaje_y_filtro():
     html = C.kpis_bandeja(_ind(), {"vista": "bandeja", "entidad": "HIDALGO", "rec": "Cumple"})
-    assert html.count('class="kpi ') == 4 and "\n" not in html
+    assert html.count('class="kpi ') == 3 and "\n" not in html  # total, cumplen, requieren revisión
     assert "Expedientes analizados" in html and "<b class=\"kpi-num\">4</b>" in html
-    assert "50 % del total" in html  # 2 de 4 cumplen y 2 de 4 no cumplen
+    assert "50 % del total" in html  # 2 de 4 cumplen y 2 de 4 requieren revisión
+    assert "No cumplen" not in html  # el sistema no rechaza (e94a8d4)
     # cada tarjeta de recomendación filtra conservando la entidad; la del total quita el filtro
-    assert "rec=No+cumple" in html and "entidad=HIDALGO" in html
+    assert "rec=Requiere+revisi" in html and "entidad=HIDALGO" in html
     assert html.split("</a>")[0].count("rec=") == 0
+
+
+def test_kpis_de_la_bandeja_con_posibles_motivos_y_rechazados():
+    viejo = analizar_expediente([], usar_ejemplo=True).model_copy(update={"recomendacion": R.NO_CUMPLE})
+    ind = L.indicadores([(viejo, False), (viejo, False)])
+    html = C.kpis_bandeja(ind, {"vista": "bandeja"}, posibles=2, rechazados=1)
+    assert html.count('class="kpi ') == 5 and "kpis-5" in html
+    assert "Con posibles motivos de rechazo" in html and "Rechazados por la abogada" in html
+    assert "est=Rechazado" in html
+    # un "No cumple" de un dictamen anterior cuenta como revisión: las tarjetas suman el total
+    assert 'est-ambar">2</b><small class="kpi-sub est-ambar">100 % del total' in html
 
 
 def test_predominante_y_empate_toma_la_mas_grave():
@@ -71,7 +83,7 @@ def test_recorrido_css_solo_style_y_objetivos_existen():
 
 def test_resumen_del_estado_marca_el_filtro_activo():
     ind = _ind()
-    html = C.resumen_estado(ind, {"vista": "estado", "entidad": "HIDALGO"}, "<svg></svg>", "Hidalgo", "No cumple")
+    html = C.resumen_estado(ind, {"vista": "estado", "entidad": "HIDALGO"}, "<svg></svg>", "Hidalgo", "Requiere revisión")
     assert "\n" not in html and "Hidalgo" in html
     assert html.count("kpi-activo") == 1 and "vista=estado" in html and "entidad=HIDALGO" in html
 

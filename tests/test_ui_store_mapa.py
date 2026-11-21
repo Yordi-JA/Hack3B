@@ -168,7 +168,7 @@ def test_tarjeta_de_bandeja_sin_etiquetas_y_estado_en_texto():
     d = analizar_expediente([], usar_ejemplo=True)
     html = C.tarjeta_expediente("ejemplo:x", d, True)
     assert 'class="etq' not in html
-    assert '· <b class="exp-estado est-vino">No cumple</b>' in html
+    assert '· <b class="exp-estado est-ambar">Requiere revisión</b>' in html
     assert "Confianza 86 % · Ejemplo · 21/11/2026 10:00" in html
     assert "Ejemplo" not in C.tarjeta_expediente("resultado:x", d, False)
 

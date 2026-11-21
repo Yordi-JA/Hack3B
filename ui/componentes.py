@@ -252,6 +252,18 @@ def paginador(pagina: int, por_pagina: int, total: int, params: dict[str, str]) 
     )
 
 
+def aviso_decision(d: Dictamen) -> str:
+    """Junto al control de la decisión: el sistema no rechaza. Si hay posibles motivos de rechazo, sugiere
+    sus motivos (del catálogo MOTIVO) para el comentario; no marca nada por la abogada."""
+    nota = ('<p class="dec-nota">El sistema no rechaza expedientes; si procede, márcalo como Rechazado y '
+            "explica el motivo.</p>")
+    cats = list(dict.fromkeys(m.categoria for m in L.motivos_ui(d) if m.severidad == Severidad.BLOQUEANTE))
+    if not cats or not L.posibles_motivos_rechazo(d):
+        return nota
+    lista = ", ".join(L.MOTIVO[c] for c in cats)
+    return nota + f'<p class="dec-sugerencia">Motivos que podrías citar en el comentario: {txt(lista)}.</p>'
+
+
 def tarjeta_decision(dec: Optional["Dec.Decision"]) -> str:
     """Tarjeta con el estatus vigente del expediente y el comentario que lo explica."""
     if dec is None:
@@ -297,11 +309,19 @@ def caja_mapa(svg: str, sin_entidad: int) -> str:
 #
 # Saludo, 4 indicadores en tarjetas, mapa en tarjeta blanca con ventana emergente por estado.
 
-RECS_TABLERO = (Recomendacion.CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.NO_CUMPLE)
+# El sistema no rechaza (e94a8d4): las tarjetas son Cumplen y Requieren revisión; los "No cumple" de
+# dictámenes anteriores cuentan como revisión. El rechazo solo lo marca la abogada.
+RECS_TABLERO = (Recomendacion.CUMPLE, Recomendacion.REQUIERE_REVISION)
 ETIQUETA_KPI = {
     Recomendacion.CUMPLE: "Cumplen",
     Recomendacion.REQUIERE_REVISION: "Requieren revisión",
-    Recomendacion.NO_CUMPLE: "No cumplen",
+}
+# Mapa y recuadro del estado: color por la decisión de la abogada si ya la hay (L.color_mapa).
+ORDEN_MAPA = (Recomendacion.CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.NO_CUMPLE)
+ETIQUETA_MAPA = {
+    Recomendacion.CUMPLE: "Cumple o aprobado",
+    Recomendacion.REQUIERE_REVISION: "Requiere revisión",
+    Recomendacion.NO_CUMPLE: "Rechazado por la abogada",
 }
 
 
@@ -309,8 +329,10 @@ def _pct_entero(parte: int, total: int) -> str:
     return f"{round(100 * parte / total)} %" if total else "0 %"
 
 
-def kpis_bandeja(ind: L.Indicadores, params: dict[str, str], activo: Optional[str] = None) -> str:
-    """4 tarjetas: total y una por recomendación. Cada una filtra la bandeja al hacer clic.
+def kpis_bandeja(ind: L.Indicadores, params: dict[str, str], activo: Optional[str] = None,
+                 posibles: Optional[int] = None, rechazados: Optional[int] = None) -> str:
+    """Tarjetas: total y una por recomendación (cada una filtra la bandeja al hacer clic); con `posibles`
+    y `rechazados`, también "Con posibles motivos de rechazo" y "Rechazados por la abogada".
     `activo`: valor de la recomendación filtrada, para marcar su tarjeta."""
     base = {k: v for k, v in params.items() if k != "rec"}
     sub_total = []
@@ -325,6 +347,8 @@ def kpis_bandeja(ind: L.Indicadores, params: dict[str, str], activo: Optional[st
     ]
     for r in RECS_TABLERO:
         n = ind.por_recomendacion.get(r, 0)
+        if r == Recomendacion.REQUIERE_REVISION:
+            n += ind.por_recomendacion.get(Recomendacion.NO_CUMPLE, 0)
         tono = clase_tono(t.ESTADO[r])
         tarjetas.append(
             f'<a class="kpi kpi-{tono}{" kpi-activo" if activo == r.value else ""}" '
@@ -333,7 +357,21 @@ def kpis_bandeja(ind: L.Indicadores, params: dict[str, str], activo: Optional[st
             f'{txt(ETIQUETA_KPI[r])}</span><b class="kpi-num est-{tono}">{n}</b>'
             f'<small class="kpi-sub est-{tono}">{_pct_entero(n, ind.total)} del total</small></a>'
         )
-    return '<div class="kpis">' + "".join(tarjetas) + "</div>"
+    extra = (
+        (posibles, "Con posibles motivos de rechazo", t.AMBAR, dict(base, rec=Recomendacion.REQUIERE_REVISION.value),
+         "por confirmar"),
+        (rechazados, "Rechazados por la abogada", t.VINO, dict(base, est="Rechazado"), "decididos por la abogada"),
+    )
+    for n, etiqueta, tono_t, destino, nota in extra:
+        if n is None:
+            continue
+        tono = clase_tono(tono_t)
+        tarjetas.append(
+            f'<a class="kpi kpi-{tono}" href="{escape(url(**destino))}" target="_self">'
+            f'<span class="kpi-etq"><i class="kpi-punto" style="background:{tono_t.mapa}"></i>{txt(etiqueta)}</span>'
+            f'<b class="kpi-num est-{tono}">{n}</b><small class="kpi-sub est-{tono}">{txt(nota)}</small></a>'
+        )
+    return f'<div class="kpis kpis-{len(tarjetas)}">' + "".join(tarjetas) + "</div>"
 
 
 def ventana_entidad(
@@ -344,13 +382,13 @@ def ventana_entidad(
     if not conteo or not conteo.total:
         return ""
     filas = []
-    for r in RECS_TABLERO:
+    for r in ORDEN_MAPA:
         n = conteo.por_recomendacion.get(r, 0)
         p = round(100 * conteo.porcentaje(r))
         tono = clase_tono(t.ESTADO[r])
         filas.append(
             f'<div class="v-fila"><span class="v-etq"><i style="background:{t.ESTADO[r].mapa}"></i>'
-            f'{txt(r.value)}</span><b class="est-{tono}">{p} %</b><small>{n}</small></div>'
+            f'{txt(ETIQUETA_MAPA[r])}</span><b class="est-{tono}">{p} %</b><small>{n}</small></div>'
             f'<div class="v-barra"><i style="width:{p}%;background:{t.ESTADO[r].mapa}"></i></div>'
         )
     plural = "expediente" if conteo.total == 1 else "expedientes"
@@ -363,7 +401,7 @@ def ventana_entidad(
         f'<div class="v-cab"><b>{txt(mapa.nombre_entidad(clave))}</b>'
         f'<a class="v-cerrar" href="{escape(cerrar)}" target="_self" aria-label="Cerrar">×</a></div>'
         f'<p class="v-total">{conteo.total} {plural} · predomina '
-        f'<b class="est-{clase_tono(t.ESTADO[predo])}">{txt(predo.value) if predo else "-"}</b></p>'
+        f'<b class="est-{clase_tono(t.ESTADO[predo])}">{txt(ETIQUETA_MAPA[predo]) if predo else "-"}</b></p>'
         + "".join(filas)
         + f'<a class="v-ver" href="{escape(ver)}" target="_self">Ver expedientes del estado →</a></div>'
     )
@@ -381,7 +419,7 @@ def resumen_estado(ind: L.Indicadores, params: dict[str, str], svg: str, nombre:
 def caja_mapa_tablero(svg: str, ventana: str, sin_entidad: int) -> str:
     """Mapa en tarjeta, con leyenda arriba y el recuadro del estado en un panel a la derecha."""
     leyenda = "".join(
-        f'<span><i style="background:{t.ESTADO[r].mapa}"></i>{txt(r.value)}</span>' for r in RECS_TABLERO
+        f'<span><i style="background:{t.ESTADO[r].mapa}"></i>{txt(ETIQUETA_MAPA[r])}</span>' for r in ORDEN_MAPA
     ) + f'<span><i style="background:{t.MAPA_VACIO}"></i>Sin expedientes</span>'
     pie = ""
     if sin_entidad:
@@ -391,7 +429,8 @@ def caja_mapa_tablero(svg: str, ventana: str, sin_entidad: int) -> str:
         )
     return (
         '<div class="mapa-tarjeta"><div class="mapa-cab"><div><h3>Mapa de expedientes</h3>'
-        "<p>Color: la recomendación que predomina en el estado. "
+        "<p>Color: lo que predomina en el estado. Cuenta la decisión de la abogada si ya la tomó; si no, la "
+        "recomendación del sistema. "
         "Haz clic en un estado para ver su información.</p></div>"
         f'<div class="leyenda">{leyenda}</div></div>'
         '<div class="mapa-cuerpo">'
@@ -513,18 +552,56 @@ def _evidencia(it: L.Pendiente) -> str:
 
 
 def resumen_motivos(d: Dictamen) -> str:
-    """'Descartado por: uso de suelo (2) · adeudos de predial (1)' y 'En revisión por: ...'."""
+    """'Posible rechazo por: uso de suelo (2) · adeudos de predial (1)' y 'En revisión por: ...'."""
     filas = L.resumen_motivos_ui(L.motivos_ui(d))
     lineas = []
-    for sev, titulo, tono in ((Severidad.BLOQUEANTE, "Descartado por", "vino"), (Severidad.REVISION, "En revisión por", "ambar")):
+    for sev, titulo, tono in ((Severidad.BLOQUEANTE, "Posible rechazo por", "vino"), (Severidad.REVISION, "En revisión por", "ambar")):
         partes = [f"{txt(L.MOTIVO[cat])} ({total})" for cat, s, total in filas if s == sev]
         if partes:
             lineas.append(f'<p class="motivos-resumen"><b class="est-{tono}">{titulo}:</b> {" · ".join(partes)}</p>')
     return "".join(lineas)
 
 
+def _citas_pendiente(it: L.Pendiente) -> str:
+    """Documento, página y fragmento de un posible motivo de rechazo, a la vista (sin desplegar)."""
+    if it.requisito is not None:
+        evs = [e for h in it.requisito.hallazgos if h.estado == it.requisito.estado for e in h.evidencias]
+    elif it.inconsistencia is not None:
+        evs = [v.evidencia for v in it.inconsistencia.valores if v.evidencia]
+    else:
+        evs = []
+    if not evs:
+        return ""
+    return '<ul class="resolver-citas">' + "".join(f"<li>{cita(e)}</li>" for e in evs) + "</ul>"
+
+
 def lista_pendientes(d: Dictamen, pend: Optional[tuple] = None) -> str:
+    """Qué hay que resolver. Primero el bloque "Posibles motivos de rechazo" (con su cita a la vista) y
+    después los demás pendientes. Cada renglón sale una sola vez y ninguno se oculta: el bloque solo
+    separa la misma lista de `L.pendientes`."""
     items, sueltas = pend or L.pendientes(d)
+    posibles = [it for it in items if L.es_posible_rechazo(it)]
+    resto = [it for it in items if not L.es_posible_rechazo(it)]
+    cuerpo = ""
+    if posibles:
+        cuerpo += (
+            '<div class="posibles-rechazo"><h3>Posibles motivos de rechazo</h3>'
+            '<p class="posibles-nota">El sistema los encontró; la abogada decide si son motivo de rechazo.</p>'
+            + _lista_renglones(d, posibles, con_citas=True) + "</div>"
+        )
+        if resto:
+            cuerpo += '<h3 class="otros-pendientes">Otros pendientes</h3>'
+    if resto:
+        cuerpo += _lista_renglones(d, resto)
+    elif not posibles:
+        cuerpo = '<p class="resolver-vacio">No hay pendientes: todos los requisitos evaluados se cumplen.</p>'
+    if sueltas:
+        notas = "".join(f"<li>{txt(r)}</li>" for r in sueltas)
+        cuerpo += f'<div class="resolver-notas"><h3>Otras notas del dictamen</h3><ul>{notas}</ul></div>'
+    return cuerpo
+
+
+def _lista_renglones(d: Dictamen, items: list[L.Pendiente], con_citas: bool = False) -> str:
     ms = L.motivos_ui(d)
     if items:
         filas = []
@@ -533,17 +610,13 @@ def lista_pendientes(d: Dictamen, pend: Optional[tuple] = None) -> str:
             detalle = f'<details class="ev"><summary>Evidencia</summary>{evid}</details>' if evid else ""
             m = L.motivo_de_pendiente(it, ms)
             motivo = f' · <span class="est-{clase_tono(t.SEVERIDAD[m.severidad])}">{txt(m.etiqueta)}</span>' if m else ""
+            citas = _citas_pendiente(it) if con_citas else ""
             filas.append(
                 f'<li><p class="resolver-texto">{txt(it.texto)}</p>'
-                f'<p class="resolver-meta">{_sev(it.severidad)}{motivo} · {_archivos(it.archivos)}</p>{detalle}</li>'
+                f'<p class="resolver-meta">{_sev(it.severidad)}{motivo} · {_archivos(it.archivos)}</p>{citas}{detalle}</li>'
             )
-        cuerpo = f'<ol class="resolver">{"".join(filas)}</ol>'
-    else:
-        cuerpo = '<p class="resolver-vacio">No hay pendientes: todos los requisitos evaluados se cumplen.</p>'
-    if sueltas:
-        notas = "".join(f"<li>{txt(r)}</li>" for r in sueltas)
-        cuerpo += f'<div class="resolver-notas"><h3>Otras notas del dictamen</h3><ul>{notas}</ul></div>'
-    return cuerpo
+        return f'<ol class="resolver">{"".join(filas)}</ol>'
+    return ""
 
 
 # ---------------------------------------------------------------- bloque 3: documentos
