@@ -339,8 +339,9 @@ def _reglas(d: DatosInmueble, ctx: Contexto, descartados: list[str]) -> list[Hal
         h.append(_h("PRE-02", "El predio está identificado (clave catastral o cuenta predial)", E.CUMPLE, S.INFO,
                     f"Identificación del predio: {ident}.", d.clave_catastral, cuenta))
     else:
-        h.append(_h("PRE-02", "El predio está identificado (clave catastral o cuenta predial)", E.NO_CUMPLE,
-                    S.REVISION, "El documento no muestra clave catastral ni cuenta predial: no se puede "
+        # Dato ausente => NO_EVALUABLE (contrato): no encontrarlo no prueba que el predio no esté identificado.
+        h.append(_h("PRE-02", "El predio está identificado (clave catastral o cuenta predial)", E.NO_EVALUABLE,
+                    S.REVISION, "No se encontró clave catastral ni cuenta predial en el documento: no se puede "
                     "vincular con certeza al inmueble."))
 
     ejercicio = esp.get("ejercicio_pagado", vacio)

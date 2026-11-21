@@ -145,7 +145,8 @@ def test_ejercicio_vigente_y_sin_adeudo(llm_falso):
     r = predial.analizar(_doc(texto=texto), CTX_2025)
     assert _hallazgo(r, "PRE-03").estado == EstadoRegla.CUMPLE
     assert _hallazgo(r, "PRE-04").estado == EstadoRegla.CUMPLE
-    assert _hallazgo(r, "PRE-02").severidad == Severidad.REVISION  # sin clave ni cuenta
+    pre02 = _hallazgo(r, "PRE-02")  # sin clave ni cuenta: dato ausente, no incumplimiento
+    assert pre02.estado == EstadoRegla.NO_EVALUABLE and pre02.severidad == Severidad.REVISION
 
 
 def test_identificador_sin_descripcion(llm_falso):
