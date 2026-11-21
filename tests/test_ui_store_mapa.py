@@ -65,7 +65,10 @@ def test_relleno_por_peor_recomendacion():
 def test_svg_bandeja_enlaza_solo_entidades_con_expedientes_y_sin_recursos_externos():
     conteos = {"HIDALGO": ConteoEntidad(1, {Recomendacion.NO_CUMPLE: 1})}
     svg = mapa.svg_bandeja(conteos, None, {"vista": "bandeja", "rec": "Cumple"})
-    assert svg.count("<a ") == 1
+    assert svg.count('class="mx-enlace"') == 1  # un solo enlace enfocable por estado
+    # Hidalgo es chico: su número va en una llamada, con enlace solo para el mouse
+    assert 'class="mx-llamada" tabindex="-1" aria-hidden="true"' in svg
+    assert 'viewBox="0 0 1000 630"' in svg  # todo el país, sin acercamiento
     assert "entidad=HIDALGO" in svg and "rec=Cumple" in svg and 'target="_self"' in svg
     assert "http" not in svg.replace('xmlns="http://www.w3.org/2000/svg"', "")
     # con la entidad seleccionada, el enlace la quita del filtro
@@ -77,9 +80,6 @@ def test_cajas_de_vista():
     x, y, w, h = mapa.caja_de_vista("HIDALGO")
     x0, y0, x1, y1 = mapa._geometria()["estados"]["MXHID"]["bbox"]
     assert x < x0 and y < y0 and x + w > x1 and y + h > y1
-    assert mapa.caja_de_datos([]) == (0.0, 0.0, 1000.0, 630.0)
-    x, y, w, h = mapa.caja_de_datos(["HIDALGO", "MEXICO"])
-    assert 0 <= x and 0 <= y and x + w <= 1000 and y + h <= 630 and w >= 430
 
 
 # ------------------------------------------------------------------ html
@@ -145,3 +145,29 @@ def test_analizar_guarda_subidas_con_nombre_original_y_persiste(tmp_path, monkey
     assert vistos["contenido"] == [b"%PDF", b"img"]
     assert entrada.ruta == tmp_path / "resultados" / "TEPEJI-05.json"
     assert entrada.clave == "resultado:TEPEJI-05" and entrada.dictamen.expediente_id == "TEPEJI-05"
+
+
+# ------------------------------------------------------------------ bandeja sin tarjetas de indicadores
+
+def test_resumen_bandeja_en_una_linea():
+    from ui import logica as L
+    d = analizar_expediente([], usar_ejemplo=True)
+    assert C.resumen_bandeja(L.indicadores([(d, True), (d, False)])) == (
+        '<p class="resumen-bandeja">2 expedientes · confianza promedio 86 % · 1 de ejemplo</p>')
+    assert "de ejemplo" not in C.resumen_bandeja(L.indicadores([(d, False)]))
+    assert "1 expediente ·" in C.resumen_bandeja(L.indicadores([(d, False)]))
+    assert "Ningún expediente" in C.resumen_bandeja(L.indicadores([]))
+
+
+def test_tarjeta_de_bandeja_sin_etiquetas_y_estado_en_texto():
+    d = analizar_expediente([], usar_ejemplo=True)
+    html = C.tarjeta_expediente("ejemplo:x", d, True)
+    assert 'class="etq' not in html
+    assert '· <b class="exp-estado est-vino">No cumple</b>' in html
+    assert "Confianza 86 % · Ejemplo · 21/11/2026 10:00" in html
+    assert "Ejemplo" not in C.tarjeta_expediente("resultado:x", d, False)
+
+
+def test_estado_en_texto_contrasta_con_el_fondo_de_la_pagina():
+    for tono in (t.VERDE, t.AMBAR, t.VINO):
+        assert t.contraste(tono.texto, t.PANEL) >= 4.5

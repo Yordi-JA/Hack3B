@@ -92,8 +92,7 @@ def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
 def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
     with st.sidebar:
         html(
-            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}<div><b>Revisión de expedientes</b>'
-            "<small>Tiendas 3B · Expansión</small></div></div>"
+            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}<b>Revisión de expedientes</b></div>'
         )
         html('<div class="lateral-grupo">Expedientes</div>')
         st.button(
@@ -121,26 +120,34 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
 # ------------------------------------------------------------------ bandeja
 
 def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoInvalido]) -> None:
-    cab, buscador = st.columns([3, 2], vertical_alignment="bottom")
+    # Los filtros se leen antes de dibujar: la línea de resumen y los conteos de cada recomendación
+    # aplican entidad, búsqueda y ejemplos, pero no el filtro de recomendación.
+    _filtro("q")
+    entidad_actual = _filtro("entidad")
+    if "f_ej" not in st.session_state:
+        st.session_state["f_ej"] = st.query_params.get("ej") != "0"
+    if "f_rec" not in st.session_state:
+        rec_url = st.query_params.get("rec")
+        st.session_state["f_rec"] = rec_url if rec_url in {r.value for r in Recomendacion} else None
+    visibles = [e for e in entradas if st.session_state["f_ej"] or not e.es_ejemplo]
+    texto = st.session_state.get("f_q") or ""
+    base = [e for e in visibles if L.coincide(e.dictamen, entidad_actual or None, None, texto)]
+    ind = L.indicadores([(e.dictamen, e.es_ejemplo) for e in base])
+
+    cab, buscador = st.columns([3, 2], vertical_alignment="top")
     with cab:
         html(C.encabezado("Bandeja de expedientes", "Primero los que no cumplen, luego los que requieren revisión."))
+        if entradas:
+            html(C.resumen_bandeja(ind))
     with buscador:
-        _filtro("q")
         st.text_input(
             "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
             placeholder="Buscar por expediente, municipio, propietario o archivo",
         )
 
-    if "f_ej" not in st.session_state:
-        st.session_state["f_ej"] = st.query_params.get("ej") != "0"
-    con_ejemplos = st.session_state["f_ej"]
-    visibles = [e for e in entradas if con_ejemplos or not e.es_ejemplo]
-
     if invalidos:
         nombres = ", ".join(f"{seguro(i.ruta.name)}: {i.motivo}" for i in invalidos)
         st.warning(f"No se pudieron abrir {len(invalidos)} archivo(s) de resultados y no se muestran: {nombres}.")
-
-    html(C.kpis(L.indicadores([(e.dictamen, e.es_ejemplo) for e in visibles])))
 
     if not entradas:
         st.info("Todavía no hay expedientes analizados. Sube los archivos de uno en Nuevo análisis.")
@@ -152,8 +159,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
 
     izq, der = st.columns([1.45, 1], gap="large")
     with izq:
-        f1, f2 = st.columns([1, 1.4], vertical_alignment="bottom")
-        entidad_actual = _filtro("entidad")
+        f1, f2 = st.columns([0.8, 1.9], vertical_alignment="bottom")
         opciones = [""] + sorted(conteos, key=mapa.nombre_entidad)
         if sin_entidad:
             opciones.append(L.SIN_ENTIDAD)
@@ -165,12 +171,10 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
                 format_func=lambda v: "Todas" if not v else ("Sin entidad" if v == L.SIN_ENTIDAD else mapa.nombre_entidad(v)),
             )
         with f2:
-            if "f_rec" not in st.session_state:
-                rec_url = st.query_params.get("rec")
-                st.session_state["f_rec"] = rec_url if rec_url in {r.value for r in Recomendacion} else None
             st.segmented_control(
                 "Recomendación", [r.value for r in (Recomendacion.NO_CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.CUMPLE)],
                 key="f_rec", on_change=_sincronizar, args=("rec",),
+                format_func=lambda v: f"{v} {ind.por_recomendacion[Recomendacion(v)]}",
             )
         st.toggle(
             "Incluir expedientes de ejemplo", key="f_ej", on_change=_sincronizar, args=("ej",),
@@ -178,11 +182,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         )
 
         rec = st.session_state.get("f_rec")
-        recomendacion = Recomendacion(rec) if rec else None
-        filtrados = [
-            e for e in visibles
-            if L.coincide(e.dictamen, st.session_state.get("f_entidad") or None, recomendacion, st.session_state.get("f_q") or "")
-        ]
+        filtrados = [e for e in base if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
         filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
         if not visibles:
@@ -196,8 +196,8 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
 
     with der:
         seleccion = st.session_state.get("f_entidad") or None
-        base = dict(params_filtros(), vista="bandeja")
-        html(C.caja_mapa(mapa.svg_bandeja(conteos, seleccion, base), sin_entidad))
+        enlace = dict(params_filtros(), vista="bandeja")
+        html(C.caja_mapa(mapa.svg_bandeja(conteos, seleccion, enlace), sin_entidad))
 
 
 def _quitar_filtros() -> None:

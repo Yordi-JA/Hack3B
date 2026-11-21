@@ -20,6 +20,8 @@ def _css_tonos() -> str:
         reglas.append(f".tono-{nombre}{{color:{tono.texto};background:{tono.fondo};}}")
         # Sello del dictamen: blanco sobre el color fuerte del estado (6.7:1 a 8.1:1).
         reglas.append(f".sello-{nombre}{{color:#fff;background:{tono.texto};}}")
+        # Estado en texto (tarjetas de la bandeja): el color fuerte del estado sobre el fondo claro.
+        reglas.append(f".est-{nombre}{{color:{tono.texto};}}")
         # Sobre la tarjeta roja del dictamen el sello se invierte: bloque blanco, texto del estado.
         reglas.append(f".marco-dictamen .sello-{nombre}{{color:{tono.texto};background:#fff;}}")
     return "".join(reglas)
@@ -50,12 +52,14 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 [data-testid="stSidebar"] {{ background: var(--rojo-lat); border-right: 0; color: var(--blanco); }}
 [data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {{ padding: 4px 0 24px 16px; }}
 [data-testid="stSidebarCollapseButton"] button {{ color: var(--blanco); }}
+/* La barra no se redimensiona; su asa dibujaba una línea en la unión con el panel. */
+[data-testid="stSidebarResizeHandle"] {{ display: none !important; }}
 
-.lateral-marca {{ display: flex; gap: 12px; align-items: center; padding: 4px 16px 20px 4px;
+/* margin-top negativo: el centro del logo queda a la altura del centro del título de la página. */
+.lateral-marca {{ display: flex; gap: 12px; align-items: center; padding: 4px 16px 20px 4px; margin-top: -48px;
   border-bottom: 1px solid rgba(255,255,255,.35); margin-bottom: 8px; }}
 .lateral-marca svg {{ width: 46px; height: 46px; flex: none; }}
 .lateral-marca b {{ display: block; color: var(--blanco); font-size: 15px; line-height: 1.2; }}
-.lateral-marca small {{ color: var(--blanco); font-size: 12px; }}
 .lateral-grupo {{ color: var(--blanco); font-size: 11px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; margin: 18px 0 6px 6px; }}
 [data-testid="stSidebar"] p.lateral-nota {{ color: var(--blanco); font-size: 13px; line-height: 1.5; margin: 28px 16px 0 6px;
@@ -122,45 +126,40 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .etq-borde {{ background: transparent; border: 1px solid currentColor; }}
 {_css_tonos()}
 
-/* ---- indicadores: el total en banda roja, el resto en blanco ---- */
-.kpis {{ display: grid; grid-template-columns: 1.3fr repeat(4, 1fr); gap: 12px; margin: 18px 0 8px; }}
-.kpi {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 14px 16px; min-width: 0; }}
-.kpi span {{ color: var(--texto2); font-size: 13px; }}
-.kpi b {{ display: block; font-family: var(--f-titular); font-size: 30px; color: var(--tinta); line-height: 1.2; margin-top: 4px; }}
-.kpi small {{ color: var(--texto2); font-size: 12px; }}
-.kpi-principal {{ background: var(--rojo-osc); border-color: var(--rojo-osc); }}
-.kpi-principal span, .kpi-principal small, .kpi-principal b {{ color: var(--blanco); }}
+/* ---- resumen de la bandeja: una línea de texto, sin tarjetas ---- */
+.resumen-bandeja {{ font-size: 14px; color: var(--texto); margin: 6px 0 0; }}
 
-/* ---- tarjeta de expediente en la bandeja (versión ligera del marco) ---- */
-.lista {{ display: grid; grid-template-columns: 1fr; gap: 22px; margin-top: 18px; }}
-a.exp {{ position: relative; display: block; text-decoration: none; color: var(--texto); background: var(--tarjeta);
-  border-radius: 12px; padding: 26px 20px 16px; border: 1px solid transparent; }}
-a.exp::before {{ content: ""; position: absolute; inset: 12px 8px 8px; border: 1.5px solid var(--tinta);
-  border-radius: 4px; pointer-events: none; }}
-a.exp:hover {{ border-color: var(--borde); }}
-a.exp:hover::before {{ border-color: var(--rojo); }}
-.exp-titulo {{ position: absolute; top: 12px; left: 18px; transform: translateY(-50%); background: var(--tarjeta);
+/* ---- tarjeta de expediente en la bandeja: solo la línea del marco, sobre el fondo de la página ---- */
+.lista {{ display: grid; grid-template-columns: 1fr; gap: 26px; margin-top: 22px; }}
+a.exp {{ position: relative; display: block; text-decoration: none; color: var(--texto); background: transparent;
+  border: 1.5px solid var(--tinta); border-radius: 4px; padding: 18px 18px 12px; }}
+a.exp:hover, a.exp:focus {{ border-color: var(--rojo-osc); }}
+.exp-titulo {{ position: absolute; top: 0; left: 12px; transform: translateY(-55%); background: var(--panel);
   padding: 0 8px; font-family: var(--f-titular); font-size: 15px; color: var(--tinta); text-transform: uppercase;
-  max-width: calc(100% - 40px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-.exp-lugar {{ font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--texto2); letter-spacing: .03em; margin: 4px 0 8px; }}
-.exp-etiquetas {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }}
+  max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.exp-lugar {{ font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--texto2); letter-spacing: .03em; margin: 2px 0 8px; }}
+.exp-estado {{ text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 700; }}
 .exp-resumen {{ font-size: 14px; line-height: 1.45; color: var(--texto); margin: 0 0 10px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
-.exp-meta {{ font-size: 12px; color: var(--texto2); display: flex; flex-wrap: wrap; gap: 4px 12px; }}
+.exp-meta {{ font-size: 12px; color: var(--texto2); }}
 
-/* ---- mapa ---- */
-[data-testid="stColumn"]:has(.mapa-caja) {{ position: sticky; top: 16px; align-self: flex-start; }}
-.mapa-caja {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 16px 16px 10px; }}
-.mapa-caja h3 {{ font-size: 15px; color: var(--tinta); margin: 0; padding: 0; font-weight: 700; }}
-.mapa-caja p {{ font-size: 12px; color: var(--texto2); margin: 4px 0 8px; }}
-.leyenda {{ display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--texto2); margin: 6px 0 4px; }}
+/* ---- mapa: sin caja, directo sobre el fondo de la página ---- */
+[data-testid="stColumn"]:has(.mapa-bloque) {{ position: sticky; top: 16px; align-self: flex-start; }}
+.mapa-bloque h3 {{ font-size: 15px; color: var(--tinta); margin: 0; padding: 0; font-weight: 700; }}
+.mapa-bloque p {{ font-size: 12px; color: var(--texto2); margin: 4px 0 6px; }}
+.leyenda {{ display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--texto2); margin: 6px 0 8px; }}
 .leyenda i {{ display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid rgba(0,0,0,.15); }}
 svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .mx-estado {{ stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
-.mx-enlace {{ cursor: pointer; }}
+.mx-enlace, .mx-llamada {{ cursor: pointer; }}
 .mx-enlace:hover .mx-estado {{ stroke: var(--tinta); stroke-width: 2; }}
 .mx-borde-sel {{ fill: none; stroke: var(--tinta); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }}
-.mx-num {{ font: 700 14px var(--f-texto); fill: var(--tinta); stroke: #fff; stroke-width: 3px; paint-order: stroke; pointer-events: none; }}
+/* Números en unidades del mapa (1000 de ancho): con la columna de 330 a 390 px quedan en 12 a 14 px. */
+.mx-num {{ font: 700 36px var(--f-texto); fill: var(--tinta); pointer-events: none; }}
+.mx-num-halo {{ stroke: #fff; stroke-width: 6px; paint-order: stroke; stroke-linejoin: round; }}
+.mx-llamada circle {{ stroke: var(--tinta); stroke-width: 1.5; vector-effect: non-scaling-stroke; }}
+.mx-llamada:hover circle {{ stroke-width: 2.5; }}
+.mx-guia {{ stroke: var(--tinta); stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }}
 .sin-entidad {{ font-size: 12px; color: var(--texto2); margin-top: 4px; }}
 
 /* ---- marco: tarjeta con línea fina y título que interrumpe la línea ----
@@ -274,7 +273,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .stApp .marco p.marco-titular {{ font-family: var(--f-titular); font-size: 44px; line-height: 1.05; font-weight: 900; margin: 0 0 14px; }}
 .stApp h2.seccion {{ font-size: 21px; padding: 0; margin: 40px 0 4px; letter-spacing: 0; }}
 .stApp .doc-campos dt, .stApp .doc-campos dd {{ font-size: 14px; line-height: 1.4; }}
-.stApp .inc h3, .stApp .razones h3, .stApp .mapa-caja h3 {{ font-family: var(--f-texto); font-weight: 700; }}
+.stApp .inc h3, .stApp .razones h3, .stApp .mapa-bloque h3 {{ font-family: var(--f-texto); font-weight: 700; }}
 
 /* escritorio angosto (1280): más aire para el texto del dictamen */
 @media (max-width: 1400px) {{
@@ -285,8 +284,6 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 @media (max-width: 900px) {{
   .stApp .marco .marco-titulo {{ font-size: 26px; }}
   .stApp .marco p.marco-titular {{ font-size: 34px; }}
-  .kpis {{ grid-template-columns: repeat(2, 1fr); }}
-  .kpi-principal {{ grid-column: 1 / -1; }}
   .marco-cuerpo {{ grid-template-columns: 1fr; }}
   .marco {{ padding: 54px 24px 28px; }}
   .marco-titulo {{ font-size: 26px; }}

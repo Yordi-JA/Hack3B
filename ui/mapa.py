@@ -144,14 +144,26 @@ def etiqueta_accesible(clave: str, conteo: ConteoEntidad) -> str:
     return f"{nombre_entidad(clave)}: {conteo.total} {plural}, {', '.join(partes)}"
 
 
+# A escala nacional, los estados del centro miden pocas unidades y sus números se encimarían. Su
+# número va en una burbuja fuera del estado, unida con una línea, en un punto libre del mapa.
+LLAMADAS = {
+    "QUERETARO": (545, 357),
+    "HIDALGO": (642, 368),
+    "AGUASCALIENTES": (478, 333),
+    "MEXICO": (530, 478),
+    "CIUDAD DE MEXICO": (560, 535),
+    "MORELOS": (624, 550),
+    "TLAXCALA": (684, 428),
+}
+
+
 def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], params_base: dict[str, str]) -> str:
-    """Mapa completo. Cada estado con expedientes es un enlace que filtra la bandeja."""
+    """Mapa de todo el país. Cada estado con expedientes es un enlace que filtra la bandeja."""
     geo = _geometria()
     rellenos = relleno_por_entidad(conteos)
-    x, y, w, h = caja_de_datos(list(conteos))
     partes = [
-        f'<svg class="mx-mapa" viewBox="{x} {y} {w} {h}" role="group" '
-        f'aria-label="Mapa de expedientes por entidad federativa" xmlns="http://www.w3.org/2000/svg">'
+        '<svg class="mx-mapa" viewBox="0 0 1000 630" role="group" '
+        'aria-label="Mapa de expedientes por entidad federativa" xmlns="http://www.w3.org/2000/svg">'
     ]
     etiquetas = []
     for clave, (id_svg, _) in ENTIDADES.items():
@@ -166,16 +178,27 @@ def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], par
         )
         if conteo and conteo.total:
             nuevo = dict(params_base, entidad="" if clave == seleccion else clave)
-            href = "?" + urlencode({k: v for k, v in nuevo.items() if v})
+            href = escape("?" + urlencode({k: v for k, v in nuevo.items() if v}))
             trazo = (
-                f'<a href="{escape(href)}" target="_self" class="mx-enlace" '
+                f'<a href="{href}" target="_self" class="mx-enlace" '
                 f'aria-label="{escape(etiqueta_accesible(clave, conteo))}">{trazo}</a>'
             )
             x, y = estado.get("etiqueta", [0, 0])
-            etiquetas.append(
-                f'<text class="mx-num" x="{x}" y="{y}" text-anchor="middle" dominant-baseline="central">'
-                f"{conteo.total}</text>"
-            )
+            if clave in LLAMADAS:
+                lx, ly = LLAMADAS[clave]
+                # Enlace duplicado solo para el mouse; el lector de pantalla ya tiene el del estado.
+                etiquetas.append(
+                    f'<line class="mx-guia" x1="{x}" y1="{y}" x2="{lx}" y2="{ly}"/>'
+                    f'<a href="{href}" target="_self" class="mx-llamada" tabindex="-1" aria-hidden="true">'
+                    f'<circle cx="{lx}" cy="{ly}" r="28" fill="{rellenos[id_svg]}"/>'
+                    f'<text class="mx-num" x="{lx}" y="{ly}" text-anchor="middle" dominant-baseline="central">'
+                    f"{conteo.total}</text></a>"
+                )
+            else:
+                etiquetas.append(
+                    f'<text class="mx-num mx-num-halo" x="{x}" y="{y}" text-anchor="middle" '
+                    f'dominant-baseline="central">{conteo.total}</text>'
+                )
         partes.append(trazo)
     # La selección se dibuja al final para que su borde no quede tapado por los vecinos.
     if seleccion in ENTIDADES and (estado := geo["estados"].get(ENTIDADES[seleccion][0])):
@@ -183,27 +206,6 @@ def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], par
     partes.extend(etiquetas)
     partes.append("</svg>")
     return "".join(partes)
-
-
-def caja_de_datos(claves: list[str], ancho_min: float = 430.0) -> tuple[float, float, float, float]:
-    """viewBox que encuadra las entidades con expedientes, con contexto alrededor.
-
-    A escala nacional, Hidalgo, Estado de México o CDMX miden unos pocos píxeles; centrar la vista
-    en los datos hace legibles los números. Sin datos se muestra el país completo.
-    """
-    geo = _geometria()
-    cajas = [geo["estados"][ENTIDADES[c][0]]["bbox"] for c in claves if c in ENTIDADES]
-    if not cajas:
-        return (0.0, 0.0, 1000.0, 630.0)
-    x0, y0 = min(b[0] for b in cajas), min(b[1] for b in cajas)
-    x1, y1 = max(b[2] for b in cajas), max(b[3] for b in cajas)
-    proporcion = 630 / 1000
-    ancho = max((x1 - x0) * 1.5, ancho_min, (y1 - y0) * 1.5 / proporcion)
-    alto = ancho * proporcion
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    x = min(max(cx - ancho / 2, 0.0), max(1000.0 - ancho, 0.0))
-    y = min(max(cy - alto / 2, 0.0), max(630.0 - alto, 0.0))
-    return (round(x, 1), round(y, 1), round(min(ancho, 1000.0), 1), round(min(alto, 630.0), 1))
 
 
 def caja_de_vista(clave: Optional[str], margen: float = 1.6, minimo: float = 140.0) -> tuple[float, float, float, float]:
