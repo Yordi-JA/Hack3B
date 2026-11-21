@@ -1,7 +1,11 @@
 # Documentos del reto (guias, criterios y expedientes).
 # Regla 06: no se suben a otros servicios ni se comparten fuera del equipo.
-reto/*
-!reto/README.md
+Documentos/*
+!Documentos/README.md
+reto/
+__MACOSX/
+# Texto OCR cacheado: es contenido de los documentos, tampoco se sube.
+cache/
 *.pdf
 *.docx
 *.doc

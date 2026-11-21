@@ -1,4 +1,4 @@
-# reto/
+# Documentos/
 
 Aquí van los documentos oficiales del reto: guías por tipo documental, criterios y reglas, y expedientes de ejemplo.
 
