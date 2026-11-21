@@ -1,0 +1,50 @@
+# Documentos del reto (guias, criterios y expedientes).
+# Regla 06: no se suben a otros servicios ni se comparten fuera del equipo.
+reto/*
+!reto/README.md
+*.pdf
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+
+# Secretos (API keys de LLM, etc.)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / UI
+node_modules/
+dist/
+build/
+.next/
+.vite/
+
+# Vectores, caches y salidas locales
+chroma/
+.chroma/
+*.faiss
+outputs/
+*.log
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
