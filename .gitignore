@@ -52,3 +52,8 @@ outputs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Dictámenes generados por la UI: contienen datos de los documentos (regla 06).
+resultados/
+# Material de referencia visual del equipo, no se versiona.
+REFERENCIA/
