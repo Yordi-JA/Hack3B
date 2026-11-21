@@ -222,3 +222,31 @@ def test_prompt_incluye_uso_requerido_y_marcadores():
     sistema, humano = us.construir_mensajes(_doc(), CTX_2023)
     assert CTX_2023.uso_requerido in sistema.content
     assert "[P1]" in humano.content and "[P2]" in humano.content
+
+
+def test_no_manda_paginas_de_otro_tipo_ni_vacias():
+    paginas = [Pagina(numero=1, texto=P1), Pagina(numero=2, texto=""), Pagina(numero=3, texto="RECIBO PREDIAL"),
+               Pagina(numero=4, texto=P2), Pagina(numero=5, texto="PLANO")]
+    doc = _doc(paginas=paginas).model_copy(update={
+        "notas": "Origen del texto: llm 5 pág. Contiene páginas de tipo predial: p3. "
+                 "Contiene páginas de tipo alineamiento_numero_oficial: p5-p5."})
+    assert [p.numero for p in us._paginas_con_texto(doc)] == [1, 4]
+
+
+def test_respuesta_del_llm_se_reutiliza_del_disco(monkeypatch, tmp_path):
+    monkeypatch.setattr(us, "DIR_ANALISIS", tmp_path)
+    llamadas = []
+
+    class LLMFalso:
+        def with_structured_output(self, *a, **kw):
+            return self
+
+        def invoke(self, mensajes, config=None):
+            llamadas.append(1)
+            return _extraccion()
+
+    monkeypatch.setattr(us, "get_llm", lambda **kw: LLMFalso())
+    primera = us.analizar(_doc(), CTX_2023)
+    segunda = us.analizar(_doc(), CTX_2026)  # otra fecha: cambian las reglas, no el prompt
+    assert len(llamadas) == 1
+    assert primera.datos == segunda.datos

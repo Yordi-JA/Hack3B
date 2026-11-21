@@ -21,20 +21,27 @@ Una sola llamada al LLM por documento (salida estructurada). Las reglas USO- se 
 código sobre lo extraído, y toda cita del LLM se verifica contra el texto: si no aparece,
 el dato se queda sin evidencia ni `normalizado` y no sustenta ningún CUMPLE.
 
+La respuesta del modelo se guarda en `cache/analisis/uso_suelo/` (regla 5 de uso de la API):
+la llave es un hash de modelo + prompt + esquema + texto, así que repetir una corrida o cambiar
+las reglas no cuesta llamadas.
+
 Prefijo de reglas: USO-.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import unicodedata
 from datetime import date
 from enum import Enum
+from pathlib import Path
 from typing import Callable, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from ..config import get_callbacks, get_llm
+from ..config import CACHE_DIR, LLM_MODEL, get_callbacks, get_llm
 from ..schemas import (
     Campo,
     Contexto,
@@ -53,6 +60,7 @@ from ..schemas import (
 MAX_PAGINAS_LLM = 12
 # Una legibilidad PARCIAL no deja que la confianza del documento pase de aquí.
 TOPE_CONFIANZA_PARCIAL = 0.6
+DIR_ANALISIS = CACHE_DIR / "analisis" / "uso_suelo"
 
 ENTIDADES = {
     "AGUASCALIENTES", "BAJA CALIFORNIA", "BAJA CALIFORNIA SUR", "CAMPECHE", "CHIAPAS",
@@ -87,7 +95,8 @@ class _CampoLLM(BaseModel):
     valor: Optional[str] = Field(default=None, description="Dato tal como aparece en el documento")
     cita: Optional[str] = Field(default=None, description="Texto literal del documento que contiene el dato")
     pagina: Optional[int] = Field(default=None, description="Página [Pn] donde está la cita")
-    confianza: float = Field(default=0.0, ge=0, le=1)
+    # Sin ge/le: el json_schema estricto no acepta límites numéricos; se acota en _campo.
+    confianza: float = Field(default=0.0, description="0 a 1")
 
 
 class _FechaLLM(_CampoLLM):
@@ -299,14 +308,15 @@ def _campo(extraido: _CampoLLM, archivo: str, paginas: list[Pagina],
     """_CampoLLM -> Campo del contrato. Sin cita verificable no hay evidencia ni `normalizado`."""
     if not extraido.valor or not extraido.valor.strip():
         return Campo()
+    confianza = min(max(extraido.confianza, 0.0), 1.0)
     pagina = _verificar_cita(extraido.cita, extraido.pagina, paginas)
     if pagina is None:
-        return Campo(valor=extraido.valor, confianza=round(min(extraido.confianza, 0.3), 2))
+        return Campo(valor=extraido.valor, confianza=round(min(confianza, 0.3), 2))
     return Campo(
         valor=extraido.valor,
         normalizado=normalizado if normalizado is not None else normalizador(extraido.valor),
         evidencia=Evidencia(archivo=archivo, pagina=pagina, cita=extraido.cita.strip()),
-        confianza=round(extraido.confianza, 2),
+        confianza=round(confianza, 2),
     )
 
 
@@ -334,7 +344,7 @@ REGLAS DURAS:
 CAMPOS:
 - propietario: titular o solicitante a favor de quien se expide.
 - direccion: ubicación del predio (calle, número, colonia).
-- entidad_federativa: el estado de la República. Casi nunca viene en la dirección: búscalo en TODO el documento (encabezado del gobierno o la dependencia, sellos, fundamento legal, lugar y fecha). Ej. "Tultepec, Estado de México" -> valor "Estado de México".
+- entidad_federativa: el estado de la República. Casi nunca viene en la dirección: búscalo en TODO el documento (encabezado del gobierno o la dependencia, sellos, fundamento legal, lugar y fecha). Ej. "Tultepec, Estado de México" -> valor "Estado de México". Ojo: "Plaza Hidalgo", "Calle Morelos" o "Av. Juárez" son calles, no estados.
 - municipio: municipio o alcaldía donde está el predio.
 - superficie_terreno_m2: superficie total del predio, con unidad.
 - clave_catastral, numero_oficial.
@@ -363,18 +373,48 @@ def _formatear_paginas(paginas: list[Pagina]) -> str:
     return "\n\n".join(f"[P{p.numero}]\n{p.texto}" for p in paginas)
 
 
+def _paginas_de_otro_tipo(notas: Optional[str]) -> set[int]:
+    """Lee 'Contiene páginas de tipo predial: p4, p6-p7.' de las notas de la ingesta."""
+    paginas: set[int] = set()
+    for rangos in re.findall(r"Contiene páginas de tipo \w+: ([p\d, -]+)", notas or ""):
+        for a, b in re.findall(r"p(\d+)(?:-p(\d+))?", rangos):
+            paginas.update(range(int(a), int(b or a) + 1))
+    return paginas
+
+
+def _paginas_con_texto(doc: DocumentoLeido) -> list[Pagina]:
+    """Páginas que van al modelo: sin las vacías (borrosas o ilegibles, la ingesta descarta su
+    texto) ni las de otro tipo anexas (ej. el predial dentro de una licencia)."""
+    otras = _paginas_de_otro_tipo(doc.notas)
+    return [p for p in doc.paginas if p.texto.strip() and p.numero not in otras][:MAX_PAGINAS_LLM]
+
+
 def construir_mensajes(doc: DocumentoLeido, ctx: Contexto) -> list:
     """Mensajes que se mandan al LLM. Público para revisar el prompt sin gastar API."""
-    paginas = doc.paginas[:MAX_PAGINAS_LLM]
+    paginas = _paginas_con_texto(doc)
     return [
         SystemMessage(content=_PROMPT_SISTEMA.format(uso_requerido=ctx.uso_requerido)),
         HumanMessage(content=_formatear_paginas(paginas)),
     ]
 
 
+def _ruta_analisis(doc: DocumentoLeido, mensajes: list) -> Path:
+    firma = json.dumps([LLM_MODEL, [m.content for m in mensajes], _UsoSueloLLM.model_json_schema()],
+                       ensure_ascii=False)
+    return DIR_ANALISIS / f"{doc.archivo}.{hashlib.sha256(firma.encode()).hexdigest()[:12]}.json"
+
+
 def _extraer(doc: DocumentoLeido, ctx: Contexto) -> _UsoSueloLLM:
-    llm = get_llm().with_structured_output(_UsoSueloLLM)
-    return llm.invoke(construir_mensajes(doc, ctx), config={"callbacks": get_callbacks()})
+    mensajes = construir_mensajes(doc, ctx)
+    ruta = _ruta_analisis(doc, mensajes)
+    if ruta.exists():
+        return _UsoSueloLLM.model_validate_json(ruta.read_text(encoding="utf-8"))
+
+    llm = get_llm(effort="low", max_tokens=4000).with_structured_output(_UsoSueloLLM, method="json_schema")
+    extraido = llm.invoke(mensajes, config={"callbacks": get_callbacks()})
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(extraido.model_dump_json(indent=2), encoding="utf-8")
+    return extraido
 
 
 # ---------------------------------------------------------------- reglas USO-
@@ -581,7 +621,7 @@ def _resultado_ilegible(doc: DocumentoLeido) -> DocumentoAnalizado:
 
 
 def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
-    if doc.legibilidad == Legibilidad.ILEGIBLE or not any(p.texto.strip() for p in doc.paginas):
+    if doc.legibilidad == Legibilidad.ILEGIBLE or not _paginas_con_texto(doc):
         return _resultado_ilegible(doc)
     extraido = _extraer(doc, ctx)
     datos = _construir_datos(extraido, doc.archivo, doc.paginas)
