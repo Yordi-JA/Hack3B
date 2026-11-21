@@ -298,3 +298,15 @@ def test_tipo_faltante_con_archivo_muestra_ambas_tarjetas():
     d.documentos_faltantes = [TipoDocumento.ALINEAMIENTO]
     html = C.documentos(d)
     assert "doc-falta" in html and html.count("03 Alineamiento DEMO.pdf") >= 2  # aviso y tarjeta del archivo
+
+
+def test_dos_ilegibles_del_mismo_tipo_con_una_regla_compartida_tienen_cada_uno_su_renglon():
+    regla = "La página es ilegible."
+    d = _base([
+        _doc("a.pdf", TipoDocumento.PREDIAL, [_h("PRE-ILEG", regla, estado=EstadoRegla.NO_EVALUABLE)],
+             legibilidad=Legibilidad.ILEGIBLE),
+        _doc("b.pdf", TipoDocumento.PREDIAL, [_h("PRE-ILEG", regla, estado=EstadoRegla.NO_EVALUABLE)],
+             legibilidad=Legibilidad.ILEGIBLE),
+    ])
+    filas = [it for it in L.pendientes(d)[0] if it.clase == "ilegible"]
+    assert sorted(a for it in filas for a in it.archivos) == ["a.pdf", "b.pdf"]
