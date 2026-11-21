@@ -153,7 +153,7 @@ def test_licencia_compatible_y_vigente(llm_falso):
     assert _hallazgo(r, "USO-02").estado == EstadoRegla.CUMPLE
     assert _hallazgo(r, "USO-03").estado == EstadoRegla.CUMPLE
     assert all(h.evidencias for h in r.hallazgos if h.estado == EstadoRegla.CUMPLE
-               and h.id_regla != "USO-04")
+               and h.id_regla not in ("USO-04", "USO-08"))  # ausencias: no hay cita que mostrar
     assert 0 < r.confianza <= 1
 
 
@@ -250,3 +250,63 @@ def test_respuesta_del_llm_se_reutiliza_del_disco(monkeypatch, tmp_path):
     segunda = us.analizar(_doc(), CTX_2026)  # otra fecha: cambian las reglas, no el prompt
     assert len(llamadas) == 1
     assert primera.datos == segunda.datos
+
+
+# ---------------------------------------------------------------- criterios Tiendas 3B (USO-07..11)
+
+P_CRITERIOS = P1 + """
+SUPERFICIE MÁXIMA PARA COMERCIO: 120 M2 POR USO.
+SUPERFICIE LIBRE DE CONSTRUCCIÓN: 50% LA SUPERFICIE DEL LOTE.
+QUEDA PROHIBIDA LA VENTA DE BEBIDAS ALCOHÓLICAS EN ENVASE CERRADO.
+Se reconoce el uso por DERECHOS ADQUIRIDOS conforme al plan anterior.
+EL PREDIO SE UBICA DENTRO DE LA ZONA DE MONUMENTOS HISTÓRICOS DECLARADA POR EL INAH."""
+
+
+def _doc_criterios():
+    return _doc(paginas=[Pagina(numero=1, texto=P_CRITERIOS), Pagina(numero=2, texto=P2)])
+
+
+def test_criterios_3b_detectan_banderas(llm_falso):
+    llm_falso(_extraccion(
+        superficie_maxima_giro_m2=_c("120 M2", cita="SUPERFICIE MÁXIMA PARA COMERCIO: 120 M2"),
+        area_libre=_c("50%", cita="SUPERFICIE LIBRE DE CONSTRUCCIÓN: 50% LA SUPERFICIE DEL LOTE"),
+        prohibiciones_giro=[_c("venta de bebidas alcohólicas en envase cerrado",
+                               cita="QUEDA PROHIBIDA LA VENTA DE BEBIDAS ALCOHÓLICAS EN ENVASE CERRADO")],
+        derechos_adquiridos=_c("DERECHOS ADQUIRIDOS", cita="Se reconoce el uso por DERECHOS ADQUIRIDOS"),
+        zona_protegida=_c("ZONA DE MONUMENTOS HISTÓRICOS", cita="DENTRO DE LA ZONA DE MONUMENTOS HISTÓRICOS"),
+    ))
+    r = us.analizar(_doc_criterios(), CTX_2023)
+    bloq = (EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE)
+    for regla in ("USO-07", "USO-08", "USO-09"):
+        h = _hallazgo(r, regla)
+        assert (h.estado, h.severidad) == bloq, regla
+        assert h.evidencias, regla
+    for regla in ("USO-10", "USO-11"):
+        h = _hallazgo(r, regla)
+        assert (h.estado, h.severidad) == (EstadoRegla.NO_CUMPLE, Severidad.REVISION), regla
+
+
+def test_criterios_3b_sin_banderas(llm_falso):
+    llm_falso(_extraccion(cos=_c("70 %", cita="superficie total de predio de 350.00 M²")))
+    r = us.analizar(_doc(), CTX_2023)
+    assert _hallazgo(r, "USO-07").estado == EstadoRegla.NO_EVALUABLE
+    assert _hallazgo(r, "USO-08").estado == EstadoRegla.CUMPLE
+    h = _hallazgo(r, "USO-09")
+    assert h.estado == EstadoRegla.CUMPLE and "30 %" in h.explicacion  # 100 - COS 70 %
+    assert not [h for h in r.hallazgos if h.id_regla in ("USO-10", "USO-11")]
+
+
+@pytest.mark.parametrize("m2, estado, severidad", [
+    ("249 m2", EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE),
+    ("280 m2", EstadoRegla.CUMPLE, Severidad.REVISION),
+    ("500 m2", EstadoRegla.CUMPLE, Severidad.INFO),
+])
+def test_superficie_comercial_umbral(llm_falso, m2, estado, severidad):
+    llm_falso(_extraccion(superficie_maxima_giro_m2=_c(m2, cita="superficie total de predio de 350.00 M²")))
+    h = _hallazgo(us.analizar(_doc(), CTX_2023), "USO-07")
+    assert (h.estado, h.severidad) == (estado, severidad)
+
+
+@pytest.mark.parametrize("s, esperado", [("20%", 20.0), ("70 %", 70.0), ("0.7", 70.0), ("1.4 VECES", 1.4), (None, None)])
+def test_porcentaje(s, esperado):
+    assert us._porcentaje(s) == esperado

@@ -6,7 +6,13 @@ superficie aplicable, fecha de emisión y vigencia, autoridad emisora.
 
 Claves de `datos.especificos`: uso_autorizado, clave_uso (ej. CU-100-B), giro_autorizado,
 compatibilidad_comercial, superficie_maxima_giro_m2, cos, cus, niveles_maximos,
-condicionantes, folio, periodo_administracion, vigencia_texto.
+condicionantes, folio, periodo_administracion, vigencia_texto, area_libre, prohibicion_N,
+derechos_adquiridos, zona_protegida.
+
+Reglas: USO-01 compatibilidad, 02 vigencia, 03 coherencia de fechas, 04 condicionantes,
+05 identificación del predio, 06 autoridad; y los criterios de Tiendas 3B: 07 superficie comercial
+máxima (< 250 m² rechaza), 08 prohibición expresa de giro, 09 área libre > 40 %, 10 derechos
+adquiridos y 11 zona de conservación o patrimonio (estas dos solo aparecen si aplican).
 
 Llenar también `datos.entidad_federativa` y `datos.municipio` (la UI los usa para el mapa).
 El estado muchas veces no viene en la dirección: buscarlo en todo el documento (encabezado de
@@ -60,6 +66,11 @@ from ..schemas import (
 MAX_PAGINAS_LLM = 12
 # Una legibilidad PARCIAL no deja que la confianza del documento pase de aquí.
 TOPE_CONFIANZA_PARCIAL = 0.6
+
+# Criterios de Tiendas 3B (criterios_de_evaluacion_inmobiliaria, sección 1).
+SUPERFICIE_MINIMA_TIENDA_M2 = 250.0  # debajo: rechazo directo
+SUPERFICIE_HOLGADA_TIENDA_M2 = 300.0  # entre ambas: revisión
+AREA_LIBRE_MAXIMA = 40.0             # % de área libre que todavía deja la huella de sala y bodega
 DIR_ANALISIS = CACHE_DIR / "analisis" / "uso_suelo"
 
 ENTIDADES = {
@@ -148,6 +159,10 @@ class _UsoSueloLLM(_SalidaLLM):
     cus: _CampoLLM = Field(default_factory=_CampoLLM)
     niveles_maximos: _CampoLLM = Field(default_factory=_CampoLLM)
     condicionantes: list[_CampoLLM] = Field(default_factory=list)
+    area_libre: _CampoLLM = Field(default_factory=_CampoLLM)
+    prohibiciones_giro: list[_CampoLLM] = Field(default_factory=list)
+    derechos_adquiridos: _CampoLLM = Field(default_factory=_CampoLLM)
+    zona_protegida: _CampoLLM = Field(default_factory=_CampoLLM)
     compatibilidad_comercial: _Compatibilidad = _Compatibilidad.NO_DETERMINABLE
     compatibilidad_justificacion: Optional[str] = Field(
         default=None, description="Por qué, en una o dos frases para el equipo legal")
@@ -370,11 +385,15 @@ CAMPOS:
 - superficie_maxima_giro_m2: superficie máxima permitida para el giro, si la indica.
 - cos, cus, niveles_maximos: coeficientes de ocupación y utilización, altura o niveles.
 - condicionantes: una entrada por cada restricción u obligación relevante (no autoriza construcción, requiere otro dictamen, cajones de estacionamiento, horario, etc.). Máximo 8.
+- area_libre: porcentaje de área o superficie libre de construcción que exige (ej. "20% LA SUPERFICIE DEL LOTE").
+- prohibiciones_giro: SOLO prohibiciones o limitantes expresas que afecten a una tienda: autoservicio, minisúper, venta de bebidas alcohólicas en envase cerrado, almacenamiento, carga o descarga de mercancías. Una entrada por prohibición; [] si no hay.
+- derechos_adquiridos: si la licencia se otorga o se reconoce con base en "derechos adquiridos", la frase que lo dice; null si no.
+- zona_protegida: si el PREDIO está en zona de conservación, centro histórico, zona de monumentos o patrimonio (INAH, INBAL) o área natural protegida, la frase que lo dice. Las normas generales de imagen urbana para "zonas patrimoniales" que no digan que el predio está en una de ellas NO cuentan: null.
 
 COMPATIBILIDAD con el uso requerido:
 - compatible: el documento autoriza o permite expresamente comercio de productos básicos, abarrotes, tienda de autoservicio o minisúper (o un uso comercial general que los incluya).
 - condicionado: lo permite pero sujeto a otro trámite, dictamen o condición expresa.
-- incompatible: autoriza otro uso (ej. solo habitacional) o prohíbe el comercio.
+- incompatible: autoriza otro uso (ej. zonificación habitacional pura H como "H 2/20" sin comercio en planta baja) o prohíbe el comercio.
 - no_determinable: el texto no permite decidirlo.
 Llena compatibilidad_justificacion, compatibilidad_cita y compatibilidad_pagina con el texto literal que lo sustenta.
 """
@@ -557,16 +576,102 @@ def _regla_autoridad(datos: DatosInmueble) -> Hallazgo:
               "No se identificó con evidencia la autoridad que expide la licencia.")
 
 
+def _porcentaje(s: Optional[str]) -> Optional[float]:
+    """'20%' -> 20.0, '70 %' -> 70.0, '0.7' -> 70.0 (coeficiente). None si no hay número."""
+    if not s:
+        return None
+    m = re.search(r"\d+(?:[.,]\d+)?", s)
+    if not m:
+        return None
+    n = float(m.group(0).replace(",", "."))
+    return n * 100 if "%" not in s and n <= 1 else n
+
+
+def _regla_superficie_comercial(datos: DatosInmueble) -> Hallazgo:
+    desc = f"La superficie comercial permitida alcanza para una tienda ({SUPERFICIE_MINIMA_TIENDA_M2:.0f} m² o más)"
+    tope = datos.especificos.get("superficie_maxima_giro_m2")
+    if not tope or not tope.normalizado:
+        return _h("USO-07", desc, EstadoRegla.NO_EVALUABLE, Severidad.INFO,
+                  "La licencia no fija una superficie máxima para el giro comercial.")
+    m2 = float(tope.normalizado)
+    if m2 < SUPERFICIE_MINIMA_TIENDA_M2:
+        return _h("USO-07", desc, EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE,
+                  f"Limita el uso comercial a {m2:,.0f} m², menos de los {SUPERFICIE_MINIMA_TIENDA_M2:.0f} m² "
+                  "mínimos de una tienda.", tope.evidencia)
+    if m2 < SUPERFICIE_HOLGADA_TIENDA_M2:
+        return _h("USO-07", desc, EstadoRegla.CUMPLE, Severidad.REVISION,
+                  f"Permite hasta {m2:,.0f} m² comerciales: alcanza al mínimo pero queda por debajo de "
+                  f"{SUPERFICIE_HOLGADA_TIENDA_M2:.0f} m²; confirmar con el formato de tienda.", tope.evidencia)
+    return _h("USO-07", desc, EstadoRegla.CUMPLE, Severidad.INFO,
+              f"Permite hasta {m2:,.0f} m² comerciales.", tope.evidencia)
+
+
+def _regla_prohibiciones(datos: DatosInmueble) -> Hallazgo:
+    desc = "Sin prohibición expresa de autoservicio, alcohol en envase cerrado o carga y descarga"
+    prohib = [c for k, c in datos.especificos.items() if k.startswith("prohibicion_") and c.evidencia]
+    if prohib:
+        return _h("USO-08", desc, EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE,
+                  "La licencia prohíbe expresamente: " + "; ".join(c.valor for c in prohib) + ".",
+                  *(c.evidencia for c in prohib))
+    return _h("USO-08", desc, EstadoRegla.CUMPLE, Severidad.INFO,
+              "No se encontraron prohibiciones expresas para el giro de la tienda.")
+
+
+def _regla_area_libre(datos: DatosInmueble) -> Hallazgo:
+    desc = f"Área libre exigida de {AREA_LIBRE_MAXIMA:.0f} % o menos"
+    libre, cos = datos.especificos.get("area_libre"), datos.especificos.get("cos")
+    pct, campo, origen = None, None, ""
+    if libre and libre.normalizado:
+        pct, campo = _porcentaje(libre.valor), libre
+    elif cos and cos.normalizado and (ocupacion := _porcentaje(cos.valor)) is not None and ocupacion <= 100:
+        pct, campo, origen = 100 - ocupacion, cos, f" (calculada del COS {cos.valor})"
+    if pct is None:
+        return _h("USO-09", desc, EstadoRegla.NO_EVALUABLE, Severidad.INFO,
+                  "La licencia no indica área libre ni COS.")
+    if pct > AREA_LIBRE_MAXIMA:
+        return _h("USO-09", desc, EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE,
+                  f"Exige {pct:.0f} % de área libre{origen}, más del {AREA_LIBRE_MAXIMA:.0f} % que permite la "
+                  "huella de sala de ventas y bodega.", campo.evidencia)
+    return _h("USO-09", desc, EstadoRegla.CUMPLE, Severidad.INFO,
+              f"Área libre exigida: {pct:.0f} %{origen}.", campo.evidencia)
+
+
+def _regla_derechos_adquiridos(datos: DatosInmueble) -> Optional[Hallazgo]:
+    da = datos.especificos.get("derechos_adquiridos")
+    if not da or not da.evidencia:
+        return None
+    return _h("USO-10", "Uso basado en derechos adquiridos", EstadoRegla.NO_CUMPLE, Severidad.REVISION,
+              "La licencia se sustenta en derechos adquiridos: hay que acreditar la documentación legal que "
+              "los respalda.", da.evidencia)
+
+
+def _regla_zona_protegida(datos: DatosInmueble) -> Optional[Hallazgo]:
+    zp = datos.especificos.get("zona_protegida")
+    if not zp or not zp.evidencia:
+        return None
+    return _h("USO-11", "Predio fuera de zona de conservación o patrimonio", EstadoRegla.NO_CUMPLE,
+              Severidad.REVISION,
+              f"El predio está en zona protegida («{zp.valor}»): puede limitar fachada, anuncios luminosos "
+              "y maniobras de carga. Revisar las restricciones de la autoridad (INAH, INBAL o ambiental).",
+              zp.evidencia)
+
+
 def aplicar_reglas(ex: _UsoSueloLLM, datos: DatosInmueble, ctx: Contexto,
                    archivo: str, paginas: list[Pagina]) -> list[Hallazgo]:
-    return [
+    hallazgos = [
         _regla_compatibilidad(ex, datos, ctx, archivo, paginas),
         _regla_vigencia(datos, ctx),
         _regla_coherencia_fechas(datos, ctx),
         _regla_condicionantes(datos),
         _regla_identificacion(datos),
         _regla_autoridad(datos),
+        _regla_superficie_comercial(datos),
+        _regla_prohibiciones(datos),
+        _regla_area_libre(datos),
+        _regla_derechos_adquiridos(datos),
+        _regla_zona_protegida(datos),
     ]
+    return [h for h in hallazgos if h is not None]  # USO-10 y USO-11 solo aparecen si aplican
 
 
 # ---------------------------------------------------------------- armado
@@ -597,6 +702,11 @@ def _construir_datos(ex: _UsoSueloLLM, archivo: str, paginas: list[Pagina]) -> D
         "periodo_administracion": c(ex.periodo_administracion),
         "vigencia_texto": c(ex.vigencia_texto),
     }
+    especificos["area_libre"] = c(ex.area_libre)
+    especificos["derechos_adquiridos"] = c(ex.derechos_adquiridos)
+    especificos["zona_protegida"] = c(ex.zona_protegida)
+    for i, prohibicion in enumerate(ex.prohibiciones_giro[:5], start=1):
+        especificos[f"prohibicion_{i}"] = c(prohibicion)
     for i, cond in enumerate(ex.condicionantes[:8], start=1):
         especificos[f"condicionante_{i}"] = c(cond)
     datos.especificos = {k: v for k, v in especificos.items() if v.valor}
