@@ -65,6 +65,9 @@ NOMBRE = {
     "clave_catastral": "clave catastral",
     "numero_oficial": "número oficial",
 }
+# Artículo de cada campo para la descripción ("El propietario no coincide", "La dirección no coincide").
+ARTICULO = {"propietario": "El", "direccion": "La", "superficie_terreno_m2": "La", "clave_catastral": "La",
+            "numero_oficial": "El"}
 TIPO_LEGIBLE = {
     TipoDocumento.ESCRITURA: "Escritura",
     TipoDocumento.PREDIAL: "Predial",
@@ -226,7 +229,7 @@ def _docs(grupo: list[_Item]) -> str:
 
 def _describir(campo: str, grupos: list[list[_Item]]) -> str:
     partes = [f"«{g[0].crudo}» en {_docs(g)}" for g in grupos]
-    texto = f"La {NOMBRE[campo]} no coincide entre documentos: " + "; ".join(partes) + "."
+    texto = f"{ARTICULO[campo]} {NOMBRE[campo]} no coincide entre documentos: " + "; ".join(partes) + "."
     if campo == "superficie_terreno_m2":
         vals = [g[0].comparable for g in grupos]
         dif = max(vals) - min(vals)
