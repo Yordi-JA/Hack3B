@@ -22,6 +22,8 @@ ROJO_3B = "#EB1C24"           # logo y línea del marco del dictamen (no lleva t
 ROJO_3B_SIDEBAR = "#D9161E"   # barra lateral y marco de la app: el rojo de marca apenas más hondo
                               # para que el texto blanco pase AA (5.1:1; sobre #EB1C24 sería 4.45)
 ROJO_3B_OSCURO = "#C0141B"    # botón principal, título DICTAMEN, KPI principal, texto rojo sobre blanco
+VERDE_3B = "#4BD811"          # color secundario: acción de analizar y filtros activos de la bandeja
+VERDE_3B_HOVER = "#3DB30D"    # hover del botón verde; la tinta encima sigue en 6.2:1
 TINTA_3B = "#04211F"          # solo texto y líneas finas; nunca como superficie
 
 # Superficies: rojo de marca alrededor, blanco y gris muy claro adentro.

@@ -113,6 +113,13 @@ def test_contraste_de_etiquetas_cumple_aa():
     for texto, fondo in pares:
         assert t.contraste(texto, fondo) >= 4.5, (texto, fondo)
     assert t.contraste("#FFFFFF", t.ROJO_3B) < 4.5  # por eso la barra usa ROJO_3B_SIDEBAR
+    # Verde de marca: texto en tinta sobre el botón (normal y hover) y sobre el segmento activo.
+    assert t.contraste(t.TINTA_3B, t.VERDE_3B) >= 4.5
+    assert t.contraste(t.TINTA_3B, t.VERDE_3B_HOVER) >= 4.5
+    # El verde solo contra el fondo no llega a 3:1; el contorno en tinta del segmento activo y del
+    # interruptor encendido es lo que lo separa del fondo.
+    assert t.contraste(t.VERDE_3B, t.PANEL) < 3
+    assert t.contraste(t.TINTA_3B, t.PANEL) >= 3
 
 
 def test_no_quedan_superficies_oscuras():
