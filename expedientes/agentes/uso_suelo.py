@@ -326,8 +326,10 @@ def _verificar_cita(cita: Optional[str], pagina_llm: Optional[int], paginas: lis
 
     Cita corta (encabezados como 'ESTADO DE MÉXICO'): tiene que aparecer completa.
     Cita larga: basta con las primeras 6 palabras, porque el OCR suele romper el final.
-    Con `valor`, además el valor tiene que estar en la cita y en el texto junto a ella: una cita
-    real con un valor inventado al final ('...SUPERFICIE TOTAL DE 999.00 M2') no pasa.
+    Con `valor`, además cada palabra del valor tiene que estar en la cita y en el texto junto a
+    ella: una cita real con un valor inventado al final ('...SUPERFICIE TOTAL DE 999.00 M2') no
+    pasa. No se exige que vayan seguidas: el modelo resume ('Notaría 101' de 'NOTARÍA PÚBLICA
+    NÚMERO 101').
     """
     if not cita:
         return None
@@ -336,15 +338,16 @@ def _verificar_cita(cita: Optional[str], pagina_llm: Optional[int], paginas: lis
     if not palabras or len(limpia) < 3:
         return None
     firma = limpia if len(palabras) <= 6 else " ".join(palabras[:6])
-    v = _limpia(valor) if valor else ""
-    if v and _buscar(v, limpia) < 0:
+    v = set(_limpia(valor).split()) if valor else set()
+    if not v <= set(palabras):
         return None
     for p in sorted(paginas, key=lambda p: p.numero != pagina_llm):
         tx = _limpia(p.texto)
         i = _buscar(firma, tx)
         if i < 0:
             continue
-        if not v or _buscar(v, tx[i:i + len(limpia) + VENTANA_VALOR]) >= 0:
+        ventana = tx[i:i + len(limpia) + VENTANA_VALOR].split()[:len(palabras) + 3]
+        if v <= set(ventana):
             return p.numero
     return None
 

@@ -330,6 +330,7 @@ PAG_NOTARIA = [Pagina(numero=1, texto="TITULAR DE LA NOTARIA PUBLICA NUMERO 101 
     ("999.00 m2", "EL INMUEBLE CUENTA CON UNA SUPERFICIE TOTAL DE TERRENO DE 999.00 M2", False),  # valor inventado al final
     ("JUAN PEREZ", "TITULAR DE LA NOTARIA PUBLICA", False),                                 # cita real, valor ajeno
     ("450.00 M2", "EL INMUEBLE CUENTA CON UNA SUPERFICIE TOTAL DE TERRENO DE 450.00 M2", True),
+    ("Notaría 101", "NOTARIA PUBLICA NUMERO 101", True),                                   # el modelo resume
 ])
 def test_cita_debe_contener_el_valor(valor, cita, acepta):
     assert (us._verificar_cita(cita, 1, PAG_NOTARIA, valor) is not None) is acepta
