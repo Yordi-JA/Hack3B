@@ -346,6 +346,12 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
    mayúsculas que interrumpen la línea del marco, etiquetas en mayúsculas y acción principal verde. */
 [data-testid="stSidebar"] [class*="st-key-nav-"] [data-testid="stIconMaterial"] {{ font-size: 20px; }}
 [data-testid="stSidebar"] [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] {{ gap: 6px; }}
+/* La tarjeta del usuario va siempre hasta abajo del menú lateral. */
+[data-testid="stSidebarContent"] {{ display: flex; flex-direction: column; }}
+[data-testid="stSidebarUserContent"] {{ flex: 1 0 auto; display: flex; flex-direction: column; }}
+[data-testid="stSidebarUserContent"] > div {{ flex: 1 0 auto; display: flex; flex-direction: column; }}
+[data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"] {{ flex: 1 0 auto; }}
+[data-testid="stSidebarUserContent"] [data-testid="stElementContainer"]:has(.lateral-usuario) {{ margin-top: auto; }}
 [data-testid="stSidebar"] .lateral-grupo {{ margin: 20px 0 10px 6px; }}
 .lateral-marca .lateral-sub {{ display: block; color: var(--blanco); font-size: 12px; margin-top: 2px; }}
 .lateral-usuario {{ display: flex; gap: 12px; align-items: center; margin: 22px 16px 0 4px; padding-top: 16px;
