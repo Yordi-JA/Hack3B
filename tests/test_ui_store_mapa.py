@@ -100,14 +100,12 @@ def test_contraste_de_etiquetas_cumple_aa():
     estados = (t.VERDE, t.AMBAR, t.VINO, t.AZUL, t.GRIS)
     for tono in estados:
         assert t.contraste(tono.texto, tono.fondo) >= 4.5            # etiqueta suave
-        assert t.contraste("#FFFFFF", tono.texto) >= 4.5              # sello sobre fondo claro
-        assert t.contraste(tono.texto, "#FFFFFF") >= 4.5              # sello blanco sobre la tarjeta roja
+        assert t.contraste("#FFFFFF", tono.texto) >= 4.5              # sello: texto blanco sobre el color del estado
     pares = [
         ("#FFFFFF", t.ROJO_3B_SIDEBAR),   # texto de la barra lateral y foco blanco
-        ("#FFFFFF", t.ROJO_3B_OSCURO),    # tarjeta del dictamen, KPI principal, botón principal
-        (t.ROJO_3B_OSCURO, "#FFFFFF"),    # botón blanco dentro del dictamen, texto rojo sobre blanco
-        (t.ROJO_3B_OSCURO, t.PANEL),      # pestaña activa de la navegación
-        (t.TINTA_3B, "#FFFFFF"), (t.TINTA_3B, t.PANEL),
+        ("#FFFFFF", t.ROJO_3B_OSCURO),    # botón principal del dictamen, KPI principal
+        (t.ROJO_3B_OSCURO, t.PANEL),      # título DICTAMEN sobre la línea, pestaña activa de la navegación
+        (t.TINTA_3B, "#FFFFFF"), (t.TINTA_3B, t.PANEL),  # texto y botón secundario "Ver documentos"
         (t.TEXTO, t.PANEL), (t.TEXTO_2, t.PANEL), (t.TEXTO_2, "#FFFFFF"),
     ]
     for texto, fondo in pares:

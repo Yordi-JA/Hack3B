@@ -25,8 +25,6 @@ def _css_tonos() -> str:
         reglas.append(f".sello-{nombre}{{color:#fff;background:{tono.texto};}}")
         # Estado en texto (tarjetas de la bandeja): el color fuerte del estado sobre el fondo claro.
         reglas.append(f".est-{nombre}{{color:{tono.texto};}}")
-        # Sobre la tarjeta roja del dictamen el sello se invierte: bloque blanco, texto del estado.
-        reglas.append(f".marco-dictamen .sello-{nombre}{{color:{tono.texto};background:#fff;}}")
     return "".join(reglas)
 
 
@@ -199,8 +197,8 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .sin-entidad {{ font-size: 12px; color: var(--texto2); margin-top: 4px; }}
 
 /* ---- marco: tarjeta con línea fina y título que interrumpe la línea ----
-   Base (documentos): blanca con línea y título en tinta. Dictamen: bloque rojo sólido con línea y
-   título blancos; es el único bloque rojo del contenido. */
+   Base (documentos): blanca con línea y título en tinta. Dictamen: sobre el fondo de la página, solo
+   el borde y el título en rojo; el texto en tinta. */
 .marco {{ position: relative; background: var(--tarjeta); color: var(--texto); border-radius: 6px;
   padding: 58px 40px 36px; margin: 34px 0 10px; border: 1px solid var(--borde); }}
 .marco::before {{ content: ""; position: absolute; inset: 28px 14px 14px; border: 1.5px solid var(--tinta); pointer-events: none; }}
@@ -231,21 +229,16 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .mx-vecino {{ fill: var(--mapa-vacio); stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
 .mx-resaltado {{ stroke: var(--tinta); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }}
 
-/* dictamen: bloque rojo, todo el texto en blanco puro (6.26:1) */
-.marco-dictamen {{ background: var(--rojo-osc); border-color: var(--rojo-osc); color: #fff; }}
-.marco-dictamen::before {{ border: 2px solid #fff; }}
-.marco-dictamen .marco-titulo {{ background: var(--rojo-osc); color: #fff; }}
-.marco-dictamen .marco-ceja, .marco-dictamen .marco-texto p.marco-resumen, .marco-dictamen .marco-datos,
-.marco-dictamen .marco-datos b, .marco-dictamen .marco-media figcaption {{ color: #fff; }}
-.marco-dictamen .btn-acento {{ background: #fff; color: var(--rojo-osc) !important; }}
-.marco-dictamen .btn-acento:hover {{ background: {t.PANEL}; }}
-.marco-dictamen .btn-linea {{ background: transparent; color: #fff !important; border: 1.5px solid #fff; }}
-.marco-dictamen .btn-linea:hover {{ background: rgba(255,255,255,.14); color: #fff !important; border-color: #fff; }}
-.marco-dictamen .marco-botones span.btn-nada {{ color: #fff; }}
-.stApp .marco-dictamen a:focus-visible {{ outline: 3px solid #fff; outline-offset: 2px; }}
+/* dictamen: como el marco de Subir expediente. Fondo de la página, línea de 2 px en rojo 3B con el
+   radio de la app y el título rojo sobre la línea (con un parche del fondo detrás). El sello es el color
+   del estado con texto blanco; botón principal rojo, secundario blanco con línea de 2 px en tinta. */
+.marco-dictamen {{ background: var(--panel); border: 2px solid var(--rojo-osc); border-radius: var(--radio);
+  padding: 44px 36px 32px; }}
+.marco-dictamen::before {{ display: none; }}
+.marco-dictamen .marco-titulo {{ top: 0; left: 22px; background: var(--panel); color: var(--rojo-osc); }}
+.marco-dictamen .btn-linea {{ background: #fff; border-width: 2px; }}
+.marco-dictamen .marco-botones a {{ border-radius: var(--radio); }}
 .marco-dictamen .marco-media {{ background: transparent; }}
-.marco-dictamen .mx-vecino {{ fill: rgba(255,255,255,.14); stroke: rgba(255,255,255,.5); }}
-.marco-dictamen .mx-resaltado {{ fill: #fff; stroke: #fff; }}
 
 /* ---- Detalle: dictamen, qué resolver, documentos y detalle completo ----
    Sin etiquetas tipo píldora. Las cajas usan la línea de Subir expediente: 2 px tinta y radio de 6 px. */

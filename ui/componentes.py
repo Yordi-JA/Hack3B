@@ -463,7 +463,7 @@ def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool, pend: Optional[tuple] = None
         f"<span>Analizado <b>{fecha(d.fecha_analisis)}</b></span>"
         f"<span>Vigencias evaluadas al <b>{fecha(d.fecha_referencia)}</b></span></div>"
         f'<div class="marco-botones">{botones}</div></div>'
-        f'<figure class="marco-media" style="margin:0">{mapa.svg_detalle(u.entidad, "#FFFFFF")}'
+        f'<figure class="marco-media" style="margin:0">{mapa.svg_detalle(u.entidad, tono.mapa)}'
         f"<figcaption>{txt(pie)}</figcaption></figure>"
         "</div></section>"
     )
