@@ -172,11 +172,13 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     with st.container(key="b-kpis"):
         html(C.kpis_bandeja(ind, enlace))
 
-    # El mapa va al centro; al seleccionar un estado se abre su ventana con los porcentajes.
-    seleccion = st.session_state.get("f_entidad") or None
-    ventana = C.ventana_entidad(seleccion, conteos[seleccion], enlace) if seleccion in conteos else ""
+    # Elegir un estado en el mapa solo abre su recuadro (parámetro `mapa`); no filtra la lista de abajo.
+    # Sus expedientes se ven en la vista del estado ("Ver expedientes del estado").
+    seleccion = st.query_params.get("mapa") or None
+    ventana = C.ventana_entidad(seleccion, conteos[seleccion], dict(enlace, mapa=seleccion), "mapa") if seleccion in conteos else ""
     with st.container(key="b-mapa"):
-        html(C.caja_mapa_tablero(mapa.svg_bandeja(conteos, seleccion, enlace, numeros=False), ventana, sin_entidad))
+        svg = mapa.svg_bandeja(conteos, seleccion, enlace, numeros=False, parametro="mapa")
+        html(C.caja_mapa_tablero(svg, ventana, sin_entidad))
 
     filtros = st.container(key="b-filtros")
     f1, f2, f3 = filtros.columns([1, 1.6, 1.2], vertical_alignment="bottom")
@@ -208,7 +210,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
 
     html('<div id="expedientes" class="ancla"></div>')
     with st.container(key="b-lista"):
-        donde = f"en {mapa.nombre_entidad(seleccion)}" if seleccion and seleccion != L.SIN_ENTIDAD else ""
+        donde = f"en {mapa.nombre_entidad(entidad_actual)}" if entidad_actual and entidad_actual != L.SIN_ENTIDAD else ""
         titulo = f"Expedientes {C.txt(donde)}" if donde else "Expedientes"
         html(f'<h2 class="lista-titulo">{titulo} <small>{len(filtrados)}</small></h2>')
         if not visibles:
@@ -264,12 +266,11 @@ def t_estado(rec: Optional[Recomendacion]) -> str:
 
 
 def _volver_inicio(clave: Optional[str]) -> None:
-    """Regresa al inicio con el estado seleccionado, para que su ventana siga abierta en el mapa."""
+    """Regresa al inicio con el estado elegido en el mapa, para que su recuadro siga abierto."""
     params = {k: st.query_params[k] for k in ("ej",) if k in st.query_params}
     params["vista"] = "bandeja"
     if clave:
-        params["entidad"] = clave
-        st.session_state["f_entidad"] = clave
+        params["mapa"] = clave
     st.query_params.from_dict(params)
 
 

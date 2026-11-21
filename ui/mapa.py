@@ -192,11 +192,12 @@ def _bajo_llamada(x: float, y: float, radio: float = 30) -> bool:
 
 def svg_bandeja(
     conteos: dict[str, ConteoEntidad], seleccion: Optional[str], params_base: dict[str, str],
-    criterio: str = "predominante", abreviaturas: bool = True, numeros: bool = True,
+    criterio: str = "predominante", abreviaturas: bool = True, numeros: bool = True, parametro: str = "entidad",
 ) -> str:
     """Mapa de todo el país. Cada estado con expedientes es un enlace que filtra la bandeja y abre
     su ventana con los porcentajes. Con `abreviaturas`, cada estado grande lleva su clave (BCN, SON...).
-    Con `numeros=False` no se dibujan conteos ni burbujas: solo el color (el detalle va en la ventana)."""
+    Con `numeros=False` no se dibujan conteos ni burbujas: solo el color (el detalle va en la ventana).
+    `parametro`: nombre del parámetro de la URL que guarda el estado elegido."""
     geo = _geometria()
     rellenos = relleno_por_entidad(conteos, criterio)
     partes = [
@@ -215,7 +216,7 @@ def svg_bandeja(
             f"<title>{escape(_tooltip(clave, conteo))}</title></path>"
         )
         if conteo and conteo.total:
-            nuevo = dict(params_base, entidad="" if clave == seleccion else clave)
+            nuevo = dict(params_base, **{parametro: "" if clave == seleccion else clave})
             href = escape("?" + urlencode({k: v for k, v in nuevo.items() if v}))
             trazo = (
                 f'<a href="{href}" target="_self" class="mx-enlace" '

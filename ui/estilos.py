@@ -383,13 +383,13 @@ a.kpi.kpi-total {{ border-color: var(--rojo-osc); }}
 .mapa-cab {{ display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 24px; }}
 .mapa-cab p {{ font-size: 13px; color: var(--texto2); margin: 0; max-width: 60ch; }}
 .mapa-cab .leyenda {{ margin: 0; }}
-.mapa-lienzo {{ position: relative; max-width: calc(62vh * 1000 / 630); margin: 10px auto 0; }}
+.mapa-cuerpo {{ display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: center; margin-top: 10px; }}
+.mapa-lienzo {{ position: relative; max-width: calc(62vh * 1000 / 630); width: 100%; margin: 0 auto; }}
+.mapa-panel {{ align-self: center; }}
 .mx-abr {{ font: 700 11px var(--f-texto); fill: var(--texto2); letter-spacing: .05em; pointer-events: none; }}
 
-.mx-ventana {{ position: absolute; z-index: 5; width: 262px; background: #fff; border: 2px solid var(--tinta); border-radius: 6px;
-  box-shadow: 0 10px 28px rgba(4,33,31,.18); padding: 14px 16px 14px; }}
-.mx-ventana.v-der {{ transform: translate(22px, -50%); }}
-.mx-ventana.v-izq {{ transform: translate(calc(-100% - 22px), -50%); }}
+.mx-ventana {{ background: #fff; border: 2px solid var(--tinta); border-radius: 6px; padding: 14px 16px 14px; }}
+.mx-ventana.v-vacia {{ background: transparent; border-style: dashed; }}
 .v-cab {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; }}
 .v-cab b {{ font-family: var(--f-titular); font-weight: 900; font-size: 16px; text-transform: uppercase; color: var(--tinta); }}
 .mx-ventana a.v-cerrar {{ text-decoration: none; color: var(--tinta); font-size: 22px; line-height: 1; padding: 0 4px; }}
@@ -438,7 +438,7 @@ a.kpi.kpi-activo {{ border-color: var(--rojo-osc); box-shadow: inset 0 0 0 2px v
 @media (max-width: 1100px) {{
   .estado-resumen {{ grid-template-columns: 1fr; }}
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-  .mx-ventana {{ width: 220px; }}
+  .mapa-cuerpo {{ grid-template-columns: 1fr; }}
 }}
 
 /* escritorio angosto (1280): más aire para el texto del dictamen */

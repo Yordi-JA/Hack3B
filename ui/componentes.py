@@ -209,15 +209,13 @@ def kpis_bandeja(ind: L.Indicadores, params: dict[str, str], activo: Optional[st
     return '<div class="kpis">' + "".join(tarjetas) + "</div>"
 
 
-def ventana_entidad(clave: str, conteo: "mapa.ConteoEntidad", params: dict[str, str]) -> str:
-    """Ventana emergente sobre el mapa: porcentaje de cada recomendación en el estado y acceso a
-    sus expedientes. Se ancla al punto del estado (unidades 1000 x 630 -> porcentaje del lienzo)."""
-    punto = mapa.punto_etiqueta(clave)
-    if punto is None or not conteo or not conteo.total:
+def ventana_entidad(
+    clave: str, conteo: "mapa.ConteoEntidad", params: dict[str, str], parametro: str = "entidad",
+) -> str:
+    """Recuadro del estado en el panel junto al mapa (no encima, para no taparlo): porcentaje de
+    cada recomendación y acceso a la vista del estado. `parametro` es el que se quita al cerrar."""
+    if not conteo or not conteo.total:
         return ""
-    x, y = punto
-    lado = "v-izq" if x > 560 else "v-der"  # la ventana se abre hacia el lado con más espacio
-    top = min(max(y / 630 * 100, 22), 78)
     filas = []
     for r in RECS_TABLERO:
         n = conteo.por_recomendacion.get(r, 0)
@@ -229,11 +227,11 @@ def ventana_entidad(clave: str, conteo: "mapa.ConteoEntidad", params: dict[str, 
             f'<div class="v-barra"><i style="width:{p}%;background:{t.ESTADO[r].mapa}"></i></div>'
         )
     plural = "expediente" if conteo.total == 1 else "expedientes"
-    cerrar = url(**{k: v for k, v in params.items() if k != "entidad"})
+    cerrar = url(**{k: v for k, v in params.items() if k != parametro})
     ver = url(vista="estado", entidad=clave, ej=params.get("ej"))
     predo = conteo.predominante
     return (
-        f'<div class="mx-ventana {lado}" style="left:{x / 10:.1f}%;top:{top:.1f}%" role="dialog" '
+        f'<div class="mx-ventana" role="region" '
         f'aria-label="{escape(mapa.nombre_entidad(clave))}">'
         f'<div class="v-cab"><b>{txt(mapa.nombre_entidad(clave))}</b>'
         f'<a class="v-cerrar" href="{escape(cerrar)}" target="_self" aria-label="Cerrar">×</a></div>'
@@ -254,7 +252,7 @@ def resumen_estado(ind: L.Indicadores, params: dict[str, str], svg: str, nombre:
 
 
 def caja_mapa_tablero(svg: str, ventana: str, sin_entidad: int) -> str:
-    """Mapa en tarjeta blanca, centrado, con leyenda arriba y la ventana del estado encima."""
+    """Mapa en tarjeta, con leyenda arriba y el recuadro del estado en un panel a la derecha."""
     leyenda = "".join(
         f'<span><i style="background:{t.ESTADO[r].mapa}"></i>{txt(r.value)}</span>' for r in RECS_TABLERO
     ) + f'<span><i style="background:{t.MAPA_VACIO}"></i>Sin expedientes</span>'
@@ -269,7 +267,17 @@ def caja_mapa_tablero(svg: str, ventana: str, sin_entidad: int) -> str:
         "<p>Color: la recomendación que predomina en el estado. "
         "Haz clic en un estado para ver su información.</p></div>"
         f'<div class="leyenda">{leyenda}</div></div>'
-        f'<div class="mapa-lienzo">{svg}{ventana}</div>{pie}</div>'
+        '<div class="mapa-cuerpo">'
+        f'<div class="mapa-lienzo">{svg}</div><aside class="mapa-panel">{ventana or _panel_vacio()}</aside></div>'
+        f"{pie}</div>"
+    )
+
+
+def _panel_vacio() -> str:
+    return (
+        '<div class="mx-ventana v-vacia"><div class="v-cab"><b>Selecciona un estado</b></div>'
+        '<p class="v-total">Haz clic en un estado de color para ver el porcentaje de cada recomendación '
+        "y entrar a sus expedientes.</p></div>"
     )
 
 
