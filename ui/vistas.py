@@ -100,7 +100,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
             type="primary" if vista == "bandeja" else "secondary", width="stretch",
         )
         st.button(
-            "Nuevo análisis", key="nav-nuevo", on_click=ir, args=("nuevo",),
+            "Subir expediente", key="nav-nuevo", on_click=ir, args=("nuevo",),
             type="primary" if vista == "nuevo" else "secondary", width="stretch",
         )
         if abierto:
@@ -150,8 +150,8 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         st.warning(f"No se pudieron abrir {len(invalidos)} archivo(s) de resultados y no se muestran: {nombres}.")
 
     if not entradas:
-        st.info("Todavía no hay expedientes analizados. Sube los archivos de uno en Nuevo análisis.")
-        st.button("Ir a Nuevo análisis", on_click=ir, args=("nuevo",), type="primary")
+        st.info("Todavía no hay expedientes analizados. Sube los archivos de uno en Subir expediente.")
+        st.button("Ir a Subir expediente", on_click=ir, args=("nuevo",), type="primary")
         return
 
     conteos = L.conteo_por_entidad(e.dictamen for e in visibles)
@@ -251,7 +251,7 @@ def _estado_trabajo() -> None:
         if error is not None:
             st.session_state["error_trabajo"] = error
             if not en_nuevo:
-                st.session_state["aviso"] = "El análisis no terminó. Abre Nuevo análisis para ver el detalle."
+                st.session_state["aviso"] = "El análisis no terminó. Abre Subir expediente para ver el detalle."
         elif en_nuevo:
             ir("detalle", trabajo.futuro.result().clave)
         else:
@@ -326,58 +326,80 @@ def _archivos_validos(archivos) -> list[tuple[str, bytes]]:
     return r.validos
 
 
+# Qué revisa el sistema en cada tipo, según la sección 02 del reto (CONTEXT.md).
+DOCUMENTOS_ESPERADOS = [
+    ("Escritura", "Titular, dirección, superficie del terreno y datos del inmueble."),
+    ("Predial", "Propietario o contribuyente, dirección, clave catastral y superficie registrada."),
+    ("Alineamiento y Número Oficial", "Dirección oficial, número asignado, alineamiento, vigencia y autoridad emisora."),
+    ("Uso de Suelo", "Uso autorizado, compatibilidad con uso comercial, restricciones, vigencia y autoridad emisora."),
+]
+
+
+def _documentos_esperados() -> str:
+    filas = "".join(f"<dt>{C.txt(tipo)}</dt><dd>{C.txt(revisa)}</dd>" for tipo, revisa in DOCUMENTOS_ESPERADOS)
+    return (
+        '<div class="subir-esperados"><h3>Se esperan 4 documentos</h3>'
+        f"<dl>{filas}</dl>"
+        "<p>No hace falta renombrar los archivos: el sistema reconoce el tipo de cada uno.</p></div>"
+    )
+
+
 def vista_nuevo() -> None:
-    html(C.encabezado(
-        "Nuevo análisis",
-        "Sube los archivos de un expediente: Escritura, Predial, Alineamiento y Número Oficial, y Uso de Suelo.",
-    ))
-    st.write("")
+    html(C.encabezado("Subir expediente"))
     pendiente = _trabajo_pendiente()
-    with st.form("nuevo", border=False):
-        nombre = st.text_input(
-            "Nombre del expediente (opcional)", max_chars=80,
-            placeholder="Ej. TEPEJI-05. Si lo dejas vacío se usa la fecha y hora.",
-            help="Si ya existe un expediente con ese nombre, el nuevo análisis lo reemplaza.",
-        )
-        archivos = st.file_uploader(
-            "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
-            help="PDF o imagen. No hace falta renombrarlos: el sistema reconoce el tipo de cada archivo.",
-        )
-        enviar = st.form_submit_button("Analizar expediente", type="primary", disabled=pendiente, key="analizar")
+    with st.container(key="subir"):
+        izq, der = st.columns([1.5, 1], gap="large")
+        with izq, st.container(key="subir-marco"):  # el título EXPEDIENTE lo pone el CSS sobre la línea
+            with st.form("nuevo", border=False):
+                nombre = st.text_input(
+                    "Nombre del expediente (opcional)", max_chars=80, key="subir-nombre",
+                    placeholder="Ej. TEPEJI-05. Si lo dejas vacío se usa la fecha y hora.",
+                    help="Si ya existe un expediente con ese nombre, el nuevo análisis lo reemplaza.",
+                )
+                archivos = st.file_uploader(
+                    "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
+                    key="subir-archivos",
+                )
+                enviar = st.form_submit_button(
+                    "Analizar expediente", type="primary", disabled=pendiente, key="analizar"
+                )
+        with der:
+            html(_documentos_esperados())
 
-    if pendiente:
-        st.info("Hay un análisis en curso; su avance se ve en la barra lateral. Puedes ir a la bandeja "
-                "mientras tanto: al terminar se guarda y te avisamos.")
-    if enviar and not pendiente:
-        if not archivos:
-            st.warning("Agrega al menos un archivo del expediente antes de analizar.")
-        else:
-            datos = _archivos_validos(archivos)
-            if datos:
-                st.session_state.pop("error_trabajo", None)
-                st.session_state.pop("listo", None)
-                trabajo = trabajos.lanzar(_analizar, datos, store.id_expediente(nombre), archivos=len(datos))
-                if trabajo is None:
-                    st.warning("Hay otro análisis en espera; intenta cuando termine.")
-                else:
-                    st.session_state["trabajo"] = trabajo
-                    st.rerun()
+        if pendiente:
+            st.info("Hay un análisis en curso; su avance se ve en la barra lateral. Puedes ir a la bandeja "
+                    "mientras tanto: al terminar se guarda y te avisamos.")
+        if enviar and not pendiente:
+            if not archivos:
+                st.warning("Agrega al menos un archivo del expediente antes de analizar.")
+            else:
+                datos = _archivos_validos(archivos)
+                if datos:
+                    st.session_state.pop("error_trabajo", None)
+                    st.session_state.pop("listo", None)
+                    trabajo = trabajos.lanzar(_analizar, datos, store.id_expediente(nombre), archivos=len(datos))
+                    if trabajo is None:
+                        st.warning("Hay otro análisis en espera; intenta cuando termine.")
+                    else:
+                        st.session_state["trabajo"] = trabajo
+                        st.rerun()
 
-    error = st.session_state.pop("error_trabajo", None)
-    if error is not None:
-        _mostrar_error(error)
+        error = st.session_state.pop("error_trabajo", None)
+        if error is not None:
+            _mostrar_error(error)
 
-    html(C.seccion("Probar con el dictamen de ejemplo", "ejemplo",
-                   "Abre un dictamen ya generado para ver la pantalla de resultados sin subir archivos."))
-    if st.button("Abrir dictamen de ejemplo"):
-        try:
-            clave = _ejemplo()
-        except Exception as e:  # el orquestador es de otro equipo: si falla, se muestra y se registra
-            _log.error("No se pudo abrir el dictamen de ejemplo", exc_info=e)
-            _mostrar_error(e)
-        else:
-            ir("detalle", clave)
-            st.rerun()
+        with st.container(horizontal=True, vertical_alignment="center", gap="small", key="subir-ejemplo"):
+            html('<span class="subir-ejemplo-texto">¿Sin archivos a mano?</span>')
+            abrir = st.button("Abrir dictamen de ejemplo", type="tertiary", key="subir-abrir-ejemplo")
+        if abrir:
+            try:
+                clave = _ejemplo()
+            except Exception as e:  # el orquestador es de otro equipo: si falla, se muestra y se registra
+                _log.error("No se pudo abrir el dictamen de ejemplo", exc_info=e)
+                _mostrar_error(e)
+            else:
+                ir("detalle", clave)
+                st.rerun()
 
 
 def _ejemplo() -> str:

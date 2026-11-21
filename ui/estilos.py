@@ -284,6 +284,40 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .hallazgo p {{ font-size: 14px; line-height: 1.5; margin: 0 0 6px; }}
 .vacio-msg {{ color: var(--texto2); font-size: 14px; }}
 
+/* ---- Subir expediente (vista "nuevo"): todo lo de esta vista va en este bloque ---- */
+.st-key-subir {{ max-width: 1100px; }}
+.st-key-subir-marco {{ position: relative; border: 1.5px solid var(--tinta); border-radius: 4px;
+  padding: 30px 22px 20px; margin-top: 22px; overflow: visible; }}
+.st-key-subir-marco::before {{ content: "Expediente"; position: absolute; top: 0; left: 14px; transform: translateY(-55%);
+  background: var(--panel); padding: 0 10px; font-family: var(--f-titular); font-weight: 900; font-size: 18px;
+  line-height: 1; color: var(--tinta); text-transform: uppercase; }}
+.st-key-subir-nombre [data-testid="stTextInputRootElement"] {{ border: 1.5px solid var(--tinta); border-radius: 4px;
+  background: #fff; }}
+.st-key-subir-nombre [data-testid="stTextInputRootElement"]:focus-within {{ border-color: var(--rojo-osc);
+  box-shadow: 0 0 0 2px var(--rojo-osc); }}
+.st-key-subir-nombre input::placeholder {{ color: var(--texto2); opacity: 1; }}
+/* Streamlit muestra "Press Enter to submit form" en inglés y encima del texto de ejemplo. */
+.st-key-subir-nombre [data-testid="InputInstructions"] {{ display: none; }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] {{ border: 1.5px solid var(--tinta); border-radius: 4px;
+  background: #fff; min-height: 180px; padding: 24px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px; text-align: center; }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:focus-within {{ border-color: var(--rojo-osc); }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]::before {{
+  content: "Arrastra aquí los PDF o imágenes del expediente"; font-size: 16px; font-weight: 600; color: var(--tinta); }}
+.subir-esperados {{ margin-top: 22px; }}
+.stApp .subir-esperados h3 {{ font-family: var(--f-texto); font-size: 16px; font-weight: 700; color: var(--tinta);
+  margin: 0 0 4px; padding: 0; }}
+.subir-esperados dl {{ margin: 0 0 16px; }}
+.subir-esperados dt {{ font-size: 14px; font-weight: 700; color: var(--tinta); margin-top: 12px; }}
+.subir-esperados dd {{ font-size: 14px; line-height: 1.45; color: var(--texto2); margin: 2px 0 0; }}
+.subir-esperados p {{ font-size: 14px; color: var(--texto); border-top: 1px solid var(--borde); padding-top: 12px; margin: 0; }}
+.st-key-subir-ejemplo {{ margin-top: 28px; }}
+.subir-ejemplo-texto {{ font-size: 14px; color: var(--texto2); }}
+.st-key-subir-abrir-ejemplo button {{ padding: 0; min-height: 0; }}
+.st-key-subir-abrir-ejemplo button p {{ font-size: 14px; color: var(--tinta); text-decoration: underline;
+  text-underline-offset: 3px; }}
+.st-key-subir-abrir-ejemplo button:hover p {{ color: var(--rojo-osc); }}
+
 /* Streamlit da estilo propio a h1-h3 y p dentro de Markdown; estas reglas ganan por especificidad. */
 .stApp .marco .marco-titulo, .stApp .encabezado h1, .stApp h2.seccion {{ font-family: var(--f-titular); font-weight: 900; }}
 .stApp .marco .marco-titulo {{ font-size: 34px; line-height: 1; padding: 0 14px; margin: 0; }}
