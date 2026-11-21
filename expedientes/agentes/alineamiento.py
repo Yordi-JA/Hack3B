@@ -53,7 +53,7 @@ log = logging.getLogger(__name__)
 
 # Severidades configurables. El reto castiga descartar expedientes que sí podían continuar,
 # así que lo que se resuelve con un trámite (renovar la constancia) es REVISION, no BLOQUEANTE.
-SEVERIDAD_VENCIDA = Severidad.REVISION
+SEVERIDAD_VENCIDA = Severidad.BLOQUEANTE  # criterio confirmado por los organizadores: vencido a hoy = No cumple
 SEVERIDAD_SIN_NUMERO = Severidad.REVISION
 # Criterio del equipo: afectación vial = rechazo directo. Pendiente confirmar con las guías oficiales
 # la severidad de infraestructura, invasión de vía pública y lotes sin fusionar.
@@ -302,9 +302,18 @@ def calcular_vencimiento(ext: ExtraccionAlineamiento) -> tuple[Optional[date], s
     return None, "sin_dato"
 
 
-def evaluar(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto) -> list[Hallazgo]:
+_CAMPOS_RIESGO = {"ALI-03": "afectaciones", "ALI-08": "infraestructura", "ALI-09": "invasion_via_publica",
+                  "ALI-10": "lotes_sin_fusionar"}
+
+
+def evaluar(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
+            no_verificados: list[str] = ()) -> list[Hallazgo]:
     hs: list[Hallazgo] = []
     NE, C, NC = EstadoRegla.NO_EVALUABLE, EstadoRegla.CUMPLE, EstadoRegla.NO_CUMPLE
+    # Contrato: un dato que no se pudo verificar cuenta como ausente (NO_EVALUABLE, nunca NO_CUMPLE).
+    nv = set(no_verificados)
+    riesgo_sin_verificar = {r for r, campo in _CAMPOS_RIESGO.items() if campo in nv}
+    ext = ext.model_copy(update={n: None for n in nv if n in ExtraccionAlineamiento.model_fields})
 
     # ALI-01 número oficial asignado
     no = ext.numero_oficial and nz.numero_oficial(ext.numero_oficial.normalizado or ext.numero_oficial.valor)
@@ -359,7 +368,11 @@ def evaluar(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto) -> 
          "El predio se compone de lotes o fracciones sin fusionar: «{v}». Se requiere el trámite de fusión.", []),
     ]
     for id_regla, desc, dato, severidad, plantilla, ev_extra in riesgos:
-        if dato:
+        if id_regla in riesgo_sin_verificar:
+            hs.append(_h(id_regla, desc, NE, Severidad.REVISION,
+                         "El modelo reportó este riesgo, pero su cita no se encontró en el texto del documento: "
+                         "confirmarlo contra el original."))
+        elif dato:
             hs.append(_h(id_regla, desc, NC, severidad, plantilla.format(v=dato.valor), _ev(doc, dato) + ev_extra))
         elif ext.contiene_alineamiento and ext.alineamiento:
             hs.append(_h(id_regla, desc, C, Severidad.INFO,
@@ -482,8 +495,9 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
             c = datos.vigencia_hasta
         if isinstance(c, Campo):
             c.normalizado = None
+            c.evidencia = None
 
-    hallazgos = evaluar(ext, doc, ctx)
+    hallazgos = evaluar(ext, doc, ctx, no_verificados or [])
     if no_verificados:
         hallazgos.append(_h("ALI-EVI", "Las citas de los datos extraídos están en el documento", EstadoRegla.NO_EVALUABLE,
                             Severidad.REVISION,
