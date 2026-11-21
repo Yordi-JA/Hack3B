@@ -267,7 +267,7 @@
       },
       "hallazgos": [
         {
-          "id_regla": "PRE-01",
+          "id_regla": "PRE-03",
           "descripcion": "Predial pagado del ejercicio vigente",
           "estado": "no_cumple",
           "severidad": "revision",
@@ -281,7 +281,7 @@
           ]
         },
         {
-          "id_regla": "PRE-02",
+          "id_regla": "PRE-04",
           "descripcion": "Sin adeudos de impuesto predial",
           "estado": "no_cumple",
           "severidad": "bloqueante",

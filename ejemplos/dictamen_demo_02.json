@@ -154,7 +154,7 @@
           ]
         },
         {
-          "id_regla": "ESC-02",
+          "id_regla": "ESC-08",
           "descripcion": "Inscripción en el Registro Público de la Propiedad",
           "estado": "cumple",
           "severidad": "info",
@@ -291,7 +291,7 @@
       },
       "hallazgos": [
         {
-          "id_regla": "PRE-01",
+          "id_regla": "PRE-03",
           "descripcion": "Predial pagado del ejercicio vigente",
           "estado": "cumple",
           "severidad": "info",
@@ -305,7 +305,7 @@
           ]
         },
         {
-          "id_regla": "PRE-02",
+          "id_regla": "PRE-04",
           "descripcion": "Sin adeudos de impuesto predial",
           "estado": "cumple",
           "severidad": "info",
@@ -660,7 +660,7 @@
           ]
         },
         {
-          "id_regla": "USO-03",
+          "id_regla": "USO-04",
           "descripcion": "Condicionantes de la licencia",
           "estado": "cumple",
           "severidad": "info",

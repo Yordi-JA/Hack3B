@@ -164,15 +164,41 @@ def insignia_estatus(e: "Dec.Estatus") -> str:
     return f'<span class="insignia est-{clase_tono(Dec.TONO[e])}" style="background:{Dec.TONO[e].fondo}">{txt(e.value)}</span>'
 
 
-def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Estatus") -> str:
+def _motivo_fila(d: Dictamen, params: dict[str, str], categoria: Optional["L.Categoria"]) -> str:
+    """Debajo de la recomendación: el motivo principal como enlace que filtra por su categoría. Con un
+    filtro de motivo activo se muestra el motivo de esa categoría y, si no es el principal, también éste."""
+    ms = L.motivos(d) if d.recomendacion != Recomendacion.CUMPLE else []
+    principal = ms[0] if ms else None
+    mostrado = L.motivo_de_categoria(d, categoria) if categoria else principal
+    if mostrado is None:
+        return ""
+    tono = t.SEVERIDAD[mostrado.severidad]
+    href = url(**L.aplicar_filtro(params, "mot", mostrado.categoria.value))
+    extra = ""
+    if categoria and principal and principal.categoria != categoria:
+        extra = f' <span class="t-tambien">(también: {txt(L.MOTIVO[principal.categoria])})</span>'
+    return (
+        f'<a class="t-motivo est-{clase_tono(tono)}" style="color:{tono.texto}" href="{escape(href)}" target="_self" '
+        f'title="Filtrar por {txt(L.MOTIVO[mostrado.categoria])}">{txt(mostrado.etiqueta)}</a>{extra}'
+    )
+
+
+def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Estatus",
+                    params: Optional[dict[str, str]] = None, categoria: Optional["L.Categoria"] = None) -> str:
+    """Una fila de la tabla. La fila es un div: el enlace del identificador se estira sobre toda la fila
+    para abrir el detalle, y el enlace del motivo queda encima para filtrar sin abrir el detalle (un
+    enlace dentro de otro no es HTML válido)."""
     u = L.consolidar_ubicacion(d)
     recibidos = sum(1 for tr in L.documentos_por_tipo(d) if tr.recibido)
     tono = t.ESTADO[d.recomendacion]
     ejemplo = ' <small class="t-ej">Ejemplo</small>' if es_ejemplo else ""
+    motivo = _motivo_fila(d, params or {}, categoria)
     celdas = (
-        f'<span class="t-id">{txt(d.expediente_id)}{ejemplo}</span>',
+        f'<a class="t-id t-abrir" href="{escape(url(vista="detalle", exp=clave))}" target="_self">'
+        f'{txt(d.expediente_id)}{ejemplo}</a>',
         f'<span class="t-lugar">{txt(texto_ubicacion(u))}</span>',
-        f'<span class="t-rec est-{clase_tono(tono)}"><i style="background:{tono.mapa}"></i>{txt(d.recomendacion.value)}</span>',
+        f'<span class="t-rec est-{clase_tono(tono)}"><i style="background:{tono.mapa}"></i>{txt(d.recomendacion.value)}</span>'
+        + (f'<span class="t-motivo-linea">{motivo}</span>' if motivo else ""),
         insignia_estatus(estatus),
         f"<span>{recibidos} de 4</span>",
         f"<span>{len(d.inconsistencias)}</span>",
@@ -180,15 +206,24 @@ def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Est
         f'<span class="t-fecha">{fecha(d.fecha_analisis)}</span>',
     )
     cuerpo = "".join(f'<span class="t-celda" role="cell" data-col="{escape(n)}">{c}</span>' for n, c in zip(COLUMNAS_TABLA, celdas))
-    return f'<a class="t-fila" role="row" href="{escape(url(vista="detalle", exp=clave))}" target="_self">{cuerpo}</a>'
+    return f'<div class="t-fila" role="row">{cuerpo}</div>'
 
 
-def tabla_expedientes(filas: Iterable[tuple[str, Dictamen, bool, "Dec.Estatus"]]) -> str:
+def tabla_expedientes(filas: Iterable[tuple[str, Dictamen, bool, "Dec.Estatus"]],
+                      params: Optional[dict[str, str]] = None, categoria: Optional["L.Categoria"] = None) -> str:
     cab = "".join(f'<span class="t-celda" role="columnheader">{n}</span>' for n in COLUMNAS_TABLA)
     return (
         f'<div class="t-tabla" role="table" aria-label="Expedientes"><div class="t-cab" role="row">{cab}</div>'
-        + "".join(fila_expediente(*f) for f in filas)
+        + "".join(fila_expediente(*f, params=params, categoria=categoria) for f in filas)
         + "</div>"
+    )
+
+
+def filtro_motivo_activo(categoria: "L.Categoria", params: dict[str, str]) -> str:
+    href = url(**L.aplicar_filtro(params, "mot", ""))
+    return (
+        f'<p class="filtro-activo">Filtrando por motivo: <b>{txt(L.nombre_motivo(categoria))}</b> · '
+        f'<a href="{escape(href)}" target="_self">Quitar filtro</a></p>'
     )
 
 
@@ -473,16 +508,32 @@ def _evidencia(it: L.Pendiente) -> str:
     return ""
 
 
+def resumen_motivos(d: Dictamen) -> str:
+    """'Descartado por: uso de suelo (2) · adeudos de predial (1)' y 'En revisión por: ...'."""
+    from expedientes.motivos import resumen_por_categoria
+
+    filas = resumen_por_categoria(d)
+    lineas = []
+    for sev, titulo, tono in ((Severidad.BLOQUEANTE, "Descartado por", "vino"), (Severidad.REVISION, "En revisión por", "ambar")):
+        partes = [f"{txt(L.MOTIVO[f.categoria])} ({f.total})" for f in filas if f.severidad == sev]
+        if partes:
+            lineas.append(f'<p class="motivos-resumen"><b class="est-{tono}">{titulo}:</b> {" · ".join(partes)}</p>')
+    return "".join(lineas)
+
+
 def lista_pendientes(d: Dictamen, pend: Optional[tuple] = None) -> str:
     items, sueltas = pend or L.pendientes(d)
+    ms = L.motivos(d)
     if items:
         filas = []
         for it in items:
             evid = _evidencia(it)
             detalle = f'<details class="ev"><summary>Evidencia</summary>{evid}</details>' if evid else ""
+            m = L.motivo_de_pendiente(it, ms)
+            motivo = f' · <span class="est-{clase_tono(t.SEVERIDAD[m.severidad])}">{txt(m.etiqueta)}</span>' if m else ""
             filas.append(
                 f'<li><p class="resolver-texto">{txt(it.texto)}</p>'
-                f'<p class="resolver-meta">{_sev(it.severidad)} · {_archivos(it.archivos)}</p>{detalle}</li>'
+                f'<p class="resolver-meta">{_sev(it.severidad)}{motivo} · {_archivos(it.archivos)}</p>{detalle}</li>'
             )
         cuerpo = f'<ol class="resolver">{"".join(filas)}</ol>'
     else:

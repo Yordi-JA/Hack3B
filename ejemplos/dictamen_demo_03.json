@@ -154,7 +154,7 @@
           ]
         },
         {
-          "id_regla": "ESC-02",
+          "id_regla": "ESC-08",
           "descripcion": "Inscripción en el Registro Público de la Propiedad",
           "estado": "no_evaluable",
           "severidad": "revision",
@@ -291,7 +291,7 @@
       },
       "hallazgos": [
         {
-          "id_regla": "PRE-01",
+          "id_regla": "PRE-03",
           "descripcion": "Predial pagado del ejercicio vigente",
           "estado": "cumple",
           "severidad": "info",
@@ -305,7 +305,7 @@
           ]
         },
         {
-          "id_regla": "PRE-03",
+          "id_regla": "PRE-01",
           "descripcion": "El contribuyente es el titular del inmueble",
           "estado": "no_cumple",
           "severidad": "revision",
@@ -701,7 +701,7 @@
   ],
   "inconsistencias": [
     {
-      "id_regla": "CRU-PRO",
+      "id_regla": "CRU-PROP",
       "campo": "propietario",
       "descripcion": "El predial está a nombre de la vendedora (Mercedes Aguirre Beltrán); la escritura y el uso de suelo, a nombre del comprador.",
       "severidad": "revision",

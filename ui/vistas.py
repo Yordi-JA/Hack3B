@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import traceback
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,7 +23,7 @@ from . import archivos as A
 from . import decisiones as Dec
 from . import mapa, store, tour, trabajos
 
-FILTROS = ("entidad", "rec", "est", "q", "ej")
+FILTROS = ("entidad", "rec", "est", "q", "ej", "mot")
 POR_PAGINA = 25
 # Usuario de la demo (no hay inicio de sesión): nombre y rol que se muestran en la barra lateral y el saludo.
 USUARIO = ("Ana Martínez", "Abogada · Expansión")
@@ -131,9 +132,49 @@ def boton_recorrido() -> None:
     recorrido está activo, para no tapar sus tarjetas."""
     if tour.activo() is not None:
         return
+    restante = segundos_globo(st.session_state)
+    if restante > 0:
+        # El globo se desvanece solo al cumplirse el tiempo; con movimiento reducido solo desaparece.
+        # El tiempo del servidor es por sesión de Streamlit, y cada enlace de la app recarga la página y abre
+        # otra; el guion anota la primera vez en sessionStorage de la pestaña y gana el menor de los dos.
+        demora = f"min({restante:.1f}s, var(--globo-restante, {restante:.1f}s))"
+        st.html(
+            "<style>.st-key-tour-fab-etiqueta { animation: globo-fuera var(--globo-dur, .4s) ease "
+            + demora
+            + " forwards; } @media (prefers-reduced-motion: reduce) "
+            "{ .st-key-tour-fab-etiqueta { animation-duration: 0s; } }</style>"
+        )
+        with st.container(key="tour-globo-guion"):
+            st.html(GUION_GLOBO, unsafe_allow_javascript=True)
     with st.container(key="tour-fab-caja", horizontal=True, vertical_alignment="center", gap="small"):
-        st.button("¿Cómo se usa?", key="tour-fab-etiqueta", on_click=_iniciar_tour)
+        if restante > 0:
+            st.button("¿Quieres un recorrido?", key="tour-fab-etiqueta", on_click=_iniciar_tour)
         st.button("Ver recorrido guiado", key="tour-fab", on_click=_iniciar_tour)
+
+
+GLOBO_SEGUNDOS = 40
+
+
+def segundos_globo(estado, ahora: Optional[float] = None) -> float:
+    """Segundos que le quedan al globo "¿Quieres un recorrido?" en esta sesión. La primera vez que se
+    pide se anota la hora; en los reruns ya no vuelve a empezar."""
+    ahora = time.time() if ahora is None else ahora
+    desde = estado.setdefault("tour_globo_desde", ahora)
+    return max(0.0, GLOBO_SEGUNDOS - (ahora - desde))
+
+
+# Guion fijo (sin datos del expediente): primera vez que esta pestaña vio el globo, en sessionStorage.
+GUION_GLOBO = f"""<script>
+(() => {{
+  const clave = "tour-globo-desde", ahora = Date.now();
+  let desde = Number(sessionStorage.getItem(clave));
+  if (!desde) {{ desde = ahora; sessionStorage.setItem(clave, String(desde)); }}
+  const resta = Math.max(0, {GLOBO_SEGUNDOS * 1000} - (ahora - desde));
+  const raiz = document.documentElement.style;
+  raiz.setProperty("--globo-restante", resta + "ms");
+  if (resta === 0) raiz.setProperty("--globo-dur", "0s");
+}})();
+</script>"""
 
 
 # ------------------------------------------------------------------ bandeja
@@ -148,6 +189,10 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     if "f_rec" not in st.session_state:
         rec_url = st.query_params.get("rec")
         st.session_state["f_rec"] = rec_url if rec_url in {r.value for r in Recomendacion} else None
+    if "f_mot" not in st.session_state:
+        cat_url = L.categoria_de(st.query_params.get("mot"))
+        st.session_state["f_mot"] = cat_url.value if cat_url else ""
+    categoria = L.categoria_de(st.session_state.get("f_mot"))
     visibles = [e for e in entradas if st.session_state["f_ej"] or not e.es_ejemplo]
     texto = st.session_state.get("f_q") or ""
     base = [e for e in visibles if L.coincide(e.dictamen, entidad_actual or None, None, texto)]
@@ -185,12 +230,28 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     # Repositorio: buscador y filtros justo arriba de la tabla.
     historial = Dec.cargar()
     est = _filtro("est")
+    rec = st.session_state.get("f_rec")
+    # Todos los filtros menos el de motivo: de aquí salen los conteos de cada opción de "Motivo".
+    sin_motivo = [
+        e for e in base
+        if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
+        and (not est or Dec.estatus(historial, e.clave).value == est)
+    ]
+    por_motivo = L.conteo_por_motivo((e.dictamen, e.es_ejemplo) for e in sin_motivo)
+    opciones_motivo = [""] + [c.value for c in por_motivo]
+    if categoria and categoria.value not in opciones_motivo:
+        opciones_motivo.append(categoria.value)  # el filtro activo sigue a la vista aunque ya no tenga conteo
     filtros = st.container(key="b-filtros")
-    b1, f1, b3 = filtros.columns([2, 1, 1], vertical_alignment="bottom")
+    b1, f1, fm, b3 = filtros.columns([1.7, 1, 1.2, 1], vertical_alignment="bottom")
     with b1:
         st.text_input(
             "Buscar", key="f_q", on_change=_sincronizar, args=("q",),
             placeholder="Identificador, municipio, propietario o archivo", icon=":material/search:",
+        )
+    with fm:
+        st.selectbox(
+            "Motivo", opciones_motivo, key="f_mot", on_change=_sincronizar, args=("mot",),
+            format_func=lambda v: L.opcion_motivo(L.Categoria(v), por_motivo.get(L.Categoria(v))) if v else "Todos",
         )
     with b3:
         st.selectbox(
@@ -216,16 +277,11 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         )
     with f3:
         st.toggle(
-            "Incluir expedientes de ejemplo", key="f_ej", on_change=_sincronizar, args=("ej",),
+            "Incluir ejemplos", key="f_ej", on_change=_sincronizar, args=("ej",),
             help="Los ejemplos son dictámenes inventados para probar la pantalla. Ocúltalos cuando haya resultados reales.",
         )
 
-    rec = st.session_state.get("f_rec")
-    filtrados = [
-        e for e in base
-        if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
-        and (not est or Dec.estatus(historial, e.clave).value == est)
-    ]
+    filtrados = [e for e in sin_motivo if not categoria or L.coincide(e.dictamen, categoria=categoria)]
     filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
     html('<div id="expedientes" class="ancla"></div>')
@@ -233,18 +289,26 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
         donde = f"en {mapa.nombre_entidad(entidad_actual)}" if entidad_actual and entidad_actual != L.SIN_ENTIDAD else ""
         titulo = f"Expedientes {C.txt(donde)}" if donde else "Expedientes"
         html(f'<h2 class="lista-titulo">{titulo} <small>{len(filtrados)}</small></h2>')
+        if categoria:
+            html(C.filtro_motivo_activo(categoria, enlace))
+        if filtrados:
+            st.download_button(
+                "Descargar seguimiento (CSV)", L.csv_seguimiento((e.dictamen for e in filtrados), categoria),
+                file_name="seguimiento_expedientes.csv", mime="text/csv", type="tertiary", key="b-csv",
+            )
         if not visibles:
-            st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
+            st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir ejemplos” para verlos.")
         elif not filtrados:
             st.info("Ningún expediente coincide con los filtros.")
             st.button("Quitar filtros", on_click=_quitar_filtros)
         else:
-            _tabla(filtrados, historial, enlace)
+            _tabla(filtrados, historial, enlace, categoria)
 
     tour.mostrar(html)
 
 
-def _tabla(filas: list[store.Entrada], historial: dict, params: dict[str, str]) -> None:
+def _tabla(filas: list[store.Entrada], historial: dict, params: dict[str, str],
+           categoria: Optional[L.Categoria] = None) -> None:
     """Tabla paginada: aguanta miles de expedientes sin volverse una pared de tarjetas."""
     try:
         pagina = max(1, int(st.query_params.get("pag", "1")))
@@ -253,7 +317,8 @@ def _tabla(filas: list[store.Entrada], historial: dict, params: dict[str, str]) 
     paginas = max(1, -(-len(filas) // POR_PAGINA))
     pagina = min(pagina, paginas)
     tramo = filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
-    html(C.tabla_expedientes((e.clave, e.dictamen, e.es_ejemplo, Dec.estatus(historial, e.clave)) for e in tramo))
+    html(C.tabla_expedientes(((e.clave, e.dictamen, e.es_ejemplo, Dec.estatus(historial, e.clave)) for e in tramo),
+                             params, categoria))
     html(C.paginador(pagina, POR_PAGINA, len(filas), params))
 
 
@@ -322,7 +387,7 @@ def _volver_inicio(clave: Optional[str]) -> None:
 
 def _quitar_filtros() -> None:
     st.query_params.pop("pag", None)
-    for nombre in ("entidad", "rec", "est", "q"):
+    for nombre in ("entidad", "rec", "est", "q", "mot"):
         st.session_state[f"f_{nombre}"] = None if nombre == "rec" else ""
         st.query_params.pop(nombre, None)
 
@@ -575,6 +640,7 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
 
     # 2. Qué hay que resolver: una sola lista, priorizada
     html(C.seccion(f"Qué hay que resolver ({len(pend[0])})", "resolver"))
+    html(C.resumen_motivos(d))
     html(C.lista_pendientes(d, pend))
 
     # 3. Documentos recibidos y faltantes

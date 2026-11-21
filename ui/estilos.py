@@ -389,6 +389,8 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
   transform: translateY(-50%) rotate(45deg); }}
 .st-key-tour-fab-etiqueta button:hover {{ transform: translateY(-2px); background: #fff; border-color: var(--rojo-osc); }}
 .st-key-tour-fab-etiqueta button:hover p {{ color: var(--rojo-osc); }}
+@keyframes globo-fuera {{ to {{ opacity: 0; visibility: hidden; }} }}
+.st-key-tour-globo-guion {{ display: none; }}
 .st-key-tour-fab button:focus-visible, .st-key-tour-fab-etiqueta button:focus-visible {{
   outline: 3px solid var(--tinta); outline-offset: 3px; }}
 @media (prefers-reduced-motion: reduce) {{
@@ -509,14 +511,32 @@ a.kpi.kpi-activo {{ border-color: var(--rojo-osc); box-shadow: inset 0 0 0 2px v
 
 /* Tabla de expedientes (repositorio): encabezado con nombre de columna y una fila por expediente. */
 .t-tabla {{ margin-top: 14px; border: 2px solid var(--tinta); border-radius: 6px; overflow: hidden; background: #fff; }}
-.t-cab, a.t-fila {{ display: grid; align-items: center; gap: 12px; padding: 0 16px;
-  grid-template-columns: 1.3fr 1.8fr 1.2fr 1fr .75fr 1.05fr .7fr 1fr; }}
+.t-cab, .t-fila {{ display: grid; align-items: center; gap: 12px; padding: 0 16px;
+  grid-template-columns: 1.3fr 1.6fr 1.6fr 1fr .75fr 1.05fr .7fr 1fr; }}
 .t-cab {{ background: var(--panel); color: var(--tinta); border-bottom: 2px solid var(--tinta); font-size: 12px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .04em; min-height: 40px; }}
-a.t-fila {{ min-height: 48px; font-size: 14px; color: var(--texto); text-decoration: none; border-top: 1px solid var(--borde); }}
-a.t-fila:nth-child(odd) {{ background: #FAFBF8; }}
-a.t-fila:hover, a.t-fila:focus {{ background: #FDECEC; color: var(--texto); text-decoration: none; }}
+.t-fila {{ min-height: 48px; font-size: 14px; color: var(--texto); text-decoration: none; border-top: 1px solid var(--borde); }}
+.t-fila:nth-child(odd) {{ background: #FAFBF8; }}
+.t-fila:hover, .t-fila:focus {{ background: #FDECEC; color: var(--texto); text-decoration: none; }}
 .t-celda {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 8px 0; }}
+/* Fila: el enlace del identificador se estira sobre la fila (abre el detalle); el del motivo va encima. */
+.t-fila {{ position: relative; }}
+a.t-abrir {{ color: var(--tinta); text-decoration: none; }}
+a.t-abrir::after {{ content: ""; position: absolute; inset: 0; }}
+.t-fila:focus-within {{ outline: 3px solid var(--tinta); outline-offset: -3px; }}
+a.t-abrir:focus-visible {{ outline: none; }}
+.t-rec {{ display: block; }}
+.t-motivo-linea {{ display: block; font-size: 12px; line-height: 1.35; white-space: normal; margin-top: 2px; }}
+a.t-motivo {{ position: relative; z-index: 1; font-weight: 600; text-decoration: none; }}
+a.t-motivo:hover, a.t-motivo:focus-visible {{ text-decoration: underline; text-underline-offset: 2px; }}
+a.t-motivo:focus-visible {{ outline: 3px solid var(--tinta); outline-offset: 1px; }}
+.t-tambien {{ color: var(--texto2); }}
+/* Lista desplegable de los selectbox: tan ancha como su opción más larga (las del filtro Motivo llevan
+   conteos), sin pasar de 480px; nunca más angosta que el campo. */
+[data-testid="stSelectboxVirtualDropdown"] {{ width: max-content !important; min-width: 200px; max-width: 480px; }}
+.filtro-activo {{ font-size: 14px; color: var(--texto); margin: 8px 0 0; }}
+.filtro-activo a {{ color: var(--tinta); text-decoration: underline; }}
+.motivos-resumen {{ font-size: 14px; color: var(--texto); margin: 4px 0; }}
 .t-id {{ font-weight: 700; color: var(--tinta); }}
 .t-ej {{ font-size: 11px; font-weight: 600; color: var(--texto2); border: 1px solid var(--borde); border-radius: 4px; padding: 0 4px; margin-left: 4px; }}
 .t-rec {{ font-weight: 700; }}
@@ -546,8 +566,8 @@ a.pag-btn:hover {{ background: var(--verde); border-color: var(--verde); color: 
   .estado-resumen {{ grid-template-columns: 1fr; }}
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
   .mapa-cuerpo {{ grid-template-columns: 1fr; }}
-  .t-cab, a.t-fila {{ grid-template-columns: 1.3fr 1.6fr 1.2fr 1fr .9fr; }}
-  .t-cab .t-celda:nth-child(n+6), a.t-fila .t-celda:nth-child(n+6) {{ display: none; }}
+  .t-cab, .t-fila {{ grid-template-columns: 1.3fr 1.5fr 1.6fr 1fr .9fr; }}
+  .t-cab .t-celda:nth-child(n+6), .t-fila .t-celda:nth-child(n+6) {{ display: none; }}
 }}
 
 /* escritorio angosto (1280): más aire para el texto del dictamen */
