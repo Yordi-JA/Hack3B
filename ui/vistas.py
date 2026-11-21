@@ -635,3 +635,4 @@ def main() -> None:
         vista_estado(entradas, st.query_params.get("entidad"))
     else:
         vista_bandeja(entradas, invalidos)
+    st.html(C.paisaje())  # pie de todas las vistas, también los estados vacíos y "no encontrado"
