@@ -104,7 +104,9 @@ def _paginas_como_texto(doc: DocumentoLeido) -> str:
 
 
 def extraer(doc: DocumentoLeido) -> ExtraccionAlineamiento:
-    llm = get_llm().with_structured_output(ExtraccionAlineamiento)
+    # json_schema = salida estructurada nativa de Claude: el JSON siempre cumple el esquema.
+    # El modo por defecto (tool calling) no puede forzarse en Opus 5.5 / Sonnet 5.5.
+    llm = get_llm().with_structured_output(ExtraccionAlineamiento, method="json_schema")
     mensajes = [
         ("system", INSTRUCCIONES),
         ("human", f"Archivo: {doc.archivo}\n\n{_paginas_como_texto(doc)}"),

@@ -113,7 +113,7 @@ def _direcciones_llm(a: str, b: str) -> Optional[bool]:
         return None
     try:
         from ..config import get_callbacks, get_llm
-        llm = get_llm().with_structured_output(_Veredicto)
+        llm = get_llm().with_structured_output(_Veredicto, method="json_schema")
         r = llm.invoke(
             [("system", "Eres el agente de validación cruzada de un expediente inmobiliario en México. "
                         "Decide si dos direcciones, escritas por documentos distintos, describen el mismo predio. "
