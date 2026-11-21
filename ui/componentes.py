@@ -554,9 +554,14 @@ def detalle_completo(d: Dictamen) -> str:
 PAISAJE = Path(__file__).resolve().parent / "assets" / "paisaje.webp"
 
 
-@lru_cache(maxsize=1)
 def paisaje() -> str:
     """Ilustración 3B al pie de cada vista. Decorativa: sin texto alternativo y oculta a lectores de pantalla."""
+    return _paisaje(PAISAJE.stat().st_mtime_ns)
+
+
+@lru_cache(maxsize=1)
+def _paisaje(_version: int) -> str:
+    """Se cachea por fecha del archivo: si cambia paisaje.webp, la app lo toma sin reiniciar."""
     datos = base64.b64encode(PAISAJE.read_bytes()).decode("ascii")
     return (
         '<div class="paisaje" aria-hidden="true">'
