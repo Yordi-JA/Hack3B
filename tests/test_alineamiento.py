@@ -110,3 +110,17 @@ def test_solo_numero_oficial_no_penaliza_alineamiento():
     assert _regla(r, "ALI-01").estado == EstadoRegla.CUMPLE
     assert _regla(r, "ALI-04").severidad == Severidad.INFO
     assert r.datos.numero_oficial.normalizado == "15"
+
+
+def test_evaluador_compara_campos():
+    from expedientes.agentes.evaluar_alineamiento import comparar
+    r = ali.construir(_ext(), _doc(), Contexto(fecha_referencia=date(2026, 1, 15)))
+    verdad = {"propietario": "SILVIA ADRIANA PEÑALOZA RUIZ", "direccion": "Avenida de las Torres S/N, Col. El Mirador",
+              "numero_oficial": None, "clave_catastral": "0770431012000000", "superficie_m2": 300.0,
+              "fecha_emision": "2025-06-09", "vigencia_hasta": "2026-06-09", "afectaciones": "AFECTACIÓN DE 4.00 M"}
+    res = comparar(verdad, r)
+    assert all(x["estado"] == "ok" for x in res.values()), res
+    verdad["superficie_m2"] = 450.0
+    verdad["numero_oficial"] = "28"
+    res = comparar(verdad, r)
+    assert res["superficie_m2"]["estado"] == "distinto" and res["numero_oficial"]["estado"] == "faltó"
