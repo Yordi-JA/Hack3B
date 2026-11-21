@@ -284,29 +284,45 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .hallazgo p {{ font-size: 14px; line-height: 1.5; margin: 0 0 6px; }}
 .vacio-msg {{ color: var(--texto2); font-size: 14px; }}
 
-/* ---- Subir expediente (vista "nuevo"): todo lo de esta vista va en este bloque ---- */
+/* ---- Subir expediente (vista "nuevo"): todo lo de esta vista va en este bloque ----
+   Todas las líneas de la vista son de 2 px en tinta con esquinas rectas: marco, campos y botones. */
 .st-key-subir {{ max-width: 1100px; }}
-.st-key-subir-marco {{ position: relative; border: 1.5px solid var(--tinta); border-radius: 4px;
-  padding: 30px 22px 20px; margin-top: 22px; overflow: visible; }}
+.st-key-subir-marco {{ position: relative; border: 2px solid var(--tinta); border-radius: 0;
+  padding: 30px 22px 20px; margin-top: 52px; overflow: visible; }}
 .st-key-subir-marco::before {{ content: "Expediente"; position: absolute; top: 0; left: 14px; transform: translateY(-55%);
   background: var(--panel); padding: 0 10px; font-family: var(--f-titular); font-weight: 900; font-size: 18px;
   line-height: 1; color: var(--tinta); text-transform: uppercase; }}
-.st-key-subir-nombre [data-testid="stTextInputRootElement"] {{ border: 1.5px solid var(--tinta); border-radius: 4px;
-  background: #fff; }}
+.st-key-subir-nombre [data-testid="stWidgetLabel"] p, .st-key-subir-archivos [data-testid="stWidgetLabel"] p {{
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--tinta); }}
+.st-key-subir-nombre [data-testid="stTextInputRootElement"] {{ height: 48px; border: 2px solid var(--tinta);
+  border-radius: 0; background: #fff; }}
 .st-key-subir-nombre [data-testid="stTextInputRootElement"]:focus-within {{ border-color: var(--rojo-osc);
   box-shadow: 0 0 0 2px var(--rojo-osc); }}
 .st-key-subir-nombre input::placeholder {{ color: var(--texto2); opacity: 1; }}
 /* Streamlit muestra "Press Enter to submit form" en inglés y encima del texto de ejemplo. */
 .st-key-subir-nombre [data-testid="InputInstructions"] {{ display: none; }}
-.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] {{ border: 1.5px solid var(--tinta); border-radius: 4px;
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] {{ border: 2px dashed var(--tinta); border-radius: 0;
   background: #fff; min-height: 180px; padding: 24px; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 12px; text-align: center; }}
 .st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:focus-within {{ border-color: var(--rojo-osc); }}
 .st-key-subir-archivos [data-testid="stFileUploaderDropzone"]::before {{
-  content: "Arrastra aquí los PDF o imágenes del expediente"; font-size: 16px; font-weight: 600; color: var(--tinta); }}
-.subir-esperados {{ margin-top: 22px; }}
+  content: "Arrastra aquí los archivos del expediente"; font-size: 16px; font-weight: 600; color: var(--tinta); }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] button {{ border-radius: 0; }}
+/* Al arrastrar archivos encima, Streamlit agrega un div sin data-testid con un aviso en inglés: borde rojo
+   y el aviso en español. La lista de archivos elegidos también es un div sin data-testid, pero contiene
+   stFileChips; por eso se excluye. El borde se detecta por el aviso seguido del botón, porque :has() no
+   admite otro :has() adentro. */
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:has(> div:not([data-testid]) + span) {{
+  border-color: var(--rojo-osc); }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] > div:not([data-testid]):not(:has([data-testid="stFileChips"])),
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] > div:not([data-testid]):not(:has([data-testid="stFileChips"])) * {{ font-size: 0 !important; }}
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] > div:not([data-testid]):not(:has([data-testid="stFileChips"]))::after {{
+  content: "Suelta los archivos para agregarlos"; font-size: 16px; font-weight: 600; color: var(--rojo-osc); }}
+.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button {{ border-radius: 0; }}
+/* La columna derecha arranca a la altura de la línea superior del marco. */
+.subir-esperados {{ margin-top: 52px; }}
 .stApp .subir-esperados h3 {{ font-family: var(--f-texto); font-size: 16px; font-weight: 700; color: var(--tinta);
-  margin: 0 0 4px; padding: 0; }}
+  margin: 0 0 4px; padding: 0; line-height: 1.2; }}
 .subir-esperados dl {{ margin: 0 0 16px; }}
 .subir-esperados dt {{ font-size: 14px; font-weight: 700; color: var(--tinta); margin-top: 12px; }}
 .subir-esperados dd {{ font-size: 14px; line-height: 1.45; color: var(--texto2); margin: 2px 0 0; }}

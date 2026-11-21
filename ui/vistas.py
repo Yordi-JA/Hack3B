@@ -239,8 +239,8 @@ def _trabajo_pendiente() -> bool:
 
 
 def _estado_trabajo() -> None:
-    """Estado compacto del análisis en la barra lateral. Al terminar: si el usuario sigue en Nuevo
-    análisis se abre el dictamen; si está en otra pantalla, se avisa y se ofrece abrirlo."""
+    """Estado compacto del análisis en la barra lateral. Al terminar: si el usuario sigue en Subir
+    expediente se abre el dictamen; si está en otra pantalla, se avisa y se ofrece abrirlo."""
     trabajo = _trabajo()
     if not trabajo:
         return
@@ -251,13 +251,13 @@ def _estado_trabajo() -> None:
         if error is not None:
             st.session_state["error_trabajo"] = error
             if not en_nuevo:
-                st.session_state["aviso"] = "El análisis no terminó. Abre Subir expediente para ver el detalle."
+                st.session_state["aviso"] = "El análisis falló. Abre Subir expediente para ver el error."
         elif en_nuevo:
             ir("detalle", trabajo.futuro.result().clave)
         else:
             entrada = trabajo.futuro.result()
             st.session_state["listo"] = entrada.clave
-            st.session_state["aviso"] = f"Análisis terminado: {seguro(entrada.dictamen.expediente_id)}"
+            st.session_state["aviso"] = f"Dictamen listo: {seguro(entrada.dictamen.expediente_id)}"
         st.rerun(scope="app")
         return
     seg = trabajo.segundos
@@ -295,32 +295,37 @@ def _abrir_listo(clave: str) -> None:
 def _mostrar_error(error: BaseException) -> None:
     if isinstance(error, NotImplementedError):
         st.error(
-            "El análisis automático todavía no está disponible en esta versión: falta implementar alguno de "
-            "los agentes. Mientras tanto puedes abrir el dictamen de ejemplo."
+            "El análisis automático aún no está disponible: falta conectar alguno de los agentes. "
+            "Mientras tanto puedes abrir el dictamen de ejemplo."
         )
     else:
         st.error(
-            "No se pudo analizar el expediente. Revisa que los archivos sean PDF o imágenes legibles y vuelve "
-            "a intentarlo. Si el error se repite, comparte el detalle técnico con quien mantiene los agentes."
+            "No se pudo analizar el expediente. Revisa que los archivos sean PDF o imágenes legibles e intenta "
+            "de nuevo. Si vuelve a fallar, manda el detalle técnico a quien mantiene los agentes."
         )
     with st.expander("Detalle técnico"):
         st.code("".join(traceback.format_exception(error)), language=None)
 
 
 def _archivos_validos(archivos) -> list[tuple[str, bytes]]:
-    """Prepara las subidas (ver store.preparar_subidas) y avisa lo que se dejó fuera."""
+    """Prepara las subidas (ver store.preparar_subidas) y guarda los avisos de lo que se dejó fuera.
+
+    Los avisos van a la sesión y los muestra vista_nuevo: al lanzar el análisis la página se recarga
+    y un st.warning dibujado antes se perdería.
+    """
     r = store.preparar_subidas([(a.name, a.getvalue()) for a in archivos])
+    avisos = st.session_state.setdefault("avisos_subida", [])
     if r.exceso:
-        st.warning(r.exceso)
+        avisos.append(r.exceso)
         return []
     if r.omitidos:
-        st.warning(
-            "Se omitieron archivos con un nombre que Windows no acepta (por ejemplo CON, NUL o con dos puntos): "
-            + ", ".join(seguro(n) for n in r.omitidos) + ". Cámbiales el nombre y súbelos de nuevo."
+        avisos.append(
+            "Estos archivos no se analizarán porque Windows no acepta su nombre (por ejemplo CON, NUL o con "
+            "dos puntos): " + ", ".join(seguro(n) for n in r.omitidos) + ". Cámbiales el nombre y vuelve a subirlos."
         )
     if r.repetidos:
-        st.warning(
-            "Hay archivos con el mismo nombre (sin contar mayúsculas) y solo se analizará el primero: "
+        avisos.append(
+            "Estos archivos repiten el nombre de otro (sin distinguir mayúsculas) y no se analizarán: "
             + ", ".join(seguro(n) for n in r.repetidos) + "."
         )
     return r.validos
@@ -340,7 +345,7 @@ def _documentos_esperados() -> str:
     return (
         '<div class="subir-esperados"><h3>Se esperan 4 documentos</h3>'
         f"<dl>{filas}</dl>"
-        "<p>No hace falta renombrar los archivos: el sistema reconoce el tipo de cada uno.</p></div>"
+        "<p>No hace falta renombrar los archivos: el tipo de cada documento se detecta al analizarlo.</p></div>"
     )
 
 
@@ -353,8 +358,9 @@ def vista_nuevo() -> None:
             with st.form("nuevo", border=False):
                 nombre = st.text_input(
                     "Nombre del expediente (opcional)", max_chars=80, key="subir-nombre",
-                    placeholder="Ej. TEPEJI-05. Si lo dejas vacío se usa la fecha y hora.",
-                    help="Máximo 80 caracteres. Si ya existe un expediente con ese nombre, el nuevo análisis lo reemplaza.",
+                    placeholder="Ej. TEPEJI-05",
+                    help="Máximo 80 caracteres. Si lo dejas vacío, se usa la fecha y hora. Si ya existe un "
+                         "expediente con ese nombre, se reemplaza.",
                 )
                 archivos = st.file_uploader(
                     "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
@@ -367,23 +373,26 @@ def vista_nuevo() -> None:
             html(_documentos_esperados())
 
         if pendiente:
-            st.info("Hay un análisis en curso; su avance se ve en la barra lateral. Puedes ir a la bandeja "
-                    "mientras tanto: al terminar se guarda y te avisamos.")
+            st.info("Hay un análisis en curso; el avance aparece en la barra lateral. Puedes ir a la bandeja "
+                    "mientras tanto: el dictamen se guarda al terminar y te avisamos.")
         if enviar and not pendiente:
             if not archivos:
-                st.warning("Agrega al menos un archivo del expediente antes de analizar.")
+                st.warning("Agrega al menos un archivo antes de analizar.")
             else:
+                st.session_state.pop("avisos_subida", None)
                 datos = _archivos_validos(archivos)
                 if datos:
                     st.session_state.pop("error_trabajo", None)
                     st.session_state.pop("listo", None)
                     trabajo = trabajos.lanzar(_analizar, datos, store.id_expediente(nombre), archivos=len(datos))
                     if trabajo is None:
-                        st.warning("Hay otro análisis en espera; intenta cuando termine.")
+                        st.warning("Ya hay otros análisis en curso. Intenta de nuevo cuando termine alguno.")
                     else:
                         st.session_state["trabajo"] = trabajo
                         st.rerun()
 
+        for aviso in st.session_state.pop("avisos_subida", []):
+            st.warning(aviso)
         error = st.session_state.pop("error_trabajo", None)
         if error is not None:
             _mostrar_error(error)
