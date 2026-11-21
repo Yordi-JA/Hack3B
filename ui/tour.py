@@ -1,8 +1,11 @@
 """Recorrido guiado (spotlight) de la bandeja. Dueño: Diego.
 
-Sin JavaScript: en cada paso se inyecta un bloque <style> que ilumina el elemento objetivo (un
-contenedor con `key`, que Streamlit expone como clase `.st-key-<key>`) y oscurece el resto. La
-tarjeta del paso es un contenedor fijo con botones de Streamlit, así que avanzar no recarga la página.
+En cada paso se inyecta un bloque <style> que ilumina el elemento objetivo (un contenedor con
+`key`, que Streamlit expone como clase `.st-key-<key>`) y oscurece el resto. La tarjeta del paso es
+un contenedor fijo con botones de Streamlit, así que avanzar no recarga la página.
+
+`GUION` es JavaScript que corre en la página principal (scroll al objetivo, foco y Esc). Es una
+constante: nunca interpoles datos en él en tiempo de ejecución.
 """
 from __future__ import annotations
 
@@ -156,7 +159,7 @@ def tarjeta(i: int) -> str:
     return (
         f'<div class="tour-paso"{objetivo}>Paso {i + 1} de {len(PASOS)}</div>'
         f'<h3 class="tour-titulo">{escape(p.titulo)}</h3><p class="tour-texto">{escape(p.texto)}</p>'
-        + (f'<a class="tour-ir" href="#{p.ancla}">Ir a esta sección ↓</a>' if p.ancla else "")
+        + (f'<a class="tour-ir" href="#{escape(p.ancla)}">Ir a esta sección ↓</a>' if p.ancla else "")
     )
 
 
