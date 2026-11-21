@@ -794,6 +794,8 @@ def main() -> None:
     vista = st.query_params.get("vista", "bandeja")
     if vista not in ("bandeja", "nuevo", "detalle", "estado", "documento"):
         vista = "bandeja"
+    if vista != "bandeja" and tour.activo() is not None:
+        tour.salir()  # el recorrido es del inicio: al irse a otra vista termina y vuelve el botón del gallo
     abierto = store.buscar(entradas, st.query_params.get("exp"))
     barra_lateral(vista, abierto)
     if vista == "nuevo":

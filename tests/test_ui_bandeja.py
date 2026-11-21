@@ -153,3 +153,22 @@ def test_documentos_enlaza_solo_archivos_disponibles():
     html = C.documentos(d, {primero: "?vista=documento&exp=e&doc=x"})
     assert html.count('class="doc-archivo doc-ver"') == 1 and "Ver documento" in html
     assert "Ver documento" not in C.documentos(d)
+
+
+def test_cada_paso_del_recorrido_apunta_a_un_contenedor_que_existe():
+    """Si un cambio de diseño quita o renombra el contenedor de un paso, esta prueba falla (antes el
+    recorrido se rompía en silencio)."""
+    fuente = (Path(__file__).resolve().parent.parent / "ui" / "vistas.py").read_text(encoding="utf-8")
+    for p in tour.PASOS:
+        if p.objetivo:
+            assert f'key="{p.objetivo}"' in fuente, p.titulo
+        if p.ancla:
+            assert f'id="{p.ancla}"' in fuente, p.titulo
+
+
+def test_guion_del_recorrido_es_constante_y_lee_el_objetivo_de_la_tarjeta():
+    assert "{{" not in tour.GUION and "data-objetivo" in tour.GUION and "Escape" in tour.GUION
+    i = next(k for k, p in enumerate(tour.PASOS) if p.objetivo == "b-filtros")
+    assert 'data-objetivo="b-filtros"' in tour.tarjeta(i)
+    assert "data-objetivo" not in tour.tarjeta(0)  # bienvenida: sin objetivo
+

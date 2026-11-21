@@ -388,7 +388,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .st-key-tour-fab-etiqueta button:hover {{ transform: translateY(-2px); background: #fff; border-color: var(--rojo-osc); }}
 .st-key-tour-fab-etiqueta button:hover p {{ color: var(--rojo-osc); }}
 @keyframes globo-fuera {{ to {{ opacity: 0; visibility: hidden; }} }}
-.st-key-tour-globo-guion {{ display: none; }}
+.st-key-tour-globo-guion, [class*="st-key-tour-guion-"] {{ display: none; }}
 .st-key-tour-fab button:focus-visible, .st-key-tour-fab-etiqueta button:focus-visible {{
   outline: 3px solid var(--tinta); outline-offset: 3px; }}
 @media (prefers-reduced-motion: reduce) {{
