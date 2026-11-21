@@ -118,6 +118,9 @@ def test_primera_oracion_no_corta_en_abreviaturas():
         "A nombre de Inmobiliaria Sur S.A. de C.V. con folio 9. Fin.": "A nombre de Inmobiliaria Sur S.A. de C.V. con folio 9.",
         "Firmó el Ing. Ruiz y la Sra. Gómez con el Dr. Paz y el Arq. Sol. Fin.":
             "Firmó el Ing. Ruiz y la Sra. Gómez con el Dr. Paz y el Arq. Sol.",
+        "A nombre de Juan P. Pérez, Av. 5 Pte. Núm. 3, Art. 27, Exp. 12, Fol. 9 y Mtro. Díaz. Fin.":
+            "A nombre de Juan P. Pérez, Av. 5 Pte. Núm. 3, Art. 27, Exp. 12, Fol. 9 y Mtro. Díaz.",
+        "Calle 3 Ote. esq. 4 Nte. en Sta. Ana y Sto. Tomás. Fin.": "Calle 3 Ote. esq. 4 Nte. en Sta. Ana y Sto. Tomás.",
     }
     for texto, esperado in casos.items():
         assert L.primera_oracion(texto) == esperado, texto
@@ -187,11 +190,62 @@ def test_regla_unida_aporta_sus_archivos():
     inc = Inconsistencia(
         id_regla="CRU-NUM", campo="numero_oficial", severidad=Severidad.REVISION, descripcion="17 contra 15.",
         valores=[ValorEncontrado(archivo="e.pdf", tipo=TipoDocumento.ESCRITURA, valor="15"),
+                 ValorEncontrado(archivo="a.pdf", tipo=TipoDocumento.ALINEAMIENTO, valor="17")])
+    d = _base([_doc("a.pdf", TipoDocumento.ALINEAMIENTO, [_h("ALI-01", "Asigna el 17, no el 15.")]),
+               _doc("a2.pdf", TipoDocumento.ALINEAMIENTO, [_h("ALI-01", "Tampoco: 17 contra 15.")])],
+              inconsistencias=[inc])
+    items = [it for it in L.pendientes(d)[0] if it.clase != "faltante"]  # los demás tipos faltan a propósito
+    assert len(items) == 1 and items[0].archivos == ["e.pdf", "a.pdf", "a2.pdf"]
+
+
+def test_regla_de_otro_archivo_no_se_une():
+    inc = Inconsistencia(
+        id_regla="CRU-NUM", campo="numero_oficial", severidad=Severidad.REVISION, descripcion="17 contra 15.",
+        valores=[ValorEncontrado(archivo="e.pdf", tipo=TipoDocumento.ESCRITURA, valor="15"),
                  ValorEncontrado(archivo="p.pdf", tipo=TipoDocumento.PREDIAL, valor="17")])
     d = _base([_doc("a.pdf", TipoDocumento.ALINEAMIENTO, [_h("ALI-01", "Asigna el 17, no el 15.")])],
               inconsistencias=[inc])
-    items = [it for it in L.pendientes(d)[0] if it.clase != "faltante"]  # los demás tipos faltan a propósito
-    assert len(items) == 1 and items[0].archivos == ["e.pdf", "p.pdf", "a.pdf"]
+    assert any(it.requisito and it.requisito.id_regla == "ALI-01" for it in L.pendientes(d)[0])
+
+
+def test_un_solo_valor_comun_no_une_la_regla():
+    inc = Inconsistencia(
+        id_regla="CRU-MUN", campo="municipio", severidad=Severidad.REVISION, descripcion="Municipios distintos.",
+        valores=[ValorEncontrado(archivo="u.pdf", tipo=TipoDocumento.USO_SUELO, valor="TULTEPEC"),
+                 ValorEncontrado(archivo="e.pdf", tipo=TipoDocumento.ESCRITURA, valor="CUAUTITLAN")])
+    d = _base([_doc("u.pdf", TipoDocumento.USO_SUELO,
+                    [_h("USO-04", "El municipio de Tultepec no autoriza el giro comercial.")])], inconsistencias=[inc])
+    assert any(it.requisito and it.requisito.id_regla == "USO-04" for it in L.pendientes(d)[0])
+
+
+def test_valores_repetidos_o_contenidos_cuentan_una_vez():
+    inc = Inconsistencia(
+        id_regla="CRU-SUP", campo="superficie_terreno_m2", severidad=Severidad.REVISION, descripcion="Superficies.",
+        valores=[ValorEncontrado(archivo="e.pdf", tipo=TipoDocumento.ESCRITURA, valor="520"),
+                 ValorEncontrado(archivo="p.pdf", tipo=TipoDocumento.PREDIAL, valor="520.00"),
+                 ValorEncontrado(archivo="u.pdf", tipo=TipoDocumento.USO_SUELO, valor="Zapopan"),
+                 ValorEncontrado(archivo="a.pdf", tipo=TipoDocumento.ALINEAMIENTO, valor="ZAPOPAN")])
+    d = _base([_doc("p.pdf", TipoDocumento.PREDIAL, [_h("PRE-05", "Registra 520.00 m2.")]),
+               _doc("u.pdf", TipoDocumento.USO_SUELO, [_h("USO-07", "El predio está en Zapopan; ZAPOPAN autoriza.")])],
+              inconsistencias=[inc])
+    ids = {it.requisito.id_regla for it in L.pendientes(d)[0] if it.requisito}
+    assert {"PRE-05", "USO-07"} <= ids
+
+
+def test_ilegible_sin_regla_del_expediente_tiene_su_renglon():
+    d = _base([_doc("p.pdf", TipoDocumento.PREDIAL, [_h("PRE-ILEG", "La página 2 es ilegible.",
+                                                         estado=EstadoRegla.NO_EVALUABLE)],
+                    legibilidad=Legibilidad.ILEGIBLE)])
+    items, _ = L.pendientes(d)
+    assert any("p.pdf" in it.archivos for it in items if it.clase != "faltante")
+
+
+def test_ilegible_de_otro_archivo_del_mismo_tipo_no_lo_cubre():
+    d = _base([_doc("p1.pdf", TipoDocumento.PREDIAL, legibilidad=Legibilidad.ILEGIBLE),
+               _doc("p2.pdf", TipoDocumento.PREDIAL, [_h("PRE-08", "El predial tiene partes ilegibles.")])])
+    items, _ = L.pendientes(d)
+    assert any(it.clase == "ilegible" and it.archivos == ["p1.pdf"] for it in items)
+    assert any(it.requisito and it.requisito.id_regla == "PRE-08" for it in items)
 
 
 def test_regla_informativa_del_expediente_no_suprime_el_faltante():

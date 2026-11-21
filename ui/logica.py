@@ -329,8 +329,8 @@ class Pendiente:
 # Abreviaturas frecuentes en documentos inmobiliarios: un punto después de ellas no cierra la oración.
 # Cada una va en su propio lookbehind porque Python solo acepta lookbehinds de ancho fijo.
 _ABREVIATURAS = ["Av", "No", "Núm", "Num", "Col", "Lic", "Mpio", "Edo", "Ing", "Arq", "Dr", "Sr", "Sra",
-                 "C.V", "S.A", "Fracc", "Mz", "Lt"]
-_NO_ABREVIATURA = "".join(rf"(?<!\b{re.escape(a)}\.)" for a in _ABREVIATURAS)
+                 "C.V", "S.A", "Fracc", "Mz", "Lt", "Pte", "Ote", "Nte", "Mtro", "Sta", "Sto", "Art", "Exp", "Fol"]
+_NO_ABREVIATURA = "".join(rf"(?<!\b{re.escape(a)}\.)" for a in _ABREVIATURAS) + r"(?<!\b[A-ZÁÉÍÓÚÑ]\.)"
 _FIN_ORACION = re.compile(rf"(?<=\.){_NO_ABREVIATURA}\s+(?=[A-ZÁÉÍÓÚÑ¿¡])")
 
 
@@ -361,13 +361,33 @@ def _regla_repite_inconsistencia(r: Requisito, inc: Inconsistencia) -> bool:
     """
     if r.id_regla.startswith("EXP-") or _RANGO_SEVERIDAD[r.severidad] > _RANGO_SEVERIDAD[inc.severidad]:
         return False
+    if not {a for a in r.origen if a} & {v.archivo for v in inc.valores}:
+        return False
     texto = _norm(" ".join(h.explicacion for h in r.hallazgos))
-    valores = {v.valor for v in inc.valores if v.valor}
+    valores = {_norm(v.valor) for v in inc.valores if _norm(v.valor)}
     presentes = [v for v in valores if _contiene_palabra(texto, v)]
-    if len(presentes) >= 2:
-        return True
-    palabras_campo = _norm(nombre_campo(inc.campo)).split()
-    return bool(presentes) and all(_contiene_palabra(texto, w) for w in palabras_campo)
+    # "520" dentro de "520 00" o "juan perez" dentro de "juan perez lopez" no cuentan como un valor más.
+    distintos = [v for v in presentes if not any(v != o and _contiene_palabra(o, v) for o in presentes)]
+    return len(distintos) >= 2
+
+
+def _se_descarta(r: Requisito, tapados: set[str]) -> bool:
+    """Regla sin evaluar de revisión cuyos archivos ya tienen un renglón propio (ilegible, sin analizar)."""
+    return (r.estado == EstadoRegla.NO_EVALUABLE and r.severidad != Severidad.BLOQUEANTE
+            and not r.id_regla.startswith("EXP-") and bool(r.archivos) and all(a in tapados for a in r.archivos))
+
+
+def _dice_ilegible(r: Requisito, archivo: str) -> bool:
+    """Un hallazgo de la regla dice que ESE archivo es ilegible: es del archivo, o es del expediente y
+    lo nombra o lo cita."""
+    for origen, h in zip(r.origen or [None] * len(r.hallazgos), r.hallazgos):
+        if h.estado == EstadoRegla.CUMPLE or "ilegib" not in _norm(f"{h.descripcion} {h.explicacion}"):
+            continue
+        if origen == archivo:
+            return True
+        if origen is None and (_norm(archivo) in _norm(h.explicacion) or any(e.archivo == archivo for e in h.evidencias)):
+            return True
+    return False
 
 
 def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
@@ -411,15 +431,14 @@ def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
             "requisito", primera_oracion(decisivo.explicacion) or r.descripcion, r.severidad, archivos,
             decisivo.explicacion, requisito=r))
 
-    # Archivos ilegibles: si un renglón emitido ya lo dice (un mismo hallazgo nombra el tipo y "ilegible"),
-    # ese renglón lo cubre; si no, se agrega uno propio.
+    # Archivos ilegibles: lo cubre un renglón de regla que diga que ESE archivo es ilegible y que no se
+    # vaya a descartar; si no hay, se agrega uno propio.
     for doc in dictamen.documentos:
         if doc.legibilidad != Legibilidad.ILEGIBLE or doc.archivo in tapados:
             continue
+        con_archivo = tapados | {doc.archivo}
         cubierto = any(
-            _menciona_tipo(f"{h.descripcion} {h.explicacion}", doc.tipo)
-            and "ilegib" in _norm(f"{h.descripcion} {h.explicacion}")
-            for it in reglas for h in it.requisito.hallazgos if h.estado != EstadoRegla.CUMPLE
+            _dice_ilegible(it.requisito, doc.archivo) and not _se_descarta(it.requisito, con_archivo) for it in reglas
         )
         if not cubierto:
             items.append(Pendiente(
@@ -428,12 +447,7 @@ def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
         tapados.add(doc.archivo)
 
     # Reglas sin evaluar de archivos ya cubiertos: solo las de revisión (un bloqueante nunca se omite).
-    for it in reglas:
-        r = it.requisito
-        if (r.estado == EstadoRegla.NO_EVALUABLE and r.severidad != Severidad.BLOQUEANTE
-                and not r.id_regla.startswith("EXP-") and r.archivos and all(a in tapados for a in r.archivos)):
-            continue
-        items.append(it)
+    items.extend(it for it in reglas if not _se_descarta(it.requisito, tapados))
 
     for inc in dictamen.inconsistencias:
         archivos = list(dict.fromkeys(v.archivo for v in inc.valores))
@@ -452,8 +466,9 @@ def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
         if tr.tipo not in faltantes(dictamen):
             continue
         ya_dicho = any(
-            _menciona_tipo(f"{h.descripcion} {h.explicacion}", tr.tipo)
-            and re.search(r"falt|no se recibi", _norm(f"{h.descripcion} {h.explicacion}"))
+            (h.id_regla == "EXP-01" or re.search(r"complet|tipos documentales", _norm(h.descripcion)))
+            and _menciona_tipo(f"{h.descripcion} {h.explicacion}", tr.tipo)
+            and re.search(r"\bfalta\b|no se recibi", _norm(f"{h.descripcion} {h.explicacion}"))
             for h in emitidas_exp
         )
         if ya_dicho:
