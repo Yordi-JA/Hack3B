@@ -1,0 +1,22 @@
+# Multiagente (obligatorio: LangChain)
+langchain>=0.3
+langchain-core>=0.3
+langgraph>=0.2            # PENDIENTE Carlos: quitar si el orquestador no usa LangGraph
+
+# Proveedor LLM. PENDIENTE Carlos: dejar solo el que se use
+langchain-anthropic
+# langchain-openai
+# langchain-google-genai
+
+# Observabilidad. PENDIENTE Juan Pablo: confirmar versión
+langfuse
+
+# Documentos
+pymupdf
+pillow
+
+# Base
+pydantic>=2
+python-dotenv
+streamlit                 # PENDIENTE Yordi: confirmar Streamlit para la UI
+pytest

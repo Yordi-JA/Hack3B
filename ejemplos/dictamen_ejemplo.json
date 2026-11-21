@@ -1,0 +1,200 @@
+{
+  "expediente_id": "EXP-DEMO-001",
+  "fecha_analisis": "2026-11-21T10:00:00",
+  "fecha_referencia": "2026-11-21",
+  "documentos": [
+    {
+      "archivo": "01 Escritura DEMO.pdf",
+      "tipo": "escritura",
+      "confianza_tipo": 0.98,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {
+          "valor": "CLAUDIA ALEJANDRA MÉNDEZ SALAZAR",
+          "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA",
+          "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "y de la otra como COMPRADORA CLAUDIA ALEJANDRA MÉNDEZ SALAZAR"},
+          "confianza": 0.95
+        },
+        "direccion": {
+          "valor": "Calle Nogal de los Olmos No. 214, Col. Jardines del Lago, San Andrés Tlalmanalco, Estado de México",
+          "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX",
+          "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "inmueble ubicado en Calle Nogal de los Olmos No. 214, Col. Jardines del Lago"},
+          "confianza": 0.93
+        },
+        "superficie_terreno_m2": {
+          "valor": "450.00 metros cuadrados",
+          "normalizado": "450.00",
+          "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "con superficie de 450.00 metros cuadrados"},
+          "confianza": 0.96
+        },
+        "clave_catastral": {
+          "valor": "061 18 134 09 00 0000",
+          "normalizado": "0611813409000000",
+          "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "identificado con clave catastral 061 18 134 09 00 0000"},
+          "confianza": 0.97
+        },
+        "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "No. 214"}, "confianza": 0.9},
+        "fecha_emision": {"valor": "15 de marzo de 2019", "normalizado": "2019-03-15", "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "a 15 de marzo de 2019, ANTE MÍ"}, "confianza": 0.94},
+        "vigencia_hasta": {"valor": null, "normalizado": null, "evidencia": null, "confianza": 0.0},
+        "autoridad_emisora": {"valor": "Notaría Pública No. 12 del Estado de México", "normalizado": "NOTARIA PUBLICA 12 MEX", "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "Titular de la Notaría Pública número 12"}, "confianza": 0.92},
+        "especificos": {
+          "numero_escritura": {"valor": "52,687", "normalizado": "52687", "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "INSTRUMENTO NÚMERO 52,687"}, "confianza": 0.95},
+          "tipo_acto": {"valor": "Contrato de compraventa", "normalizado": "COMPRAVENTA", "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "se hace constar el CONTRATO DE COMPRAVENTA"}, "confianza": 0.97}
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ESC-01",
+          "descripcion": "La escritura identifica al titular del inmueble",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "La compradora y actual titular es Claudia Alejandra Méndez Salazar.",
+          "evidencias": [{"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "COMPRADORA CLAUDIA ALEJANDRA MÉNDEZ SALAZAR"}]
+        }
+      ],
+      "confianza": 0.94
+    },
+    {
+      "archivo": "02 Predial DEMO.pdf",
+      "tipo": "predial",
+      "confianza_tipo": 0.99,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {"valor": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "PROPIETARIO / POSEEDOR MENDEZ SALAZAR CLAUDIA ALEJANDRA"}, "confianza": 0.97},
+        "direccion": {"valor": "NOGAL DE LOS OLMOS 214, COL. JARDINES DEL LAGO", "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "UBICACIÓN NOGAL DE LOS OLMOS 214, COL. JARDINES DEL LAGO"}, "confianza": 0.95},
+        "superficie_terreno_m2": {"valor": "432.00", "normalizado": "432.00", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "SUPERFICIE TERRENO (M²) 432.00"}, "confianza": 0.96},
+        "clave_catastral": {"valor": "061 18 134 09 00 0000", "normalizado": "0611813409000000", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "CLAVE CATASTRAL 061 18 134 09 00 0000"}, "confianza": 0.98},
+        "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "NOGAL DE LOS OLMOS 214"}, "confianza": 0.9},
+        "fecha_emision": {"valor": "14/01/2026", "normalizado": "2026-01-14", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "FECHA DE PAGO: 14/01/2026"}, "confianza": 0.97},
+        "vigencia_hasta": {"valor": "Ejercicio 2026", "normalizado": "2026-12-31", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "AÑO 2026 BIM. INI 1 BIM. FIN 6"}, "confianza": 0.9},
+        "autoridad_emisora": {"valor": "Tesorería Municipal de San Andrés Tlalmanalco", "normalizado": "TESORERIA MUNICIPAL SAN ANDRES TLALMANALCO", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "TESORERÍA MUNICIPAL · CATASTRO E IMPUESTO PREDIAL"}, "confianza": 0.93},
+        "especificos": {
+          "ejercicio_pagado": {"valor": "2026", "normalizado": "2026", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "AÑO 2026"}, "confianza": 0.97},
+          "uso_del_predio": {"valor": "COMERCIAL", "normalizado": "COMERCIAL", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "USO DEL PREDIO COMERCIAL"}, "confianza": 0.95}
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "PRE-01",
+          "descripcion": "Predial pagado del ejercicio vigente",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "El recibo cubre los 6 bimestres de 2026, que es el ejercicio de la fecha de referencia.",
+          "evidencias": [{"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "AÑO 2026 BIM. INI 1 BIM. FIN 6"}]
+        }
+      ],
+      "confianza": 0.95
+    },
+    {
+      "archivo": "03 Alineamiento DEMO.pdf",
+      "tipo": "alineamiento_numero_oficial",
+      "confianza_tipo": 0.97,
+      "legibilidad": "parcial",
+      "datos": {
+        "propietario": {"valor": "C. CLAUDIA ALEJANDRA MÉNDEZ SALAZAR", "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "C. CLAUDIA ALEJANDRA MÉNDEZ SALAZAR: Esta Dirección"}, "confianza": 0.9},
+        "direccion": {"valor": "Calle Nogal de los Olmos No. 214, Col. Jardines del Lago", "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "con ubicación en Calle Nogal de los Olmos No. 214"}, "confianza": 0.9},
+        "superficie_terreno_m2": {"valor": "450.00 m²", "normalizado": "450.00", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "SUP. 450.00 m²"}, "confianza": 0.85},
+        "clave_catastral": {"valor": "061 18 134 09 00 0000", "normalizado": "0611813409000000", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "CLAVE CATASTRAL: 061 18 134 09 00 0000"}, "confianza": 0.88},
+        "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "NÚMERO OFICIAL ASIGNADO: 214"}, "confianza": 0.9},
+        "fecha_emision": {"valor": "02 de septiembre de 2026", "normalizado": "2026-09-02", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "a 02 de septiembre de 2026"}, "confianza": 0.9},
+        "vigencia_hasta": {"valor": "Un año a partir de su expedición", "normalizado": "2027-09-02", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "Vigencia: un año a partir de su expedición"}, "confianza": 0.88},
+        "autoridad_emisora": {"valor": "Dirección de Desarrollo Urbano y Obras Públicas", "normalizado": "DIRECCION DE DESARROLLO URBANO Y OBRAS PUBLICAS", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "DIRECCIÓN DE DESARROLLO URBANO Y OBRAS PÚBLICAS"}, "confianza": 0.9},
+        "especificos": {
+          "afectaciones": {"valor": null, "normalizado": null, "evidencia": null, "confianza": 0.3}
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "ALI-02",
+          "descripcion": "Constancia vigente a la fecha de referencia",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Emitida el 02/09/2026 con vigencia de un año; vence el 02/09/2027.",
+          "evidencias": [{"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "Vigencia: un año a partir de su expedición"}]
+        },
+        {
+          "id_regla": "ALI-03",
+          "descripcion": "Afectaciones o restricciones al predio",
+          "estado": "no_evaluable",
+          "severidad": "revision",
+          "explicacion": "La sección de observaciones está parcialmente ilegible; no se puede confirmar si hay afectaciones.",
+          "evidencias": [{"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "OBSERVACIONES: EL PREDIO PRESENTA [ilegible]"}]
+        }
+      ],
+      "confianza": 0.78
+    },
+    {
+      "archivo": "04 Uso de Suelo DEMO.pdf",
+      "tipo": "uso_de_suelo",
+      "confianza_tipo": 0.99,
+      "legibilidad": "buena",
+      "datos": {
+        "propietario": {"valor": "CLAUDIA ALEJANDRA MÉNDEZ SALAZAR", "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "NOMBRE CLAUDIA ALEJANDRA MÉNDEZ SALAZAR"}, "confianza": 0.96},
+        "direccion": {"valor": "Calle Nogal de los Olmos No. 214, Col. Jardines del Lago", "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "DOMICILIO Calle Nogal de los Olmos No. 214, Col. Jardines del Lago"}, "confianza": 0.95},
+        "superficie_terreno_m2": {"valor": "450.00 m²", "normalizado": "450.00", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "SUPERFICIE DEL PREDIO 450.00 m²"}, "confianza": 0.96},
+        "clave_catastral": {"valor": "061 18 134 09 00 0000", "normalizado": "0611813409000000", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "CLAVE CATASTRAL 061 18 134 09 00 0000"}, "confianza": 0.97},
+        "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "No. 214"}, "confianza": 0.9},
+        "fecha_emision": {"valor": "10 de febrero de 2024", "normalizado": "2024-02-10", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "FECHA DE EXPEDICIÓN: 10 DE FEBRERO DE 2024"}, "confianza": 0.97},
+        "vigencia_hasta": {"valor": "10 de febrero de 2025", "normalizado": "2025-02-10", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "VIGENCIA: 10 DE FEBRERO DE 2025"}, "confianza": 0.97},
+        "autoridad_emisora": {"valor": "Dirección de Desarrollo Urbano y Metropolitano", "normalizado": "DIRECCION DE DESARROLLO URBANO Y METROPOLITANO", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "DIRECCIÓN DE DESARROLLO URBANO Y METROPOLITANO"}, "confianza": 0.95},
+        "especificos": {
+          "uso_autorizado": {"valor": "COMERCIAL", "normalizado": "COMERCIAL", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "USO DE SUELO QUE SE AUTORIZA: COMERCIAL"}, "confianza": 0.98},
+          "giro_autorizado": {"valor": "Comercio de productos básicos (minisúper) hasta 150 m²", "normalizado": "MINISUPER <=150", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "GIRO AUTORIZADO: COMERCIO DE PRODUCTOS BÁSICOS (MINISÚPER) HASTA 150 M²"}, "confianza": 0.96}
+        }
+      },
+      "hallazgos": [
+        {
+          "id_regla": "USO-01",
+          "descripcion": "Autoriza el uso comercial requerido",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Autoriza uso COMERCIAL con giro de minisúper hasta 150 m², compatible con una tienda 3B.",
+          "evidencias": [{"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "USO DE SUELO QUE SE AUTORIZA: COMERCIAL"}]
+        },
+        {
+          "id_regla": "USO-02",
+          "descripcion": "Licencia vigente a la fecha de referencia",
+          "estado": "no_cumple",
+          "severidad": "bloqueante",
+          "explicacion": "La licencia venció el 10/02/2025, antes de la fecha de referencia (21/11/2026). Hay que tramitar una nueva.",
+          "evidencias": [{"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "VIGENCIA: 10 DE FEBRERO DE 2025"}]
+        }
+      ],
+      "confianza": 0.93
+    }
+  ],
+  "documentos_faltantes": [],
+  "hallazgos_expediente": [
+    {
+      "id_regla": "EXP-01",
+      "descripcion": "El expediente trae los 4 tipos documentales requeridos",
+      "estado": "cumple",
+      "severidad": "info",
+      "explicacion": "Se recibieron Escritura, Predial, Alineamiento y Número Oficial, y Uso de Suelo.",
+      "evidencias": []
+    }
+  ],
+  "inconsistencias": [
+    {
+      "id_regla": "CRU-SUP",
+      "campo": "superficie_terreno_m2",
+      "descripcion": "El predial registra 18 m² menos que la escritura, el alineamiento y el uso de suelo (diferencia del 4 %).",
+      "severidad": "revision",
+      "valores": [
+        {"archivo": "01 Escritura DEMO.pdf", "tipo": "escritura", "valor": "450.00", "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "con superficie de 450.00 metros cuadrados"}},
+        {"archivo": "02 Predial DEMO.pdf", "tipo": "predial", "valor": "432.00", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "SUPERFICIE TERRENO (M²) 432.00"}},
+        {"archivo": "03 Alineamiento DEMO.pdf", "tipo": "alineamiento_numero_oficial", "valor": "450.00", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "SUP. 450.00 m²"}},
+        {"archivo": "04 Uso de Suelo DEMO.pdf", "tipo": "uso_de_suelo", "valor": "450.00", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "SUPERFICIE DEL PREDIO 450.00 m²"}}
+      ]
+    }
+  ],
+  "recomendacion": "No cumple",
+  "confianza": 0.86,
+  "resumen": "El expediente está completo y los cuatro documentos corresponden al mismo inmueble (misma clave catastral, propietaria y dirección). No cumple porque la Licencia de Uso de Suelo venció el 10/02/2025. Además, el predial registra una superficie menor que el resto de los documentos y la constancia de alineamiento tiene la sección de afectaciones parcialmente ilegible; ambos puntos requieren revisión del equipo legal.",
+  "razones": [
+    "Licencia de Uso de Suelo vencida desde el 10/02/2025 (bloqueante).",
+    "Superficie en predial (432 m²) distinta a la de escritura, alineamiento y uso de suelo (450 m²).",
+    "No se pudo confirmar si el alineamiento tiene afectaciones por ilegibilidad parcial.",
+    "Propietaria, dirección, clave catastral y número oficial coinciden en los 4 documentos."
+  ]
+}
