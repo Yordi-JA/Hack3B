@@ -47,9 +47,19 @@ NOMBRE_CAMPO = {
     "fecha_emision": "Fecha de emisión",
     "vigencia_hasta": "Vigente hasta",
     "autoridad_emisora": "Autoridad emisora",
+    "numero_escritura": "Número de escritura",
+    "tipo_acto": "Acto",
+    "uso_autorizado": "Uso autorizado",
+    "giro_autorizado": "Giro autorizado",
+    "ejercicio_pagado": "Ejercicio pagado",
+    "uso_del_predio": "Uso del predio",
+    "folio_registro_publico": "Folio del Registro Público",
 }
 
-CAMPOS_COMUNES = list(NOMBRE_CAMPO)
+CAMPOS_COMUNES = [
+    "propietario", "direccion", "entidad_federativa", "municipio", "superficie_terreno_m2", "clave_catastral",
+    "numero_oficial", "fecha_emision", "vigencia_hasta", "autoridad_emisora",
+]
 
 # Datos que deben coincidir entre documentos del mismo inmueble. Fechas y autoridad cambian por
 # documento de forma legítima, así que no se marcan como diferencia.
@@ -211,6 +221,23 @@ def faltantes(dictamen: Dictamen) -> list[TipoDocumento]:
     """Lo que dice el dictamen, más cualquier tipo requerido sin archivo que el dictamen haya omitido."""
     sin_archivo = [t.tipo for t in documentos_por_tipo(dictamen) if not t.recibido]
     return list(dict.fromkeys([*dictamen.documentos_faltantes, *sin_archivo]))
+
+
+# Lo primero que revisa el equipo legal en cada tipo (claves de especificos según el ejemplo del equipo).
+CAMPOS_CLAVE = {
+    TipoDocumento.ESCRITURA: ["propietario", "superficie_terreno_m2", "clave_catastral", "numero_escritura", "tipo_acto"],
+    TipoDocumento.PREDIAL: ["propietario", "clave_catastral", "vigencia_hasta", "adeudo", "ejercicio_pagado"],
+    TipoDocumento.ALINEAMIENTO: ["numero_oficial", "direccion", "vigencia_hasta", "alineamiento", "afectaciones"],
+    TipoDocumento.USO_SUELO: ["uso_autorizado", "giro_autorizado", "vigencia_hasta", "superficie_terreno_m2"],
+}
+
+
+def campos_clave(doc: DocumentoAnalizado, n: int = 4) -> list[tuple[str, Campo]]:
+    """Hasta `n` datos para la tarjeta del documento: primero los clave de su tipo, luego el resto."""
+    disponibles = dict(campos_con_dato(doc))
+    orden = [c for c in CAMPOS_CLAVE.get(doc.tipo, []) if c in disponibles]
+    orden += [c for c in disponibles if c not in orden]
+    return [(c, disponibles[c]) for c in orden[:n]]
 
 
 def campos_con_dato(doc: DocumentoAnalizado) -> list[tuple[str, Campo]]:

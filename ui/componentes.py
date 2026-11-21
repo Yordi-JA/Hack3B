@@ -242,7 +242,7 @@ def tarjeta_documento(doc: DocumentoAnalizado) -> str:
     avisos = "".join(f'<div class="doc-aviso">{escape(h.explicacion)}</div>' for h in L.avisos_de_proceso(doc))
     if doc.legibilidad == Legibilidad.ILEGIBLE and not avisos:
         avisos = '<div class="doc-aviso">El archivo es ilegible: sus reglas quedan sin evaluar. Pide una copia legible.</div>'
-    campos = L.campos_con_dato(doc)[:4]
+    campos = L.campos_clave(doc)
     lista = "".join(f"<dt>{escape(L.nombre_campo(c))}</dt><dd>{escape(campo.valor or '')}</dd>" for c, campo in campos)
     datos = f'<dl class="doc-campos">{lista}</dl>' if lista else ""
     reglas = [h for h in doc.hallazgos if h.id_regla not in L.REGLAS_DE_PROCESO]

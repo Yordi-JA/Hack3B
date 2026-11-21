@@ -154,3 +154,10 @@ def test_orden_bandeja_pone_no_cumple_primero_y_lo_reciente_arriba():
 
 def test_conteo_entidad_peor_vacio():
     assert ConteoEntidad().peor is None
+
+
+def test_campos_clave_priorizan_lo_propio_del_tipo():
+    uso = doc("u", TipoDocumento.USO_SUELO, entidad="HIDALGO", propietario="X", vigencia_hasta="2027-01-01")
+    uso.datos.especificos["uso_autorizado"] = Campo(valor="COMERCIAL", normalizado="COMERCIAL")
+    claves = [c for c, _ in L.campos_clave(uso)]
+    assert claves[:2] == ["uso_autorizado", "vigencia_hasta"] and len(claves) == 4

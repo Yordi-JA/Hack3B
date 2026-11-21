@@ -104,7 +104,7 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .kpi-principal b {{ color: var(--claro); }}
 
 /* ---- tarjeta de expediente en la bandeja (versión ligera del marco) ---- */
-.lista {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px 14px; margin-top: 18px; }}
+.lista {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr)); gap: 22px 14px; margin-top: 18px; }}
 a.exp {{ position: relative; display: block; text-decoration: none; color: var(--texto); background: var(--tarjeta);
   border-radius: 12px; padding: 26px 20px 16px; border: 1px solid var(--borde); }}
 a.exp::before {{ content: ""; position: absolute; inset: 12px 8px 8px; border: 1.5px solid var(--tinta);
@@ -175,7 +175,7 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .tipo-falta {{ border: 1.5px dashed {t.VINO.texto}; }}
 
 /* tarjetas por documento: mismo marco, más chico */
-.docs {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 6px 16px; }}
+.docs {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr)); gap: 6px 16px; }}
 .docs .marco {{ padding: 46px 26px 26px; margin: 26px 0 4px; }}
 .docs .marco::before {{ inset: 22px 10px 10px; }}
 .docs .marco-titulo {{ top: 22px; left: 22px; font-size: 21px; padding: 0 10px; }}
@@ -223,6 +223,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .stApp .docs .marco .marco-titulo {{ font-size: 21px; padding: 0 10px; }}
 .stApp .marco p.marco-titular {{ font-family: var(--f-titular); font-size: 44px; line-height: 1.05; font-weight: 900; margin: 0 0 14px; }}
 .stApp h2.seccion {{ font-size: 21px; padding: 0; margin: 40px 0 4px; letter-spacing: 0; }}
+.stApp .doc-campos dt, .stApp .doc-campos dd {{ font-size: 14px; line-height: 1.4; }}
 .stApp .inc h3, .stApp .razones h3, .stApp .mapa-caja h3 {{ font-family: var(--f-texto); font-weight: 700; }}
 
 @media (max-width: 900px) {{
@@ -234,7 +235,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
   .marco {{ padding: 54px 24px 28px; }}
   .marco-titulo {{ font-size: 26px; }}
   .marco-titular {{ font-size: 34px; }}
-  [data-testid="stMainBlockContainer"] {{ padding: 20px 16px 48px; }}
+  [data-testid="stMainBlockContainer"] {{ padding: 56px 16px 48px; }}
   [data-testid="stMain"] {{ margin: 0; border-radius: 0; max-height: none; }}
 }}
 </style>
