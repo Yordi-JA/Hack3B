@@ -32,7 +32,9 @@ OCR_LANGFUSE (1 = mandar las trazas del OCR a Langfuse; por defecto no).
 from __future__ import annotations
 
 import base64
+import logging
 import os
+import re
 import sys
 import unicodedata
 from collections import Counter
@@ -47,6 +49,8 @@ from pydantic import BaseModel, Field
 from ..cache import guardar_cache, leer_cache, migrar_legado, nombre_archivo, ruta_paginas
 from ..config import DOCUMENTOS_DIR, get_callbacks, get_llm
 from ..schemas import DocumentoLeido, Legibilidad, Pagina, TipoDocumento
+
+log = logging.getLogger(__name__)
 
 MOTOR = os.getenv("OCR_MOTOR", "llm")                # "llm" (visión) o "tesseract" (local)
 MAX_PAGINAS = int(os.getenv("MAX_PAGINAS", "15"))    # decisión 6 del README, pendiente
@@ -64,14 +68,15 @@ UMBRAL_NITIDEZ = float(os.getenv("UMBRAL_NITIDEZ", "5.0"))
 # ---------------------------------------------------------------- lectura de una página
 
 class _SalidaOCR(BaseModel):
-    """Lo que el modelo con visión devuelve por página."""
-    texto: str = Field(
-        description="Transcripción literal y completa de la página, en orden de lectura. "
-        "Cadena vacía si la página no se puede leer."
-    )
+    """Lo que el modelo con visión devuelve por página. Tipo y legibilidad van primero: si la
+    respuesta se corta por largo, no se pierden."""
     tipo: TipoDocumento = Field(description="Tipo de documento al que pertenece la página")
     legibilidad: Legibilidad = Field(
         description="buena: se lee todo; parcial: hay partes que no se leen; ilegible: no se puede leer"
+    )
+    texto: str = Field(
+        description="Transcripción literal y completa de la página, en orden de lectura. "
+        "Cadena vacía si la página no se puede leer."
     )
 
 
@@ -86,6 +91,7 @@ tablas (una fila por línea, columnas separadas por " | "), sellos, firmas con n
    - Copia nombres, direcciones, claves, folios, superficies, montos y fechas EXACTAMENTE como aparecen.
    - No corrijas, no completes, no resumas y no agregues nada que no esté en la imagen.
    - Si una palabra o cifra no se alcanza a leer, escribe [ilegible] en su lugar. Nunca la adivines.
+   - Omite los guiones, puntos o rayas de relleno al final de las líneas (\"- - - - -\", \"......\"): no son texto.
    - Si el texto está borroso o desvanecido, NO lo reconstruyas por contexto: transcribe solo los \
 caracteres que ves con certeza y marca el resto como [ilegible].
 2. Clasifica la página en un tipo:
@@ -143,9 +149,19 @@ def _ocr_tesseract(jpeg: bytes) -> _SalidaOCR:
     return _SalidaOCR(texto=texto, tipo=tipo, legibilidad=legibilidad)
 
 
+_RELLENO = re.compile(r"(?:[-–—]\s*){6,}|(?:[.·]\s*){6,}|_{4,}")
+
+
+def _compactar_relleno(texto: str) -> str:
+    """'- - - - - - - -' (relleno notarial) -> '—'. Sin esto el modelo agotaba el límite de respuesta."""
+    return _RELLENO.sub("— ", texto).strip()
+
+
 def _ocr_y_guardar(ruta: Path, indice: int, jpeg: bytes, motor: str) -> _Lectura:
     salida = _ocr_tesseract(jpeg) if motor == "tesseract" else _ocr_llm(jpeg)
-    lectura = _Lectura(**salida.model_dump(), origen=motor)
+    datos = salida.model_dump()
+    datos["texto"] = _compactar_relleno(datos["texto"])
+    lectura = _Lectura(**datos, origen=motor)
     _guardar_pagina(ruta, indice, motor, lectura)
     return lectura
 
@@ -257,7 +273,8 @@ def _rangos(paginas: list[int]) -> str:
 
 
 def _ensamblar(
-    ruta: Path, total: int, lecturas: list[_Lectura], max_paginas: int, nitideces: list[float | None]
+    ruta: Path, total: int, lecturas: list[_Lectura], max_paginas: int, nitideces: list[float | None],
+    errores: list[int] = (),
 ) -> DocumentoLeido:
     borrosas = []
     for i, n in enumerate(nitideces):
@@ -296,6 +313,8 @@ def _ensamblar(
         notas.append(f"Solo se leyeron las primeras {len(lecturas)} de {total} páginas (tope MAX_PAGINAS={max_paginas}).")
     origenes = Counter(l.origen for l in lecturas)
     notas.append("Origen del texto: " + ", ".join(f"{k} {v} pág." for k, v in sorted(origenes.items())))
+    if errores:
+        notas.append(f"Páginas con error de OCR (se reintentan en la próxima corrida): {_rangos(list(errores))}.")
     if borrosas:
         notas.append(f"Páginas borrosas (nitidez < {UMBRAL_NITIDEZ}): {_rangos(borrosas)}; "
                      "se descartó su texto para no usar datos adivinados.")
@@ -320,8 +339,18 @@ def _ensamblar(
     )
 
 
-def _resolver(pendientes: list[_Pendiente]) -> list[_Lectura]:
-    return [p.result() if isinstance(p, Future) else p for p in pendientes]
+def _resolver(pendientes: list[_Pendiente]) -> tuple[list[_Lectura], list[int]]:
+    """Lecturas en orden y números de página cuyo OCR falló. Una página con error queda ILEGIBLE
+    (sin texto) en vez de tumbar el documento; no se guarda, así que se reintenta en la próxima corrida."""
+    lecturas, errores = [], []
+    for i, p in enumerate(pendientes):
+        try:
+            lecturas.append(p.result() if isinstance(p, Future) else p)
+        except Exception as e:
+            log.warning("OCR falló en la página %d: %s: %s", i + 1, type(e).__name__, str(e)[:200])
+            lecturas.append(_Lectura(tipo=TipoDocumento.OTRO, legibilidad=Legibilidad.ILEGIBLE, texto="", origen="error"))
+            errores.append(i + 1)
+    return lecturas, errores
 
 
 def leer_documento(ruta: Path) -> DocumentoLeido:
@@ -332,8 +361,10 @@ def leer_documento(ruta: Path) -> DocumentoLeido:
         return cacheado
     with ThreadPoolExecutor(max_workers=PARALELO) as pool:
         total, pendientes, nitideces = _preparar(ruta, pool, MOTOR, MAX_PAGINAS)
-        doc = _ensamblar(ruta, total, _resolver(pendientes), MAX_PAGINAS, nitideces)
-    guardar_cache(doc, ruta)
+        lecturas, errores = _resolver(pendientes)
+        doc = _ensamblar(ruta, total, lecturas, MAX_PAGINAS, nitideces, errores)
+    if not errores:  # con páginas fallidas no se guarda: la próxima corrida las reintenta
+        guardar_cache(doc, ruta)
     return doc
 
 
@@ -384,7 +415,10 @@ def construir_cache(
 
         for k, (ruta, total, pendientes, nitideces) in enumerate(trabajos, 1):
             try:
-                doc = _ensamblar(ruta, total, _resolver(pendientes), max_paginas, nitideces)
+                lecturas, errores = _resolver(pendientes)
+                doc = _ensamblar(ruta, total, lecturas, max_paginas, nitideces, errores)
+                if errores:
+                    raise RuntimeError(f"OCR falló en las páginas {errores}")
             except Exception as e:
                 print(f"  [{k}/{len(trabajos)}] ERROR {ruta.name}: {type(e).__name__}: {e}", file=sys.stderr)
                 fallidos.append(nombre_archivo(ruta))

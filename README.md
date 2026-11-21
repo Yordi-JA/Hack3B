@@ -12,10 +12,10 @@ Que cada responsable la resuelva, la anote aquí y avise en el grupo.
 | :- | :--- | :--- | :--- | :--- |
 | 1 | Proveedor y modelo del LLM, y de quién es la API key con créditos. | Carlos | 10:15 | **Resuelto:** Anthropic `claude-haiku-5-5` (~40 veces más barato que Opus, ~$2 USD el día) con `effort="low"` y `max_tokens=4000`. Key de Julián con $5 prepagados, sin recarga automática. Ver [Uso de la API](#uso-de-la-api-créditos). |
 | 2 | Langfuse: instancia de la organización, cloud propia o local con Docker. Una cuenta cloud propia recibiría el contenido de los documentos (regla 06). | Juan Pablo | 10:30 | Pendiente |
-| 3 | Orquestador con LangGraph o con LangChain puro. | Carlos | 11:00 | **Resuelto**: LangChain puro. El orquestador es un pipeline determinista con `ThreadPoolExecutor(max_workers=5)` para paralelizar los 4 agentes por tipo; el flujo es lineal y no requiere grafo. |
+| 3 | Orquestador con LangGraph o con LangChain puro. | Carlos → Julián | 11:00 | **Resuelto**: **LangGraph** (`StateGraph`), con los agentes por tipo en paralelo (`Send`) y un **agente auditor** que contrasta lo reportado contra el documento original; si corrige datos, se repite el cruce. Ver [Arquitectura](#arquitectura-langgraph). |
 | 4 | UI en Streamlit (llama directo a `analizar_expediente`, sin API). | Yordi | 10:15 | Propuesto |
 | 5 | Guías y criterios oficiales por tipo: ¿dónde están? Sin ellas las reglas son suposiciones. | Todos | Ya | Pendiente |
-| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | **Resuelto**: 15 páginas máximo (primeras 5 + hasta 10 con palabras clave: superficie, colindancias, catastral, folio real, gravamen, notario, etc.). |
+| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | **Parcial**: escritura.py manda al modelo máx. 15 páginas (primeras 5 + hasta 10 con palabras clave), pero la ingesta solo leyó las primeras 15 de cada archivo. Las 4 escrituras de 16, 25, 33 y 50 páginas necesitan releerse completas (`--max-paginas 60`, ~$0.05) para que la selección por palabras clave sirva. |
 | 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | **Resuelta**: 2 % o 1 m², la mayor (`cruce.TOLERANCIA_SUP_*`). Más que eso es `CRU-SUP` con severidad revisión. |
 
 Nota sobre el LLM: 57 de 62 PDFs son escaneos, así que el modelo tiene que tener visión. Cambiar de proveedor es cambiar `LLM_PROVIDER` y `LLM_MODEL` en el `.env` (`expedientes/config.py`). Una key nueva tiene límites bajos por minuto: el OCR masivo debe correr con 5-10 llamadas en paralelo como máximo.
@@ -27,12 +27,30 @@ Cada quien trabaja en su rama y hace push directo. Para traer cambios del contra
 | Persona | Rama | Archivos |
 | :--- | :--- | :--- |
 | Juan Pablo | `juanpablo/uso-suelo` | `agentes/uso_suelo.py`, `agentes/dictamen.py`, Langfuse |
-| Julián | `julian/predial` | `agentes/predial.py`, `agentes/ingesta.py`, caché OCR |
+| Julián | `julian/predial` | `agentes/predial.py`, `agentes/ingesta.py`, `agentes/escritura.py`, `agentes/auditor.py`, `orquestador.py`, `cache.py`, caché OCR |
 | Diego | `diego/alineamiento` | `agentes/alineamiento.py`, `agentes/cruce.py` |
-| Carlos | `carlos/escrituras` | `agentes/escritura.py`, `orquestador.py`, `config.py` |
+| Carlos | `carlos/escrituras` | UI (con Yordi), `config.py` |
 | Yordi | `yordi/ui` | `app.py` |
 
 Cada quien toca solo sus archivos. `schemas.py` es de todos: si hay que cambiarlo, se avisa, se cambia en `main` y todos hacen `git merge main`.
+
+## Arquitectura (LangGraph)
+
+`expedientes/orquestador.py` arma un `StateGraph` (`python -c "from expedientes import orquestador as o; print(o.diagrama())"`):
+
+```mermaid
+graph TD
+  START([inicio]) --> ingesta
+  ingesta -.->|Send, uno por documento| agente[agente por tipo<br/>escritura · predial · alineamiento · uso de suelo]
+  agente --> consolidar --> cruce[validación cruzada] --> auditor
+  auditor -.->|corrigió datos que se cruzan| cruce
+  auditor -.-> dictamen --> FIN([fin])
+```
+
+- **Agentes por tipo** (LLM): extraen con cita literal y evalúan sus reglas; corren en paralelo (máx. `MAX_AGENTES_PARALELO=5`).
+- **Cruce** (Diego): compara propietario, dirección, superficie, clave y número oficial entre documentos.
+- **Auditor** (`agentes/auditor.py`, sin LLM): revisa lo que reportó cada agente contra el texto original. AUD-01 la cita existe en la página; AUD-02 en datos que se cruzan, el valor aparece en la página (cita real con valor inventado); AUD-03 un rechazo bloqueante sin evidencia baja a revisión. Si descarta datos que se cruzan, el cruce se repite. En los 17 prediales reales revisó 210 datos sin falsos positivos.
+- **Dictamen** (Juan Pablo): consolida por tipo y decide con reglas fijas.
 
 ## Contrato
 

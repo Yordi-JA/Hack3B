@@ -24,6 +24,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, model_validator
 
 from ..config import CACHE_DIR, LLM_MODEL, get_callbacks, get_llm
+from . import normalizar as nz
 from ..schemas import (
     Campo,
     Contexto,
@@ -58,6 +59,7 @@ MESES_ES = {
 }
 
 MAX_PAGINAS_LLM = 15
+FACTOR_PARCIAL = 0.85  # confianza de un documento parcialmente legible
 PRIMERAS_PAGINAS = 5
 
 TIPOS_ACTO_TRASLATIVOS = {
@@ -195,9 +197,19 @@ def _normalizar_direccion(s: Optional[str]) -> Optional[str]:
     return base or None
 
 
+def _hectareas_a_m2(s: str) -> Optional[str]:
+    """'1-25-00 HAS' (hectáreas-áreas-centiáreas) -> 12500.00; '0.5000 HECTAREAS' -> 5000.00."""
+    if m := re.search(r"(\d+)\s*-\s*(\d{1,2})\s*-\s*(\d{1,2}(?:\.\d+)?)", s):
+        return f"{int(m[1]) * 10000 + int(m[2]) * 100 + float(m[3]):.2f}"
+    x = nz.superficie(s)
+    return f"{x * 10000:.2f}" if x is not None else None
+
+
 def _normalizar_superficie(s: Optional[str]) -> Optional[str]:
     if not s:
         return None
+    if re.search(r"\bH(A|AS|ECTAREAS?)\b", _limpia_para_match(s)):
+        return _hectareas_a_m2(s)  # antes '1-25-00 HAS' salía '1.00' m²
     # Quitar espacios y separadores de miles antes de parsear.
     limpio = s.replace(" ", "")
     # Si el patrón es "1,250.50" (coma como miles) quitamos las comas.
@@ -230,13 +242,9 @@ def _normalizar_numero(s: Optional[str]) -> Optional[str]:
 
 
 def _normalizar_numero_oficial(s: Optional[str]) -> Optional[str]:
-    """Como `_normalizar_numero`, pero 'S/N' o 'sin número' da 'SN' en vez de perderse:
-    así el cruce detecta 'S/N en la escritura vs 120 en el alineamiento'."""
-    if not s:
-        return None
-    if re.search(r"\bS ?N\b|SIN NUM", _compacto(s)):
-        return "SN"
-    return _normalizar_numero(s)
+    """El mismo normalizador que alineamiento y cruce (normalizar.numero_oficial): '104-A' -> '104A',
+    'KM 27.5 No. 1' -> '1', 'S/N' -> 'SN'. Con otro criterio el cruce marcaba CRU-NUM falsos."""
+    return nz.numero_oficial(s)
 
 
 def _normalizar_instrumento(s: Optional[str]) -> Optional[str]:
@@ -279,26 +287,10 @@ def _normalizar_municipio(s: Optional[str]) -> Optional[str]:
 
 
 def _normalizar_fecha(s: Optional[str]) -> Optional[str]:
-    """ISO YYYY-MM-DD. Acepta '15 de marzo de 2019', '15/03/2019', '2019-03-15'."""
-    if not s:
-        return None
-    low = s.lower().strip()
-    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", low)
-    if m:
-        y, mo, d = m.groups()
-        return f"{int(y):04d}-{int(mo):02d}-{int(d):02d}"
-    m = re.search(r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", low)
-    if m:
-        d, mo, y = m.groups()
-        return f"{int(y):04d}-{int(mo):02d}-{int(d):02d}"
-    m = re.search(r"(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})", low)
-    if m:
-        d, mes_txt, y = m.groups()
-        mes_norm = _upper_sin_acentos(mes_txt).lower() if _upper_sin_acentos(mes_txt) else ""
-        mo = MESES_ES.get(mes_norm)
-        if mo:
-            return f"{int(y):04d}-{mo:02d}-{int(d):02d}"
-    return None
+    """ISO YYYY-MM-DD con el normalizador común: acepta '15 de marzo del 2019', '15/03/2019',
+    '2019-03-15' y descarta fechas imposibles ('31/02/2019' -> None)."""
+    f = nz.fecha(s)
+    return f.isoformat() if f else None
 
 
 # ---------------------------------------------------------------- selección de páginas
@@ -342,41 +334,85 @@ def _seleccionar_paginas(doc: DocumentoLeido, maximo: int = MAX_PAGINAS_LLM) -> 
 # ---------------------------------------------------------------- verificación de cita
 
 def _limpia_para_match(s: str) -> str:
+    """Mayúsculas sin acentos ni signos, con un solo espacio entre palabras."""
     base = _upper_sin_acentos(s) or ""
-    return re.sub(r"[^A-Z0-9 ]", " ", re.sub(r"\s+", " ", base)).strip()
+    return " ".join(re.sub(r"[^A-Z0-9]", " ", base).split())
 
 
-def _verificar_cita(cita: Optional[str], paginas: list[Pagina]) -> Optional[tuple[int, str]]:
-    """Busca la cita en cada página.
+# Verificación portada de uso_suelo.py (Juan Pablo, commit 26d631a) para que todos los agentes
+# exijan lo mismo. Respaldo por valor solo para valores distintivos (no '12' ni '2025').
+MIN_CARACTERES_VALOR_DISTINTIVO = 6
+CONF_SOLO_VALOR = 0.6
+VENTANA_VALOR = 40  # caracteres después de la cita donde puede caer el valor (el OCR corta el final)
 
-    - Cita corta (<=6 palabras): acepta si APARECE COMPLETA y textual en alguna página
-      (necesario para datos como "300.00 m²" o "Notaría 101" que el matcher antes rechazaba).
-    - Cita larga: basta con que las primeras 6 palabras aparezcan en alguna página; se
-      queda con la página de ese primer match.
 
-    Devuelve (num_pagina, cita_original_strip) o None si no encaja en ninguna página.
+def _buscar(fragmento: str, texto: str) -> int:
+    """Posición de `fragmento` en `texto` (ambos ya limpios) respetando palabras completas, o -1.
+    'NOTARIA 10' no calza dentro de 'NOTARIA 101'."""
+    return f" {texto} ".find(f" {fragmento} ")
+
+
+def _verificar_cita(cita: Optional[str], paginas: list[Pagina], valor: Optional[str] = None,
+                    pagina_llm: Optional[int] = None) -> Optional[tuple[int, str]]:
+    """(página, cita) si la cita está en el documento, o None.
+
+    - Palabras completas: 'NOTARIA PUBLICA NUMERO 10' no calza dentro de '...101'.
+    - Cita corta (<= 6 palabras): tiene que aparecer completa. Larga: bastan sus primeras 6
+      palabras (el OCR suele romper el final).
+    - Con `valor`: cada palabra del valor tiene que estar en la cita y en el texto junto a ella.
+      Una cita real con un valor inventado ('...TERRENO DE 999.00 M2') no pasa, ni un valor que no
+      está en la cita ('JUAN PEREZ' con una cita que no lo nombra).
     """
     if not cita or not cita.strip():
         return None
-    limpio = _limpia_para_match(cita)
-    palabras = limpio.split()
-    if not palabras:
+    limpia = _limpia_para_match(cita)
+    palabras = limpia.split()
+    if not palabras or len(limpia) < 3:
         return None
-    # Cita corta: debe aparecer literal y completa.
-    if len(palabras) <= 6:
-        if len(limpio) < 3:
-            return None
-        for p in paginas:
-            if limpio in _limpia_para_match(p.texto):
-                return (p.numero, cita.strip())
+    firma = limpia if len(palabras) <= 6 else " ".join(palabras[:6])
+    v = set(_limpia_para_match(valor).split()) if valor else set()
+    if not v <= set(palabras):
         return None
-    # Cita larga: validamos por firma de 6 palabras iniciales.
-    firma = " ".join(palabras[:6])
-    firma_amplia = " ".join(palabras[: min(10, len(palabras))])
-    for p in paginas:
+    for p in sorted(paginas, key=lambda p: p.numero != pagina_llm):
         tx = _limpia_para_match(p.texto)
-        if firma in tx or firma_amplia in tx:
+        i = _buscar(firma, tx)
+        if i < 0:
+            continue
+        ventana = tx[i:i + len(limpia) + VENTANA_VALOR].split()[:len(palabras) + 3]
+        if v <= set(ventana):
             return (p.numero, cita.strip())
+    return None
+
+
+def _plano(t: str) -> str:
+    """Mayúsculas sin acentos con la MISMA longitud que `t`, para recortar el texto original."""
+    return "".join((unicodedata.normalize("NFKD", c)[:1] or c).upper()[:1] or c for c in t)
+
+
+def _recorte(texto: str, inicio: int, fin: int, antes: int = 60, despues: int = 30) -> str:
+    """Fragmento alrededor de [inicio, fin) sin salirse de la línea ni partir palabras."""
+    linea_ini = texto.rfind("\n", 0, inicio) + 1
+    linea_fin = texto.find("\n", fin)
+    linea_fin = len(texto) if linea_fin < 0 else linea_fin
+    a, b = max(linea_ini, inicio - antes), min(linea_fin, fin + despues)
+    while linea_ini < a < inicio and not texto[a - 1].isspace():
+        a += 1
+    while fin < b < linea_fin and not texto[b].isspace():
+        b -= 1
+    return re.sub(r"\s+", " ", texto[a:b]).strip(" |")
+
+
+def _localizar_valor(valor: str, paginas: list[Pagina], pagina_llm: Optional[int] = None) -> Optional[tuple[int, str]]:
+    """Respaldo cuando la cita no calza: busca el valor solo, si es distintivo.
+    Devuelve (página, fragmento literal alrededor del valor) como evidencia."""
+    v = _limpia_para_match(valor)
+    if len(v) < MIN_CARACTERES_VALOR_DISTINTIVO or len(v.split()) < 2 and not re.search(r"[A-Z]", v):
+        return None  # corto, o un solo número: aparecería en fechas, folios o importes
+    patron = re.compile(r"(?<![A-Z0-9])" + r"[^A-Z0-9]+".join(map(re.escape, v.split())) + r"(?![A-Z0-9])")
+    for p in sorted(paginas, key=lambda p: p.numero != pagina_llm):
+        m = patron.search(_plano(p.texto))
+        if m:
+            return p.numero, _recorte(p.texto, m.start(), m.end())
     return None
 
 
@@ -387,22 +423,26 @@ def _construir_campo(
     archivo: str,
     paginas: list[Pagina],
     normalizador: Optional[Callable[[Optional[str]], Optional[str]]] = None,
+    exigir_valor: bool = True,
 ) -> Campo:
     """Convierte un _CampoLLM a Campo del contrato, verificando evidencia.
 
-    Regla 4 del equipo: si la cita no se verifica, el campo queda SIN evidencia y
-    SIN normalizado. Así `cruce.validar_cruzado` ignora el dato posiblemente inventado
-    (ignora campos con `normalizado is None`). El valor literal se conserva solo
-    para mostrarlo al revisor humano.
+    Regla 4 del equipo: si la cita no se verifica, el campo queda SIN evidencia y SIN normalizado
+    (el cruce lo ignora). El valor literal se conserva solo para mostrarlo al revisor.
+    `exigir_valor=False` para texto libre o compuesto que el modelo redacta con sus palabras
+    (gravámenes, colindancias, dirección armada de varias partes): basta con que la cita exista.
     """
     if not extraido.valor or not extraido.valor.strip():
         return Campo()
 
-    match = _verificar_cita(extraido.cita, paginas)
     conf_cruda = max(0.0, min(1.0, float(extraido.confianza)))  # clip a [0,1]: el schema no lo valida
+    match = _verificar_cita(extraido.cita, paginas, extraido.valor if exigir_valor else None, extraido.pagina)
+    if match is None:
+        encontrado = _localizar_valor(extraido.valor, paginas, extraido.pagina)
+        if encontrado:
+            match, conf_cruda = encontrado, min(conf_cruda, CONF_SOLO_VALOR)
 
     if match is None:
-        # Sin evidencia confirmada: el dato NO entra al cruce ni al dictamen cruzado.
         return Campo(
             valor=extraido.valor,
             normalizado=None,
@@ -452,7 +492,7 @@ CAMPOS (descripciones precisas):
 - inscripcion_rpp: literal del párrafo de inscripción en el RPP (fecha + libro + sección + volumen) o null si no aparece. Es diferente del folio_real.
 - medidas_colindancias: resumen corto de medidas y colindancias (NORTE/SUR/ORIENTE/PONIENTE con metros y colindantes).
 - gravamenes: hipotecas, servidumbres u otras cargas sobre el inmueble. Si el documento dice "libre de gravámenes" o similar, copia ese texto.
-- regimen_propiedad: tipo de propiedad: "privada", "ejidal", "comunal", "condominio" o similar según el documento. null si no se indica.
+- regimen_propiedad: régimen VIGENTE del inmueble: "privada", "ejidal", "comunal", "condominio" o similar, solo si el documento lo dice del inmueble hoy. Mencionar un ejido como ubicación o antecedente ("ubicadas en el Ejido El Pedregal", "antes ejido") NO es régimen ejidal: en ese caso null. Si dice dominio pleno o desincorporación, cópialo en la cita.
 - copropiedad: si hay DOS O MÁS copropietarios, copia el texto donde se nombran y si hay o no poder unificado para representarlos. null si es un solo titular.
 - embargo_o_litigio: menciones de embargo judicial, juicio pendiente, demanda, anotación preventiva o litigio sobre el inmueble. null si no se menciona.
 - usufructo: existencia de usufructo (vitalicio o temporal) o nuda propiedad que limite el uso del inmueble. null si no se menciona.
@@ -482,48 +522,66 @@ def _h(id_regla: str, descripcion: str, estado: EstadoRegla, severidad: Severida
 _REGIMENES_NO_PRIVADOS = ("EJIDAL", "EJIDO", "COMUNAL", "COMUNIDAD AGRARIA")
 
 
+def _verificado(c: Optional[Campo]) -> bool:
+    """Solo un dato con evidencia verificada sustenta un CUMPLE (un valor sin cita no basta)."""
+    return bool(c and c.valor and c.evidencia)
+
+
+def _sin_verificar(id_regla: str, descripcion: str, c: Campo) -> Hallazgo:
+    return _h(id_regla, descripcion, EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
+              f"Se extrajo «{c.valor}», pero su cita no se encontró en el documento; confirmarlo contra el original.")
+
+
 def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
     h: list[Hallazgo] = []
 
     # ESC-01 identificación del titular
-    if datos.propietario.valor:
+    if _verificado(datos.propietario):
         h.append(_h("ESC-01", "La escritura identifica al titular del inmueble",
                     EstadoRegla.CUMPLE, Severidad.INFO,
                     f"Titular identificado: {datos.propietario.valor}.",
                     (datos.propietario.evidencia,)))
+    elif datos.propietario.valor:
+        h.append(_sin_verificar("ESC-01", "La escritura identifica al titular del inmueble", datos.propietario))
     else:
         h.append(_h("ESC-01", "La escritura identifica al titular del inmueble",
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                     "No se pudo extraer al titular del inmueble."))
 
     # ESC-02 dirección del inmueble
-    if datos.direccion.valor:
+    if _verificado(datos.direccion):
         h.append(_h("ESC-02", "La escritura identifica la dirección del inmueble",
                     EstadoRegla.CUMPLE, Severidad.INFO,
                     f"Dirección: {datos.direccion.valor}.",
                     (datos.direccion.evidencia,)))
+    elif datos.direccion.valor:
+        h.append(_sin_verificar("ESC-02", "La escritura identifica la dirección del inmueble", datos.direccion))
     else:
         h.append(_h("ESC-02", "La escritura identifica la dirección del inmueble",
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                     "No se extrajo la dirección del inmueble."))
 
     # ESC-03 superficie del terreno
-    if datos.superficie_terreno_m2.valor:
+    if _verificado(datos.superficie_terreno_m2):
         h.append(_h("ESC-03", "La escritura declara la superficie del terreno",
                     EstadoRegla.CUMPLE, Severidad.INFO,
                     f"Superficie declarada: {datos.superficie_terreno_m2.valor}.",
                     (datos.superficie_terreno_m2.evidencia,)))
+    elif datos.superficie_terreno_m2.valor:
+        h.append(_sin_verificar("ESC-03", "La escritura declara la superficie del terreno", datos.superficie_terreno_m2))
     else:
         h.append(_h("ESC-03", "La escritura declara la superficie del terreno",
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                     "No se extrajo la superficie del terreno."))
 
     # ESC-04 clave catastral del inmueble (sin confundir con inscripción en RPP)
-    if datos.clave_catastral.valor:
+    if _verificado(datos.clave_catastral):
         h.append(_h("ESC-04", "La escritura declara la clave catastral del inmueble",
                     EstadoRegla.CUMPLE, Severidad.INFO,
                     f"Clave catastral: {datos.clave_catastral.valor}.",
                     (datos.clave_catastral.evidencia,)))
+    elif datos.clave_catastral.valor:
+        h.append(_sin_verificar("ESC-04", "La escritura declara la clave catastral del inmueble", datos.clave_catastral))
     else:
         h.append(_h("ESC-04", "La escritura declara la clave catastral del inmueble",
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
@@ -554,8 +612,8 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
     gravamenes = datos.especificos.get("gravamenes")
     if gravamenes and gravamenes.valor and gravamenes.evidencia:
         t_low = gravamenes.valor.lower()
-        libre = any(k in t_low for k in ("libre", "no reporta", "sin gravamen", "sin carga"))
         hipoteca = "hipotec" in t_low
+        libre = not hipoteca and any(k in t_low for k in ("libre", "no reporta", "sin gravamen", "sin carga"))
         if libre:
             h.append(_h("ESC-06", "Gravámenes o limitaciones al dominio",
                         EstadoRegla.CUMPLE, Severidad.INFO,
@@ -579,8 +637,8 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
     # ESC-07 datos del notario y número de escritura
     num_esc = datos.especificos.get("numero_escritura")
     notario = datos.especificos.get("notario")
-    tiene_num = bool(num_esc and num_esc.valor)
-    tiene_not = bool(notario and notario.valor)
+    tiene_num = _verificado(num_esc)
+    tiene_not = _verificado(notario)
     if tiene_num and tiene_not:
         evs = []
         if num_esc and num_esc.evidencia:
@@ -599,13 +657,13 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
             faltan.append("notario")
         h.append(_h("ESC-07", "Datos del notario y número de escritura identificados",
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
-                    f"No se extrajo: {', '.join(faltan)}."))
+                    f"No se extrajo con evidencia verificada: {', '.join(faltan)}."))
 
     # ESC-08 inscripción en el Registro Público de la Propiedad (folio real o párrafo de inscripción)
     folio = datos.especificos.get("folio_real")
     inscripcion = datos.especificos.get("inscripcion_rpp")
-    tiene_folio = bool(folio and folio.valor)
-    tiene_inscripcion = bool(inscripcion and inscripcion.valor)
+    tiene_folio = _verificado(folio)
+    tiene_inscripcion = _verificado(inscripcion)
     if tiene_folio or tiene_inscripcion:
         evs = []
         if folio and folio.evidencia:
@@ -630,10 +688,24 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
         # "Dominio pleno" dentro del texto significa ejido ya desincorporado -> no bloqueante.
         texto = (regimen.valor or "").lower()
         dominio_pleno = "dominio pleno" in texto or "desincorporad" in texto
-        if es_no_privado and not dominio_pleno:
+        es_condominio = "CONDOMINIO" in regimen.normalizado
+        if es_no_privado and not dominio_pleno and (tiene_folio or tiene_inscripcion):
+            # Criterio 3B: se rechaza el ejidal sin dominio pleno NI inscripción en el RPP.
+            h.append(_h("ESC-09", "Régimen de propiedad del inmueble",
+                        EstadoRegla.NO_CUMPLE, Severidad.REVISION,
+                        f"Régimen detectado: {regimen.valor}. La escritura está inscrita en el RPP, pero no "
+                        "menciona dominio pleno: confirmar la desincorporación del ejido.",
+                        (regimen.evidencia,)))
+        elif es_condominio:
+            h.append(_h("ESC-09", "Régimen de propiedad del inmueble",
+                        EstadoRegla.NO_CUMPLE, Severidad.REVISION,
+                        f"Régimen en condominio: {regimen.valor}. Revisar el reglamento del condominio y si "
+                        "permite el uso comercial (bandera roja del criterio de 3B).",
+                        (regimen.evidencia,)))
+        elif es_no_privado and not dominio_pleno:
             h.append(_h("ESC-09", "Régimen de propiedad del inmueble",
                         EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE,
-                        f"Régimen detectado: {regimen.valor}. Tiendas 3B requiere propiedad privada; el régimen ejidal o comunal exige procedimiento de desincorporación previa.",
+                        f"Régimen detectado: {regimen.valor}, sin dominio pleno ni inscripción en el RPP. Tiendas 3B requiere propiedad privada; el régimen ejidal o comunal exige desincorporación previa.",
                         (regimen.evidencia,)))
         else:
             explic = f"Régimen: {regimen.valor}."
@@ -769,7 +841,7 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
 
     datos = DatosInmueble(
         propietario=_construir_campo(extraido.propietario, doc.archivo, paginas, _normalizar_nombre),
-        direccion=_construir_campo(extraido.direccion, doc.archivo, paginas, _normalizar_direccion),
+        direccion=_construir_campo(extraido.direccion, doc.archivo, paginas, _normalizar_direccion, exigir_valor=False),
         entidad_federativa=_construir_campo(extraido.entidad_federativa, doc.archivo, paginas, _normalizar_entidad),
         municipio=_construir_campo(extraido.municipio, doc.archivo, paginas, _normalizar_municipio),
         superficie_terreno_m2=_construir_campo(extraido.superficie_terreno_m2, doc.archivo, paginas, _normalizar_superficie),
@@ -777,7 +849,7 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
         numero_oficial=_construir_campo(extraido.numero_oficial, doc.archivo, paginas, _normalizar_numero_oficial),
         fecha_emision=_construir_campo(extraido.fecha_emision, doc.archivo, paginas, _normalizar_fecha),
         vigencia_hasta=Campo(),  # las escrituras no vencen; se deja vacío
-        autoridad_emisora=_construir_campo(extraido.autoridad_emisora, doc.archivo, paginas),
+        autoridad_emisora=_construir_campo(extraido.autoridad_emisora, doc.archivo, paginas, exigir_valor=False),
     )
 
     datos.especificos = {
@@ -787,13 +859,13 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
         "fecha_escritura": _construir_campo(extraido.fecha_escritura, doc.archivo, paginas, _normalizar_fecha),
         "tipo_acto": _construir_campo(extraido.tipo_acto, doc.archivo, paginas),
         "folio_real": _construir_campo(extraido.folio_real, doc.archivo, paginas),
-        "inscripcion_rpp": _construir_campo(extraido.inscripcion_rpp, doc.archivo, paginas),
-        "medidas_colindancias": _construir_campo(extraido.medidas_colindancias, doc.archivo, paginas),
-        "gravamenes": _construir_campo(extraido.gravamenes, doc.archivo, paginas),
-        "regimen_propiedad": _construir_campo(extraido.regimen_propiedad, doc.archivo, paginas),
-        "copropiedad": _construir_campo(extraido.copropiedad, doc.archivo, paginas),
-        "embargo_o_litigio": _construir_campo(extraido.embargo_o_litigio, doc.archivo, paginas),
-        "usufructo": _construir_campo(extraido.usufructo, doc.archivo, paginas),
+        "inscripcion_rpp": _construir_campo(extraido.inscripcion_rpp, doc.archivo, paginas, exigir_valor=False),
+        "medidas_colindancias": _construir_campo(extraido.medidas_colindancias, doc.archivo, paginas, exigir_valor=False),
+        "gravamenes": _construir_campo(extraido.gravamenes, doc.archivo, paginas, exigir_valor=False),
+        "regimen_propiedad": _construir_campo(extraido.regimen_propiedad, doc.archivo, paginas, exigir_valor=False),
+        "copropiedad": _construir_campo(extraido.copropiedad, doc.archivo, paginas, exigir_valor=False),
+        "embargo_o_litigio": _construir_campo(extraido.embargo_o_litigio, doc.archivo, paginas, exigir_valor=False),
+        "usufructo": _construir_campo(extraido.usufructo, doc.archivo, paginas, exigir_valor=False),
     }
 
     hallazgos = _aplicar_reglas(datos)
@@ -806,7 +878,10 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
     ]
     todos_campos = campos_comunes + list(datos.especificos.values())
     confianzas = [c.confianza for c in todos_campos if c.valor]
-    conf_global = round(sum(confianzas) / len(confianzas), 2) if confianzas else 0.0
+    conf_global = sum(confianzas) / len(confianzas) if confianzas else 0.0
+    if doc.legibilidad == Legibilidad.PARCIAL:
+        conf_global *= FACTOR_PARCIAL  # mismo criterio que predial
+    conf_global = round(conf_global, 2)
 
     return DocumentoAnalizado(
         archivo=doc.archivo,

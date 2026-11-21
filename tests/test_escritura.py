@@ -404,6 +404,21 @@ class TestReglasESC:
         assert esc08.estado == EstadoRegla.NO_EVALUABLE
 
     def test_regimen_ejidal_ESC09_bloqueante(self):
+        """Criterio 3B: ejidal sin dominio pleno NI inscripción en el RPP = rechazo."""
+        datos = _datos_completos()
+        datos.especificos["regimen_propiedad"] = Campo(
+            valor="Ejidal", normalizado="EJIDAL",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="régimen ejidal"),
+            confianza=0.9,
+        )
+        datos.especificos.pop("folio_real")
+        datos.especificos.pop("inscripcion_rpp")
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-09")
+        assert h.estado == EstadoRegla.NO_CUMPLE
+        assert h.severidad == Severidad.BLOQUEANTE
+
+    def test_regimen_ejidal_inscrito_en_rpp_ESC09_revision(self):
+        """Con inscripción en el RPP ya no es rechazo directo: revisión (caso ESCRITURA QUMA)."""
         datos = _datos_completos()
         datos.especificos["regimen_propiedad"] = Campo(
             valor="Ejidal", normalizado="EJIDAL",
@@ -412,7 +427,7 @@ class TestReglasESC:
         )
         h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-09")
         assert h.estado == EstadoRegla.NO_CUMPLE
-        assert h.severidad == Severidad.BLOQUEANTE
+        assert h.severidad == Severidad.REVISION
 
     def test_regimen_ejidal_con_dominio_pleno_ESC09_cumple(self):
         """Caso QUMA: ejido con dominio pleno ya es propiedad desincorporada, no bloqueante."""
@@ -625,3 +640,90 @@ class TestCorreccionesJulian:
         monkeypatch.setattr(escritura, "_extraer", lambda *a: (_ for _ in ()).throw(AssertionError("no debe llamar")))
         doc = _doc_con_anexo().model_copy(update={"paginas": [Pagina(numero=1, texto="  ")]})
         assert escritura.analizar(doc, Contexto()).hallazgos[0].id_regla == "ESC-ILEG"
+
+
+# ============================================================ revisión de Juan Pablo (10 casos, sin API)
+
+PAG_JP = [Pagina(numero=1, texto="TITULAR DE LA NOTARIA PUBLICA NUMERO 101 DEL ESTADO. "
+                                 "SUPERFICIE TOTAL DE TERRENO DE 450.00 M2. COMPRADOR MARIO SOTO LUNA.")]
+
+
+class TestRevisionJuanPablo:
+    def _regla(self, datos, rid):
+        return next(h for h in _aplicar_reglas(datos) if h.id_regla == rid)
+
+    # 1. CUMPLE solo con evidencia
+    @pytest.mark.parametrize("rid,campo", [("ESC-01", "propietario"), ("ESC-02", "direccion"),
+                                           ("ESC-03", "superficie_terreno_m2"), ("ESC-04", "clave_catastral")])
+    def test_1_valor_sin_evidencia_no_cumple_la_regla(self, rid, campo):
+        datos = DatosInmueble(**{campo: Campo(valor="X 123", confianza=0.5)})
+        h = self._regla(datos, rid)
+        assert (h.estado, h.severidad) == (EstadoRegla.NO_EVALUABLE, Severidad.REVISION) and not h.evidencias
+
+    def test_1_esc07_y_esc08_exigen_evidencia(self):
+        datos = DatosInmueble(especificos={"folio_real": Campo(valor="F-1", confianza=0.5),
+                                           "numero_escritura": Campo(valor="4521", confianza=0.5),
+                                           "notario": Campo(valor="Lic. X", confianza=0.5)})
+        assert self._regla(datos, "ESC-08").estado == EstadoRegla.NO_EVALUABLE
+        assert self._regla(datos, "ESC-07").estado == EstadoRegla.NO_EVALUABLE
+
+    # 2. huecos de _verificar_cita
+    def test_2a_palabras_completas(self):
+        assert _verificar_cita("NOTARIA PUBLICA NUMERO 10", PAG_JP) is None
+        assert _verificar_cita("NOTARIA PUBLICA NUMERO 101", PAG_JP) is not None
+
+    def test_2b_cita_real_con_valor_inventado_al_final(self):
+        assert _verificar_cita("SUPERFICIE TOTAL DE TERRENO DE 999.00 M2", PAG_JP, valor="999.00 M2") is None
+        assert _verificar_cita("SUPERFICIE TOTAL DE TERRENO DE 450.00 M2", PAG_JP, valor="450.00 M2") is not None
+
+    def test_2c_el_valor_tiene_que_estar_en_la_cita(self):
+        assert _verificar_cita("SUPERFICIE TOTAL DE TERRENO", PAG_JP, valor="JUAN PEREZ") is None
+        extraido = _CampoLLM(valor="JUAN PEREZ", cita="COMPRADOR MARIO SOTO LUNA", pagina=1, confianza=0.9)
+        assert _construir_campo(extraido, "a.pdf", PAG_JP).evidencia is None
+
+    # 3. QUMA: ejido como ubicación + inscripción en RPP no es rechazo directo (ver TestReglasESC)
+    def test_3_prompt_distingue_ubicacion_de_regimen(self):
+        assert "ubicadas en el Ejido" in escritura._PROMPT_SISTEMA and "NO es régimen ejidal" in escritura._PROMPT_SISTEMA
+
+    # 4-6. normalizadores
+    @pytest.mark.parametrize("entrada,esperado", [("104-A", "104A"), ("KM 27.5 No. 1", "1"), ("S/N", "SN")])
+    def test_4_numero_oficial_como_el_cruce(self, entrada, esperado):
+        assert escritura._normalizar_numero_oficial(entrada) == esperado
+
+    @pytest.mark.parametrize("entrada,esperado", [("15 de marzo del 2019", "2019-03-15"), ("31/02/2019", None)])
+    def test_5_fechas(self, entrada, esperado):
+        assert _normalizar_fecha(entrada) == esperado
+
+    @pytest.mark.parametrize("entrada,esperado", [("1-25-00 HAS", "12500.00"), ("0.5000 HECTAREAS", "5000.00"),
+                                                  ("450.00 m2", "450.00")])
+    def test_6_hectareas(self, entrada, esperado):
+        assert _normalizar_superficie(entrada) == esperado
+
+    # 7. condominio
+    def test_7_condominio_pide_revision(self):
+        datos = DatosInmueble(especificos={"regimen_propiedad": Campo(
+            valor="Régimen de propiedad en condominio", normalizado="REGIMEN DE PROPIEDAD EN CONDOMINIO",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="propiedad en condominio"), confianza=0.9)})
+        h = self._regla(datos, "ESC-09")
+        assert (h.estado, h.severidad) == (EstadoRegla.NO_CUMPLE, Severidad.REVISION)
+
+    # 8. hipoteca gana sobre "sin gravamen"
+    def test_8_hipoteca_antes_que_libre(self):
+        datos = DatosInmueble(especificos={"gravamenes": Campo(
+            valor="Sin gravamen salvo hipoteca a favor de BBVA", normalizado="X",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="hipoteca a favor de BBVA"), confianza=0.9)})
+        h = self._regla(datos, "ESC-06")
+        assert (h.estado, h.severidad) == (EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE)
+
+    # 9. legibilidad parcial baja la confianza
+    def test_9_parcial_baja_confianza(self, monkeypatch):
+        def falso(doc, paginas):
+            d = {n: _CampoLLM(valor=None, cita=None, pagina=None, confianza=0.0) for n in escritura._CAMPOS_ESCRITURA_LLM}
+            d["superficie_terreno_m2"] = _CampoLLM(valor="450.00 M2", cita="TERRENO DE 450.00 M2", pagina=1, confianza=1.0)
+            return escritura._EscrituraLLM(**d)
+        monkeypatch.setattr(escritura, "_extraer", falso)
+        base = DocumentoLeido(archivo="a.pdf", tipo=TipoDocumento.ESCRITURA, confianza_tipo=1.0,
+                              legibilidad=Legibilidad.BUENA, paginas=PAG_JP, paginas_totales=1)
+        buena = escritura.analizar(base, Contexto()).confianza
+        parcial = escritura.analizar(base.model_copy(update={"legibilidad": Legibilidad.PARCIAL}), Contexto()).confianza
+        assert buena == 1.0 and parcial == escritura.FACTOR_PARCIAL
