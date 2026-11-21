@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import CACHE_DIR, LLM_MODEL, get_callbacks, get_llm
 from ..schemas import (
@@ -91,7 +91,18 @@ MESES_ES = {
 
 # ---------------------------------------------------------------- modelo interno LLM
 
-class _CampoLLM(BaseModel):
+def _todo_requerido(schema: dict) -> None:
+    schema["required"] = list(schema.get("properties", {}))
+
+
+class _SalidaLLM(BaseModel):
+    """Base de lo que devuelve el modelo. En el esquema que ve la API todos los campos son
+    obligatorios (los nulos se piden como null): la API acepta máximo 24 opcionales. Los valores
+    por defecto solo sirven para construir objetos en código y en pruebas."""
+    model_config = ConfigDict(json_schema_extra=_todo_requerido)
+
+
+class _CampoLLM(_SalidaLLM):
     valor: Optional[str] = Field(default=None, description="Dato tal como aparece en el documento")
     cita: Optional[str] = Field(default=None, description="Texto literal del documento que contiene el dato")
     pagina: Optional[int] = Field(default=None, description="Página [Pn] donde está la cita")
@@ -113,7 +124,7 @@ class _Compatibilidad(str, Enum):
     NO_DETERMINABLE = "no_determinable"
 
 
-class _UsoSueloLLM(BaseModel):
+class _UsoSueloLLM(_SalidaLLM):
     """Extracción cruda de la licencia antes de normalizar y verificar citas."""
 
     propietario: _CampoLLM = Field(default_factory=_CampoLLM)
