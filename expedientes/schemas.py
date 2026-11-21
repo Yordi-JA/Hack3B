@@ -131,6 +131,18 @@ class DatosInmueble(BaseModel):
     """
     propietario: Campo = Field(default_factory=Campo)
     direccion: Campo = Field(default_factory=Campo)
+    entidad_federativa: Campo = Field(
+        default_factory=Campo,
+        description=(
+            "Estado de la República (ej. 'Hidalgo'). Puede venir solo en encabezado, sello o texto legal, "
+            "no en la dirección; buscar en todo el documento. normalizado: nombre oficial en mayúsculas "
+            "sin acentos, ej. 'HIDALGO', 'MEXICO' para Estado de México, 'CIUDAD DE MEXICO'."
+        ),
+    )
+    municipio: Campo = Field(
+        default_factory=Campo,
+        description="Municipio o alcaldía. normalizado: mayúsculas sin acentos.",
+    )
     superficie_terreno_m2: Campo = Field(default_factory=Campo)
     clave_catastral: Campo = Field(default_factory=Campo)
     numero_oficial: Campo = Field(default_factory=Campo)
