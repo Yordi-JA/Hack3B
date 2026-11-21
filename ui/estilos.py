@@ -61,6 +61,17 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 [data-testid="stSidebar"] p.lateral-nota {{ color: var(--blanco); font-size: 13px; line-height: 1.5; margin: 28px 16px 0 6px;
   padding-top: 14px; border-top: 1px solid rgba(255,255,255,.35); }}
 
+.lateral-estado {{ margin: 14px 16px 6px 6px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.6);
+  border-radius: 8px; color: var(--blanco); }}
+.lateral-estado b {{ display: block; font-size: 14px; color: var(--blanco); }}
+.lateral-estado small {{ display: block; font-size: 12px; color: var(--blanco); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+[data-testid="stSidebar"] [class*="st-key-lat-"] {{ padding-right: 16px; }}
+[data-testid="stSidebar"] [class*="st-key-lat-"] button {{ background: transparent; color: var(--blanco);
+  border: 1.5px solid var(--blanco); border-radius: 8px; min-height: 44px; }}
+[data-testid="stSidebar"] [class*="st-key-lat-"] button:hover {{ background: rgba(255,255,255,.14); color: var(--blanco); }}
+[data-testid="stSidebar"] [class*="st-key-lat-"] button p {{ color: inherit; font-weight: 700; }}
+
 /* navegación: botones de Streamlit con forma de pestaña blanca que se une al panel */
 [data-testid="stSidebar"] [class*="st-key-nav-"] {{ width: calc(100% + 30px) !important; max-width: none !important; }}
 [data-testid="stSidebar"] [class*="st-key-nav-"] button {{

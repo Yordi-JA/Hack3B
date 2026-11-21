@@ -10,7 +10,9 @@ import json
 import os
 import re
 import tempfile
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -43,7 +45,16 @@ class ArchivoInvalido:
     motivo: str
 
 
-RESERVADOS_WINDOWS = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+RESERVADOS_WINDOWS = {
+    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+    *(f"COM{i}" for i in [*range(1, 10), "¹", "²", "³"]),
+    *(f"LPT{i}" for i in [*range(1, 10), "¹", "²", "³"]),
+}
+# Mismos caracteres que Windows no acepta en un nombre; ":" y separadores se rechazan aparte.
+_CARACTERES_INVALIDOS = re.compile(r'[<>"|?*\x00-\x1f]+')
+
+LIMITE_ARCHIVOS = 20
+LIMITE_BYTES = 200 * 1024 * 1024
 
 
 def nombre_reservado(nombre: str) -> bool:
@@ -61,6 +72,64 @@ def nombre_archivo(expediente_id: str) -> str:
     if not limpio or nombre_reservado(limpio):
         limpio = "expediente"
     return limpio + ".json"
+
+
+@dataclass
+class Subidas:
+    """Resultado de preparar los archivos subidos: qué se analiza y qué se avisa."""
+    validos: list[tuple[str, bytes]] = field(default_factory=list)
+    omitidos: list[str] = field(default_factory=list)   # nombres que Windows no acepta
+    repetidos: list[str] = field(default_factory=list)  # mismo nombre salvo mayúsculas o punto final
+    exceso: Optional[str] = None                        # motivo si se pasan los límites
+
+
+def preparar_subidas(archivos: list[tuple[str, bytes]]) -> Subidas:
+    """Normaliza los nombres de las subidas sin cambiar el original más de lo necesario.
+
+    Rechaza nombres reservados de Windows, limpia <>"|?* y caracteres de control, y deja un solo
+    archivo por nombre comparando sin mayúsculas ni puntos o espacios finales (Windows los ignora).
+    Con más de LIMITE_ARCHIVOS archivos o LIMITE_BYTES en total no deja nada para analizar.
+    """
+    r = Subidas()
+    if len(archivos) > LIMITE_ARCHIVOS:
+        r.exceso = f"Se pueden analizar hasta {LIMITE_ARCHIVOS} archivos por expediente; subiste {len(archivos)}."
+        return r
+    total = sum(len(contenido) for _, contenido in archivos)
+    if total > LIMITE_BYTES:
+        r.exceso = (f"Los archivos suman {total / 1024 / 1024:.0f} MB; el límite por expediente es "
+                    f"{LIMITE_BYTES // 1024 // 1024} MB.")
+        return r
+    vistos: dict[str, int] = {}
+    for original, contenido in archivos:
+        # Se separa a mano: en Windows, Path("a:b.pdf").name daría "b.pdf" (lee "a:" como unidad).
+        base = original.replace("\\", "/").rsplit("/", 1)[-1]
+        if nombre_reservado(base) or nombre_reservado(Path(base).stem):
+            r.omitidos.append(original)
+            continue
+        limpio = _CARACTERES_INVALIDOS.sub("-", base).rstrip(" .")
+        if not limpio or nombre_reservado(limpio):
+            r.omitidos.append(original)
+            continue
+        clave = limpio.casefold()
+        if clave in vistos:
+            r.repetidos.append(original)
+            continue
+        vistos[clave] = len(r.validos)
+        r.validos.append((limpio, contenido))
+    return r
+
+
+def id_expediente(nombre: Optional[str], ahora: Optional[datetime] = None) -> str:
+    """El id lo fija la UI antes del análisis: el nombre del usuario o la fecha y hora."""
+    return (nombre or "").strip() or (ahora or datetime.now()).strftime("EXP-%Y%m%d-%H%M%S")
+
+
+def fijar_id(dictamen: Dictamen, expediente_id: str) -> Dictamen:
+    """Si el dictamen trae otro id (un LLM con texto inyectado podría cambiarlo), se usa el de la UI;
+    así un análisis nunca sobrescribe el archivo de otro expediente."""
+    if dictamen.expediente_id == expediente_id:
+        return dictamen
+    return dictamen.model_copy(update={"expediente_id": expediente_id})
 
 
 def _leer(ruta: Path, origen: Origen) -> Entrada | ArchivoInvalido:
@@ -106,7 +175,7 @@ def guardar(dictamen: Dictamen, dir_resultados: Optional[Path] = None) -> Entrad
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(dictamen.model_dump_json(indent=2))
-        os.replace(tmp, destino)
+        _reemplazar(tmp, destino)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
@@ -121,18 +190,44 @@ def _id_guardado(ruta: Path) -> Optional[str]:
         return None
 
 
+def _reemplazar(origen: str, destino: Path, intentos: int = 10) -> None:
+    """os.replace con reintentos: en Windows falla con PermissionError si otra sesión está leyendo
+    el archivo en ese momento."""
+    for i in range(intentos):
+        try:
+            os.replace(origen, destino)
+            return
+        except PermissionError:
+            if i == intentos - 1:
+                raise
+            time.sleep(0.1)
+
+
+def _parecidos(ruta: Path) -> list[Path]:
+    """Archivos de la carpeta con el mismo nombre sin distinguir mayúsculas, el exacto primero."""
+    if not ruta.parent.is_dir():
+        return []
+    iguales = [p for p in ruta.parent.iterdir() if p.name.casefold() == ruta.name.casefold()]
+    return sorted(iguales, key=lambda p: p.name != ruta.name)
+
+
 def _en_disco(ruta: Path) -> Path:
-    """El nombre tal como quedó en disco (NTFS y APFS no distinguen mayúsculas)."""
-    return next((p for p in ruta.parent.iterdir() if p.name.lower() == ruta.name.lower()), ruta)
+    """El nombre tal como quedó en disco: el exacto si existe; si no, el que solo cambia en
+    mayúsculas (NTFS y APFS no las distinguen)."""
+    parecidos = _parecidos(ruta)
+    return parecidos[0] if parecidos else ruta
 
 
 def _destino_libre(carpeta: Path, expediente_id: str) -> Path:
-    """El mismo id reusa su archivo (re-análisis). Si otro id cae en el mismo nombre, por la limpieza
-    de caracteres o por mayúsculas, se agrega -2, -3..."""
+    """El mismo id reusa su archivo (re-análisis). Si otro id ocupa el mismo nombre, aunque sea solo
+    con otras mayúsculas, se agrega -2, -3... Así funciona igual en disco con o sin mayúsculas."""
     base = nombre_archivo(expediente_id)[: -len(".json")]
     n = 1
     while True:
         destino = carpeta / (f"{base}.json" if n == 1 else f"{base}-{n}.json")
-        if not destino.exists() or _id_guardado(_en_disco(destino)) == expediente_id:
+        parecidos = _parecidos(destino)
+        if not parecidos:
             return destino
+        if all(_id_guardado(p) == expediente_id for p in parecidos):
+            return parecidos[0]
         n += 1

@@ -341,6 +341,8 @@ def tabla_datos(d: Dictamen) -> str:
 def avisos_sin_analizar(d: Dictamen) -> str:
     avisos = []
     for doc in L.archivos_sin_analizar(d):
+        if doc.tipo == TipoDocumento.OTRO:  # no es un tipo requerido: no deja requisitos incompletos
+            continue
         tipo = L.NOMBRE_TIPO[doc.tipo]
         avisos.append(
             f'<div class="aviso-req">{etiqueta("Sin analizar", t.AMBAR)} {txt(doc.archivo)} ({tipo}) no se pudo '
