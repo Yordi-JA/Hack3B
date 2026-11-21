@@ -99,13 +99,13 @@ def css_paso(paso: Paso) -> str:
     else:
         reglas.append(oscurecer_lateral)
         reglas.append(
-            f".st-key-{paso.objetivo} {{ position: relative; z-index: 999; border-radius: 16px; "
+            f".st-key-{paso.objetivo} {{ position: relative; z-index: 999; border-radius: 8px; "
             f"box-shadow: 0 0 0 4px #fff, 0 0 0 9999px {_SOMBRA}; scroll-margin: 80px; }}"
         )
     centrada = paso.objetivo is None
     reglas.append(
         ".st-key-tour-card { position: fixed; z-index: 1001; width: 380px; max-width: calc(100vw - 32px); "
-        f"background: #fff; border-radius: 16px; padding: 20px 22px 14px; border-top: 5px solid {t.ROJO_3B}; "
+        f"background: #fff; border-radius: 6px; padding: 20px 22px 14px; border: 2px solid {t.TINTA_3B}; "
         "box-shadow: 0 18px 48px rgba(0,0,0,.28); "
         + ("left: 50%; top: 50%; transform: translate(-50%, -50%); }" if centrada else "right: 32px; bottom: 32px; }")
     )

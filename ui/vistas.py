@@ -146,9 +146,9 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
 
     # Tablero: saludo y buscador, 4 indicadores, mapa en tarjeta con ventana por estado, filtros y lista.
     with st.container(key="b-cabecera"):
-        cab, buscador = st.columns([3, 2], vertical_alignment="center")
+        cab, buscador = st.columns([3, 2], vertical_alignment="bottom")
         with cab:
-            html(C.saludo(USUARIO[0].split()[0], "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
+            html(C.encabezado(f"Hola, {USUARIO[0].split()[0]}", "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
         with buscador:
             st.text_input(
                 "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
@@ -370,8 +370,7 @@ def _documentos_esperados() -> str:
 
 
 def vista_nuevo() -> None:
-    with st.container(key="b-cabecera"):  # misma banda de encabezado que el inicio
-        html(C.cabecera("Subir expediente", "Sube los PDF o imágenes de un inmueble y el sistema emite el dictamen con su evidencia."))
+    html(C.encabezado("Subir expediente"))
     pendiente = _trabajo_pendiente()
     with st.container(key="subir"):
         izq, der = st.columns([1.5, 1], gap="large")

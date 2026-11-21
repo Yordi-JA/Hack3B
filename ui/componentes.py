@@ -197,18 +197,6 @@ ETIQUETA_KPI = {
 }
 
 
-def saludo(nombre: str, subtitulo: str) -> str:
-    return (
-        f'<div class="saludo"><h1>Hola, <em class="saludo-nombre">{txt(nombre)}</em></h1>'
-        f'<p>{txt(subtitulo)}</p></div>'
-    )
-
-
-def cabecera(titulo: str, subtitulo: str) -> str:
-    """Encabezado de las demás vistas con la misma banda y tipografía del saludo del inicio."""
-    return f'<div class="saludo"><h1>{txt(titulo)}</h1><p>{txt(subtitulo)}</p></div>'
-
-
 def _pct_entero(parte: int, total: int) -> str:
     return f"{round(100 * parte / total)} %" if total else "0 %"
 

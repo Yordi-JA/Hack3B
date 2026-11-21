@@ -343,120 +343,86 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
 .stApp .doc-campos dt, .stApp .doc-campos dd {{ font-size: 14px; line-height: 1.4; }}
 .stApp .inc h3, .stApp .razones h3, .stApp .mapa-bloque h3 {{ font-family: var(--f-texto); font-weight: 700; }}
 
-/* ==== Bandeja tipo tablero (Diego): todo lo de la bandeja nueva va en este bloque ====
-   Saludo en banda blanca, 4 indicadores en tarjetas, mapa en tarjeta blanca con ventana por
-   estado, filtros en tarjeta y recorrido guiado. Barra lateral con la tipografía del tablero. */
-[data-testid="stSidebar"], [data-testid="stSidebar"] p, [data-testid="stSidebar"] button {{ font-family: var(--f-ui); }}
-[data-testid="stSidebar"] [class*="st-key-nav-"] button p {{ font-size: 15px; font-weight: 500; }}
+/* ==== Inicio (Diego) con el estilo de Subir expediente (Yordi) ====
+   Mismo lenguaje que esa vista: líneas de 2 px en tinta con esquinas de 6 px, títulos gruesos en
+   mayúsculas que interrumpen la línea del marco, etiquetas en mayúsculas y acción principal verde. */
 [data-testid="stSidebar"] [class*="st-key-nav-"] [data-testid="stIconMaterial"] {{ font-size: 20px; }}
-.lateral-grupo {{ font-family: var(--f-ui); letter-spacing: .08em; opacity: .85; }}
+[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] {{ gap: 6px; }}
+[data-testid="stSidebar"] .lateral-grupo {{ margin: 20px 0 10px 6px; }}
+.lateral-marca .lateral-sub {{ display: block; color: var(--blanco); font-size: 12px; margin-top: 2px; }}
 .lateral-usuario {{ display: flex; gap: 12px; align-items: center; margin: 22px 16px 0 4px; padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,.35); color: var(--blanco); font-family: var(--f-ui); }}
+  border-top: 1px solid rgba(255,255,255,.35); color: var(--blanco); }}
 .lat-avatar {{ flex: none; width: 38px; height: 38px; border-radius: 50%; background: var(--blanco); color: var(--rojo-osc);
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }}
 .lateral-usuario b {{ display: block; font-size: 14px; color: var(--blanco); }}
-.lateral-usuario small {{ display: block; font-size: 12px; color: var(--blanco); opacity: .9; }}
+.lateral-usuario small {{ display: block; font-size: 12px; color: var(--blanco); }}
 
-.st-key-b-cabecera {{ background: var(--tarjeta); margin: -28px -36px 22px; padding: 16px 36px;
-  border-bottom: 1px solid var(--borde); border-radius: 20px 20px 0 0; }}
-.saludo h1, .stApp .saludo h1 {{ font-family: var(--f-ui); font-size: 26px; font-weight: 600; color: var(--tinta);
-  margin: 0; padding: 0; line-height: 1.2; letter-spacing: -.01em; }}
-.stApp .saludo h1, .stApp .saludo h1 span {{ color: var(--tinta); }}
-.stApp .saludo em.saludo-nombre {{ color: var(--rojo-osc); font-style: normal; }}
-/* La bandeja usa todo el ancho del panel, como el tablero de referencia. */
-[data-testid="stMainBlockContainer"]:has(.st-key-b-cabecera) {{ max-width: none; }}
-[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] {{ gap: 6px; }}
-[data-testid="stSidebar"] .lateral-grupo {{ margin: 20px 0 10px 6px; }}
-.st-key-b-cabecera {{ width: calc(100% + 72px) !important; max-width: none !important; }}
-.tour-ir {{ display: inline-block; font-size: 13px; font-weight: 700; color: var(--rojo-osc); text-decoration: none; margin: 0 0 8px; }}
-.lateral-marca .lateral-sub {{ display: block; color: var(--blanco); font-size: 12px; opacity: .9; margin-top: 2px; }}
-.saludo p {{ font-family: var(--f-ui); font-size: 13px; color: var(--texto2); margin: 4px 0 0; }}
-.st-key-b-cabecera [data-testid="stTextInputRootElement"] {{ border-radius: 10px; border: 1px solid var(--borde); background: var(--panel); }}
+/* El inicio usa todo el ancho del panel. */
+[data-testid="stMainBlockContainer"]:has(.st-key-b-kpis) {{ max-width: none; }}
+.st-key-b-cabecera {{ margin-bottom: 26px; }}
+.st-key-b-cabecera [data-testid="stTextInputRootElement"] {{ height: 46px; border: 2px solid var(--tinta); border-radius: 6px; background: #fff; }}
+.st-key-b-cabecera [data-testid="stTextInputRootElement"]:focus-within {{ border-color: var(--rojo-osc); box-shadow: 0 0 0 2px var(--rojo-osc); }}
+.st-key-b-cabecera input::placeholder {{ color: var(--texto2); opacity: 1; }}
 
-.kpis {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0 0 18px; font-family: var(--f-ui); }}
-a.kpi {{ display: block; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 18px 20px 16px;
-  text-decoration: none; color: var(--texto); transition: border-color .15s, box-shadow .15s; }}
-a.kpi:hover, a.kpi:focus-visible {{ border-color: var(--rojo-osc); box-shadow: 0 6px 18px rgba(4,33,31,.08); }}
-a.kpi.kpi-total {{ border: 1.5px solid var(--rojo-osc); }}
-.kpi-etq {{ display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--texto2); }}
-.kpi-punto {{ display: inline-block; width: 10px; height: 10px; border-radius: 50%; }}
-.kpi-num {{ display: block; font-size: 34px; font-weight: 700; line-height: 1.1; margin: 10px 0 6px; color: var(--tinta); }}
-.kpi-sub {{ display: block; font-size: 12px; color: var(--texto2); }}
+/* Título que interrumpe la línea del marco, igual que EXPEDIENTE en Subir expediente. */
+.st-key-b-filtros::before, .mapa-tarjeta .mapa-cab h3, .stApp .mapa-tarjeta .mapa-cab h3 {{
+  position: absolute; top: 0; left: 14px; transform: translateY(-55%); background: var(--panel); padding: 0 10px; margin: 0;
+  font-family: var(--f-titular); font-weight: 900; font-size: 18px; line-height: 1; color: var(--tinta); text-transform: uppercase; }}
 
-.mapa-tarjeta {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 22px 16px;
-  margin: 0 0 18px; font-family: var(--f-ui); }}
+.kpis {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 0 0 34px; }}
+a.kpi {{ display: block; background: transparent; border: 2px solid var(--tinta); border-radius: 6px; padding: 16px 18px 14px;
+  text-decoration: none; color: var(--texto); }}
+a.kpi:hover, a.kpi:focus-visible {{ border-color: var(--rojo-osc); }}
+a.kpi.kpi-total {{ border-color: var(--rojo-osc); }}
+.kpi-etq {{ display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--tinta); }}
+.kpi-punto {{ display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid rgba(0,0,0,.2); }}
+.kpi-num {{ display: block; font-family: var(--f-titular); font-weight: 900; font-size: 38px; line-height: 1.1; margin: 10px 0 4px; color: var(--tinta); }}
+.kpi-sub {{ display: block; font-size: 13px; color: var(--texto2); }}
+
+.mapa-tarjeta {{ position: relative; background: transparent; border: 2px solid var(--tinta); border-radius: 6px;
+  padding: 26px 22px 16px; margin: 0 0 34px; }}
 .mapa-cab {{ display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 24px; }}
-.stApp .mapa-cab h3 {{ font-family: var(--f-ui); font-size: 16px; font-weight: 700; color: var(--tinta); margin: 0; padding: 0; }}
-.mapa-cab p {{ font-size: 12px; color: var(--texto2); margin: 4px 0 0; max-width: 60ch; }}
-.mapa-cab .leyenda {{ margin: 2px 0 0; }}
+.mapa-cab p {{ font-size: 13px; color: var(--texto2); margin: 0; max-width: 60ch; }}
+.mapa-cab .leyenda {{ margin: 0; }}
 .mapa-lienzo {{ position: relative; max-width: calc(62vh * 1000 / 630); margin: 10px auto 0; }}
-.mx-abr {{ font: 600 11px var(--f-ui); fill: var(--texto2); letter-spacing: .05em; pointer-events: none; }}
-.mx-num {{ font-family: var(--f-ui); }}
+.mx-abr {{ font: 700 11px var(--f-texto); fill: var(--texto2); letter-spacing: .05em; pointer-events: none; }}
 
-.mx-ventana {{ position: absolute; z-index: 5; width: 260px; background: var(--tarjeta); border: 1px solid var(--borde);
-  border-radius: 14px; box-shadow: 0 14px 36px rgba(4,33,31,.2); padding: 14px 16px 14px; font-family: var(--f-ui); }}
+.mx-ventana {{ position: absolute; z-index: 5; width: 262px; background: #fff; border: 2px solid var(--tinta); border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(4,33,31,.18); padding: 14px 16px 14px; }}
 .mx-ventana.v-der {{ transform: translate(22px, -50%); }}
 .mx-ventana.v-izq {{ transform: translate(calc(-100% - 22px), -50%); }}
 .v-cab {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; }}
-.v-cab b {{ font-size: 16px; color: var(--tinta); }}
-.mx-ventana a.v-cerrar {{ text-decoration: none; color: var(--texto2); font-size: 22px; line-height: 1; padding: 0 4px; }}
+.v-cab b {{ font-family: var(--f-titular); font-weight: 900; font-size: 16px; text-transform: uppercase; color: var(--tinta); }}
+.mx-ventana a.v-cerrar {{ text-decoration: none; color: var(--tinta); font-size: 22px; line-height: 1; padding: 0 4px; }}
 .mx-ventana a.v-cerrar:hover {{ color: var(--rojo-osc); }}
-.mx-ventana p.v-total {{ font-size: 12px; color: var(--texto2); margin: 2px 0 10px; }}
-.v-fila {{ display: grid; grid-template-columns: 1fr auto 26px; align-items: center; gap: 8px; font-size: 13px; margin-top: 8px; }}
-.v-etq i {{ display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; }}
+.mx-ventana p.v-total {{ font-size: 13px; color: var(--texto2); margin: 4px 0 10px; }}
+.v-fila {{ display: grid; grid-template-columns: 1fr auto 26px; align-items: center; gap: 8px; font-size: 14px; margin-top: 8px; }}
+.v-etq i {{ display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; }}
 .v-fila b {{ font-size: 14px; }}
 .v-fila small {{ color: var(--texto2); text-align: right; font-size: 12px; }}
-.v-barra {{ height: 6px; background: var(--panel); border-radius: 4px; overflow: hidden; margin: 5px 0 0; }}
-.v-barra i {{ display: block; height: 100%; border-radius: 4px; }}
-.mx-ventana a.v-ver {{ display: block; margin-top: 14px; text-align: center; font-size: 13px; font-weight: 700; color: #fff;
-  background: var(--rojo-osc); border-radius: 8px; padding: 9px 8px; text-decoration: none; }}
-.mx-ventana a.v-ver:hover {{ background: #A51118; }}
+.v-barra {{ height: 6px; background: var(--panel); border-radius: 2px; overflow: hidden; margin: 5px 0 0; }}
+.v-barra i {{ display: block; height: 100%; }}
+.mx-ventana a.v-ver {{ display: block; margin-top: 14px; text-align: center; font-size: 14px; font-weight: 700; color: var(--tinta);
+  background: var(--verde); border: 1px solid var(--verde); border-radius: 6px; padding: 9px 8px; text-decoration: none; }}
+.mx-ventana a.v-ver:hover {{ background: var(--verde-hover); border-color: var(--verde-hover); }}
 
-.st-key-b-filtros {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 12px 18px 14px;
-  margin-bottom: 8px; font-family: var(--f-ui); }}
-.stApp h2.lista-titulo {{ font-family: var(--f-ui); font-size: 18px; font-weight: 700; color: var(--tinta); margin: 18px 0 0; padding: 0; }}
-h2.lista-titulo small {{ font-size: 13px; font-weight: 600; color: var(--texto2); background: var(--tarjeta);
-  border: 1px solid var(--borde); border-radius: 999px; padding: 1px 9px; margin-left: 6px; vertical-align: 2px; }}
+.st-key-b-filtros {{ position: relative; border: 2px solid var(--tinta); border-radius: 6px; padding: 26px 20px 16px;
+  margin-bottom: 10px; overflow: visible; }}
+.st-key-b-filtros::before {{ content: "Filtros"; }}
+.st-key-b-filtros [data-testid="stWidgetLabel"] p {{ font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--tinta); }}
+.st-key-b-filtros [data-baseweb="select"] > div {{ border: 2px solid var(--tinta); border-radius: 6px; background: #fff; }}
+.st-key-b-filtros [data-testid="stButtonGroup"] button {{ border-color: var(--tinta); }}
+.stApp h2.lista-titulo {{ font-family: var(--f-titular); font-weight: 900; font-size: 21px; color: var(--tinta); margin: 30px 0 0; padding: 0; }}
+h2.lista-titulo small {{ font-family: var(--f-texto); font-size: 13px; font-weight: 700; color: var(--tinta);
+  border: 2px solid var(--tinta); border-radius: 6px; padding: 0 8px; margin-left: 8px; vertical-align: 3px; }}
 
-.st-key-tour-card {{ font-family: var(--f-ui); }}
 .tour-paso {{ font-size: 12px; font-weight: 700; color: var(--rojo-osc); text-transform: uppercase; letter-spacing: .06em; }}
-.stApp h3.tour-titulo {{ font-family: var(--f-ui); font-size: 18px; font-weight: 700; color: var(--tinta); margin: 6px 0 6px; padding: 0; }}
-.tour-texto {{ font-size: 14px; line-height: 1.5; color: var(--texto); margin: 0 0 6px; }}
-
-/* Subir expediente con el diseño del inicio (pedido de producto): tarjetas blancas de 16 px,
-   bordes finos, campos redondeados sobre gris claro y tipografía del tablero. Solo sobrescribe
-   el bloque de Subir expediente, que va antes; no lo modifica. */
-.st-key-subir, .st-key-subir p, .st-key-subir label, .st-key-subir input, .st-key-subir button {{ font-family: var(--f-ui); }}
-.st-key-subir {{ max-width: none; }}
-.st-key-subir-marco {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px;
-  padding: 22px 24px 20px; margin-top: 0; }}
-.st-key-subir-marco::before {{ content: "Datos del expediente"; position: static; display: block; transform: none;
-  background: transparent; padding: 0; margin: 0 0 14px; font-family: var(--f-ui); font-weight: 700; font-size: 16px;
-  text-transform: none; color: var(--tinta); }}
-.st-key-subir-nombre [data-testid="stWidgetLabel"] p, .st-key-subir-archivos [data-testid="stWidgetLabel"] p {{
-  font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--texto2); }}
-.st-key-subir-nombre [data-testid="stTextInputRootElement"] {{ height: 44px; border: 1px solid var(--borde);
-  border-radius: 10px; background: var(--panel); }}
-.st-key-subir-nombre [data-testid="stTextInputRootElement"]:focus-within {{ border-color: var(--rojo-osc);
-  box-shadow: 0 0 0 1px var(--rojo-osc); }}
-.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] {{ border: 1.5px dashed {t.BORDE}; border-radius: 14px;
-  background: var(--panel); min-height: 200px; }}
-.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:hover {{ border-color: var(--rojo-osc); }}
-.st-key-subir-archivos [data-testid="stFileUploaderDropzone"] button {{ border-radius: 8px; }}
-.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button {{ border-radius: 8px; min-height: 44px; padding: 0 22px;
-  background: var(--rojo-osc); border-color: var(--rojo-osc); }}
-.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button p {{ color: #fff; font-weight: 700; }}
-.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button:hover {{ background: #A51118; border-color: #A51118; }}
-.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button:disabled {{ background: {t.BORDE}; border-color: {t.BORDE}; }}
-.stApp [data-testid="stMain"] .st-key-subir .st-key-analizar button:disabled p {{ color: var(--texto2); }}
-.subir-esperados {{ margin-top: 0; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px;
-  padding: 22px 24px 20px; font-family: var(--f-ui); }}
-.stApp .subir-esperados h3 {{ font-family: var(--f-ui); }}
-.subir-esperados dt {{ display: flex; align-items: center; gap: 8px; }}
-.subir-esperados dt::before {{ content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--rojo-osc); }}
-.subir-esperados dd {{ padding-left: 16px; }}
-.st-key-subir-ejemplo {{ margin-top: 18px; }}
-.subir-ejemplo-texto, .st-key-subir-abrir-ejemplo button p {{ font-family: var(--f-ui); }}
+.stApp h3.tour-titulo {{ font-family: var(--f-titular); font-weight: 900; font-size: 18px; text-transform: uppercase;
+  color: var(--tinta); margin: 6px 0 8px; padding: 0; line-height: 1.2; }}
+.tour-texto {{ font-size: 15px; line-height: 1.5; color: var(--texto); margin: 0 0 6px; }}
+.tour-ir {{ display: inline-block; font-size: 14px; font-weight: 700; color: var(--rojo-osc); text-decoration: none; margin: 0 0 8px; }}
 
 @media (max-width: 1100px) {{
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
