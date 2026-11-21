@@ -70,7 +70,9 @@ def _cita_en(cita: Optional[str], texto: str) -> bool:
 
 
 _HECTAREAS = re.compile(r"(\d+)\s*-\s*(\d{1,2})\s*-\s*(\d{1,2}(?:\.\d+)?)\s*H", re.IGNORECASE)
-_NUMERO = re.compile(r"\d[\d,.]*")
+# Un dígito pegado a una letra no es número: el "2" de "M2" daba la superficie 2.0, que casi
+# siempre está en la página y dejaba pasar cualquier valor inventado con unidad.
+_NUMERO = re.compile(r"(?<![A-Za-z])\d[\d,.]*")
 
 
 def _superficies_m2(texto: str) -> set[float]:
