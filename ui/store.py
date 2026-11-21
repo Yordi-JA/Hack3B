@@ -97,7 +97,7 @@ def preparar_subidas(archivos: list[tuple[str, bytes]]) -> Subidas:
         return r
     total = sum(len(contenido) for _, contenido in archivos)
     if total > LIMITE_BYTES:
-        r.exceso = (f"Los archivos suman {total / 1024 / 1024:.0f} MB; el límite es "
+        r.exceso = (f"Los archivos suman {total / 1024 / 1024:.1f} MB; el límite es "
                     f"{LIMITE_BYTES // 1024 // 1024} MB por expediente. Quita algunos y vuelve a analizar.")
         return r
     vistos: dict[str, int] = {}

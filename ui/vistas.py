@@ -333,17 +333,13 @@ def _mostrar_error(error: BaseException) -> None:
         st.code("".join(traceback.format_exception(error)), language=None)
 
 
-def _archivos_validos(archivos) -> list[tuple[str, bytes]]:
-    """Prepara las subidas (ver store.preparar_subidas) y guarda los avisos de lo que se dejó fuera.
-
-    Los avisos van a la sesión y los muestra vista_nuevo: al lanzar el análisis la página se recarga
-    y un st.warning dibujado antes se perdería.
-    """
+def _archivos_validos(archivos) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """Prepara las subidas (ver store.preparar_subidas). Devuelve (archivos válidos, avisos de lo que
+    se dejó fuera); vista_nuevo decide cuándo mostrar los avisos."""
     r = store.preparar_subidas([(a.name, a.getvalue()) for a in archivos])
-    avisos = st.session_state.setdefault("avisos_subida", [])
+    avisos: list[str] = []
     if r.exceso:
-        avisos.append(r.exceso)
-        return []
+        return [], [r.exceso]
     if r.omitidos:
         avisos.append(
             "Estos archivos no se analizarán porque Windows no acepta su nombre (por ejemplo CON, NUL o con "
@@ -354,7 +350,7 @@ def _archivos_validos(archivos) -> list[tuple[str, bytes]]:
             "Estos archivos repiten el nombre de otro (sin distinguir mayúsculas) y no se analizarán: "
             + ", ".join(seguro(n) for n in r.repetidos) + "."
         )
-    return r.validos
+    return r.validos, avisos
 
 
 # Qué revisa el sistema en cada tipo, según la sección 02 del reto (CONTEXT.md).
@@ -405,20 +401,31 @@ def vista_nuevo() -> None:
             if not archivos:
                 st.warning("Agrega al menos un archivo antes de analizar.")
             else:
-                st.session_state.pop("avisos_subida", None)
-                datos = _archivos_validos(archivos)
+                datos, avisos = _archivos_validos(archivos)
+                trabajo = None
                 if datos:
                     st.session_state.pop("error_trabajo", None)
                     st.session_state.pop("listo", None)
                     trabajo = trabajos.lanzar(_analizar, datos, store.id_expediente(nombre), archivos=len(datos))
                     if trabajo is None:
                         st.warning("Ya hay otros análisis en curso. Intenta de nuevo cuando termine alguno.")
-                    else:
-                        st.session_state["trabajo"] = trabajo
-                        st.rerun()
+                if trabajo is None:
+                    for aviso in avisos:
+                        st.warning(aviso)
+                else:
+                    # Lanzar recarga la página: los avisos se guardan ligados a este análisis y se
+                    # muestran mientras siga en curso; al terminar o cambiar de análisis se descartan.
+                    st.session_state["trabajo"] = trabajo
+                    st.session_state["avisos_subida"] = (id(trabajo.futuro), avisos)
+                    st.rerun()
 
-        for aviso in st.session_state.pop("avisos_subida", []):
-            st.warning(aviso)
+        guardados = st.session_state.get("avisos_subida")
+        actual = _trabajo()
+        if guardados and actual is not None and guardados[0] == id(actual.futuro):
+            for aviso in guardados[1]:
+                st.warning(aviso)
+        else:
+            st.session_state.pop("avisos_subida", None)
         error = st.session_state.pop("error_trabajo", None)
         if error is not None:
             _mostrar_error(error)

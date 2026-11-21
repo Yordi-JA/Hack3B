@@ -312,7 +312,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
    y el aviso en español. La lista de archivos elegidos también es un div sin data-testid, pero contiene
    stFileChips; por eso se excluye. El borde se detecta por el aviso seguido del botón, porque :has() no
    admite otro :has() adentro. */
-.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:has(> div:not([data-testid]) + span) {{
+.st-key-subir-archivos [data-testid="stFileUploaderDropzone"]:has(> div:not([data-testid]) + span):not(:has([data-testid="stFileChips"])) {{
   border-color: var(--rojo-osc); }}
 .st-key-subir-archivos [data-testid="stFileUploaderDropzone"] > div:not([data-testid]):not(:has([data-testid="stFileChips"])),
 .st-key-subir-archivos [data-testid="stFileUploaderDropzone"] > div:not([data-testid]):not(:has([data-testid="stFileChips"])) * {{ font-size: 0 !important; }}
