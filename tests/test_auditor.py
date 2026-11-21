@@ -173,3 +173,19 @@ def test_clave_y_numero_con_otro_formato_no_intervienen(campo, valor, texto):
     l = _leido("a.pdf", TipoDocumento.ALINEAMIENTO, texto)
     r = auditor.auditar([l], [_analizado(l, DatosInmueble(**{campo: _c(valor, texto, "a.pdf")}))])
     assert r.intervenciones == []
+
+
+# ---------------------------------------------------------------- regresión: el "2" de la unidad "M2" (Juan Pablo)
+
+@pytest.mark.parametrize("valor,descartar", [("350.00 m2", True), ("350.00 M2", True), ("350 metros cuadrados", True),
+                                             ("350.00 m²", True), ("300.00 m2", False), ("300 M2", False)])
+def test_superficie_con_unidad_contra_pagina_con_m2(valor, descartar):
+    l = _leido("e.pdf", TipoDocumento.ESCRITURA, "SUPERFICIE TOTAL DE 300.00 M2")
+    a = _analizado(l, DatosInmueble(superficie_terreno_m2=_c(valor, "SUPERFICIE TOTAL DE 300.00 M2", "e.pdf")))
+    r = auditor.auditar([l], [a])
+    assert (r.documentos[0].datos.superficie_terreno_m2.normalizado is None) == descartar
+    assert r.reabrir_cruce == descartar
+
+
+def test_el_digito_de_la_unidad_no_es_una_superficie():
+    assert auditor._superficies_m2("350.00 m2") == {350.0}

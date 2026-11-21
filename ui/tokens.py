@@ -31,6 +31,7 @@ FONDO_APP = ROJO_3B_SIDEBAR   # detrás del panel principal y en la barra latera
 PANEL = "#F4F5F1"             # panel principal redondeado
 TARJETA = "#FFFFFF"
 BORDE = "#DEE2DC"
+RADIO = 6                     # px: radio de toda caja con línea de 2 px (Subir expediente, Detalle)
 TEXTO = "#16201F"
 TEXTO_2 = "#4D5A57"
 TEXTO_SOBRE_ROJO = "#FFFFFF"  # blanco puro: con transparencia baja a ~3:1 sobre el rojo
@@ -80,6 +81,9 @@ LEGIBILIDAD: dict[Legibilidad, Tono] = {
 # de 3B, que usa una grotesca negra; Arial Black / Segoe UI Black están en Windows y macOS.
 FUENTE_TEXTO = '"Source Sans", "Source Sans Pro", "Segoe UI", Arial, sans-serif'
 FUENTE_TITULAR = '"Arial Black", "Segoe UI Black", "Helvetica Neue", Arial, sans-serif'
+# Tablero de la bandeja y barra lateral: sans limpia de sistema (Inter si está instalada; si no,
+# Segoe UI en Windows o la del sistema en macOS). Sin descargas, como el resto.
+FUENTE_UI = '"Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
 
 
 def contraste(a: str, b: str) -> float:

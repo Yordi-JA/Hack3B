@@ -25,6 +25,7 @@ from datetime import datetime
 from statistics import mean
 from typing import Optional
 
+from . import cruce
 from ..schemas import (
     CAMPOS_CRUZABLES,
     TIPOS_REQUERIDOS,
@@ -223,7 +224,9 @@ def dictaminar(
     else:
         partes.append("Cumple todos los requisitos evaluados y los documentos corresponden al mismo inmueble.")
     if inconsistencias:
-        campos = sorted({i.campo for i in inconsistencias})
+        # Nombres para el equipo legal, no los internos ('clave_catastral' -> 'clave catastral').
+        legibles = {**cruce.NOMBRE, "inmueble": "documento de otro inmueble"}
+        campos = sorted({legibles.get(i.campo, i.campo.replace("_", " ")) for i in inconsistencias})
         partes.append(f"Entre documentos hay {len(inconsistencias)} inconsistencia(s) en: {', '.join(campos)}.")
     elif _con_datos_cruzables(documentos) >= 2:
         partes.append("Los datos comparables coinciden entre documentos.")

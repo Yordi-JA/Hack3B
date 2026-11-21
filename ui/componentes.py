@@ -185,6 +185,116 @@ def caja_mapa(svg: str, sin_entidad: int) -> str:
     )
 
 
+# ------------------------------------------------------------------ bandeja tipo tablero (Diego)
+#
+# Saludo, 4 indicadores en tarjetas, mapa en tarjeta blanca con ventana emergente por estado.
+
+RECS_TABLERO = (Recomendacion.CUMPLE, Recomendacion.REQUIERE_REVISION, Recomendacion.NO_CUMPLE)
+ETIQUETA_KPI = {
+    Recomendacion.CUMPLE: "Cumplen",
+    Recomendacion.REQUIERE_REVISION: "Requieren revisión",
+    Recomendacion.NO_CUMPLE: "No cumplen",
+}
+
+
+def saludo(nombre: str, subtitulo: str) -> str:
+    return (
+        f'<div class="saludo"><h1>Hola, <em class="saludo-nombre">{txt(nombre)}</em></h1>'
+        f'<p>{txt(subtitulo)}</p></div>'
+    )
+
+
+def _pct_entero(parte: int, total: int) -> str:
+    return f"{round(100 * parte / total)} %" if total else "0 %"
+
+
+def kpis_bandeja(ind: L.Indicadores, params: dict[str, str]) -> str:
+    """4 tarjetas: total y una por recomendación. Cada una filtra la bandeja al hacer clic."""
+    base = {k: v for k, v in params.items() if k != "rec"}
+    sub_total = []
+    if ind.confianza_promedio is not None:
+        sub_total.append(f"confianza promedio {pct(ind.confianza_promedio)}")
+    if ind.ejemplos:
+        sub_total.append(f"{ind.ejemplos} de ejemplo")
+    tarjetas = [
+        f'<a class="kpi kpi-total" href="{escape(url(**base))}" target="_self">'
+        f'<span class="kpi-etq">Expedientes analizados</span><b class="kpi-num">{ind.total}</b>'
+        f'<small class="kpi-sub">{txt(" · ".join(sub_total) or "en la bandeja")}</small></a>'
+    ]
+    for r in RECS_TABLERO:
+        n = ind.por_recomendacion.get(r, 0)
+        tono = clase_tono(t.ESTADO[r])
+        tarjetas.append(
+            f'<a class="kpi kpi-{tono}" href="{escape(url(**dict(base, rec=r.value)))}" target="_self">'
+            f'<span class="kpi-etq"><i class="kpi-punto" style="background:{t.ESTADO[r].mapa}"></i>'
+            f'{txt(ETIQUETA_KPI[r])}</span><b class="kpi-num est-{tono}">{n}</b>'
+            f'<small class="kpi-sub est-{tono}">{_pct_entero(n, ind.total)} del total</small></a>'
+        )
+    return '<div class="kpis">' + "".join(tarjetas) + "</div>"
+
+
+def ventana_entidad(clave: str, conteo: "mapa.ConteoEntidad", params: dict[str, str]) -> str:
+    """Ventana emergente sobre el mapa: porcentaje de cada recomendación en el estado y acceso a
+    sus expedientes. Se ancla al punto del estado (unidades 1000 x 630 -> porcentaje del lienzo)."""
+    punto = mapa.punto_etiqueta(clave)
+    if punto is None or not conteo or not conteo.total:
+        return ""
+    x, y = punto
+    lado = "v-izq" if x > 560 else "v-der"  # la ventana se abre hacia el lado con más espacio
+    top = min(max(y / 630 * 100, 22), 78)
+    filas = []
+    for r in RECS_TABLERO:
+        n = conteo.por_recomendacion.get(r, 0)
+        p = round(100 * conteo.porcentaje(r))
+        tono = clase_tono(t.ESTADO[r])
+        filas.append(
+            f'<div class="v-fila"><span class="v-etq"><i style="background:{t.ESTADO[r].mapa}"></i>'
+            f'{txt(r.value)}</span><b class="est-{tono}">{p} %</b><small>{n}</small></div>'
+            f'<div class="v-barra"><i style="width:{p}%;background:{t.ESTADO[r].mapa}"></i></div>'
+        )
+    plural = "expediente" if conteo.total == 1 else "expedientes"
+    cerrar = url(**{k: v for k, v in params.items() if k != "entidad"})
+    predo = conteo.predominante
+    return (
+        f'<div class="mx-ventana {lado}" style="left:{x / 10:.1f}%;top:{top:.1f}%" role="dialog" '
+        f'aria-label="{escape(mapa.nombre_entidad(clave))}">'
+        f'<div class="v-cab"><b>{txt(mapa.nombre_entidad(clave))}</b>'
+        f'<a class="v-cerrar" href="{escape(cerrar)}" target="_self" aria-label="Cerrar">×</a></div>'
+        f'<p class="v-total">{conteo.total} {plural} · predomina '
+        f'<b class="est-{clase_tono(t.ESTADO[predo])}">{txt(predo.value) if predo else "-"}</b></p>'
+        + "".join(filas)
+        + '<a class="v-ver" href="#expedientes">Ver expedientes del estado ↓</a></div>'
+    )
+
+
+def caja_mapa_tablero(svg: str, ventana: str, sin_entidad: int) -> str:
+    """Mapa en tarjeta blanca, centrado, con leyenda arriba y la ventana del estado encima."""
+    leyenda = "".join(
+        f'<span><i style="background:{t.ESTADO[r].mapa}"></i>{txt(r.value)}</span>' for r in RECS_TABLERO
+    ) + f'<span><i style="background:{t.MAPA_VACIO}"></i>Sin expedientes</span>'
+    pie = ""
+    if sin_entidad:
+        pie = (
+            f'<div class="sin-entidad">{sin_entidad} expediente{"s" if sin_entidad > 1 else ""} sin entidad '
+            "federativa identificada: aparecen en la lista, no en el mapa.</div>"
+        )
+    return (
+        '<div class="mapa-tarjeta"><div class="mapa-cab"><div><h3>Mapa de expedientes</h3>'
+        "<p>Color: la recomendación que predomina en el estado. "
+        "Haz clic en un estado para ver su información.</p></div>"
+        f'<div class="leyenda">{leyenda}</div></div>'
+        f'<div class="mapa-lienzo">{svg}{ventana}</div>{pie}</div>'
+    )
+
+
+def usuario_lateral(nombre: str, rol: str) -> str:
+    iniciales = "".join(p[0] for p in nombre.split()[:2]).upper()
+    return (
+        f'<div class="lateral-usuario"><span class="lat-avatar">{txt(iniciales)}</span>'
+        f'<span><b>{txt(nombre)}</b><small>{txt(rol)}</small></span></div>'
+    )
+
+
 # ------------------------------------------------------------------ detalle: tarjeta del dictamen
 
 def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:

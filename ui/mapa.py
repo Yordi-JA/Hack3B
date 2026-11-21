@@ -113,16 +113,44 @@ class ConteoEntidad:
         presentes = [r for r in ORDEN_GRAVEDAD if self.por_recomendacion.get(r)]
         return presentes[-1] if presentes else None
 
+    @property
+    def predominante(self) -> Optional[Recomendacion]:
+        """La recomendación con más expedientes en el estado; en empate, la más grave."""
+        presentes = [r for r in ORDEN_GRAVEDAD if self.por_recomendacion.get(r)]
+        if not presentes:
+            return None
+        return max(presentes, key=lambda r: (self.por_recomendacion[r], ORDEN_GRAVEDAD.index(r)))
 
-def relleno_por_entidad(conteos: dict[str, ConteoEntidad]) -> dict[str, str]:
-    """id SVG -> color de relleno. Un estado toma el color de su peor recomendación;
-    sin expedientes queda neutro. El número de expedientes se dibuja aparte, nunca solo color."""
+    def porcentaje(self, r: Recomendacion) -> float:
+        return self.por_recomendacion.get(r, 0) / self.total if self.total else 0.0
+
+
+def relleno_por_entidad(conteos: dict[str, ConteoEntidad], criterio: str = "peor") -> dict[str, str]:
+    """id SVG -> color de relleno. `criterio="peor"`: la recomendación más grave del estado;
+    `"predominante"`: la que más expedientes tiene (el color "promedio" del estado). Sin
+    expedientes queda neutro. El número de expedientes se dibuja aparte, nunca solo color."""
     rellenos = {}
     for clave, (id_svg, _) in ENTIDADES.items():
         conteo = conteos.get(clave)
-        peor = conteo.peor if conteo else None
-        rellenos[id_svg] = tokens.ESTADO[peor].mapa if peor else tokens.MAPA_VACIO
+        rec = (conteo.predominante if criterio == "predominante" else conteo.peor) if conteo else None
+        rellenos[id_svg] = tokens.ESTADO[rec].mapa if rec else tokens.MAPA_VACIO
     return rellenos
+
+
+def abreviatura(clave: str) -> str:
+    """'HIDALGO' -> 'HID' (ISO 3166-2 sin el prefijo MX)."""
+    return ENTIDADES[clave][0][2:] if clave in ENTIDADES else ""
+
+
+def punto_etiqueta(clave: Optional[str]) -> Optional[tuple[float, float]]:
+    """Punto de la entidad en unidades del mapa (1000 x 630), para anclar la ventana emergente."""
+    if clave not in ENTIDADES:
+        return None
+    estado = _geometria()["estados"].get(ENTIDADES[clave][0])
+    if not estado:
+        return None
+    x, y = estado.get("etiqueta", [0, 0])
+    return (float(x), float(y))
 
 
 def _tooltip(clave: str, conteo: Optional[ConteoEntidad]) -> str:
@@ -157,10 +185,20 @@ LLAMADAS = {
 }
 
 
-def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], params_base: dict[str, str]) -> str:
-    """Mapa de todo el país. Cada estado con expedientes es un enlace que filtra la bandeja."""
+def _bajo_llamada(x: float, y: float, radio: float = 30) -> bool:
+    """La abreviatura quedaría debajo de la burbuja de un estado chico (ej. SLP bajo Querétaro)."""
+    return any((x - lx) ** 2 + (y - ly) ** 2 < radio ** 2 for lx, ly in LLAMADAS.values())
+
+
+def svg_bandeja(
+    conteos: dict[str, ConteoEntidad], seleccion: Optional[str], params_base: dict[str, str],
+    criterio: str = "predominante", abreviaturas: bool = True, numeros: bool = True,
+) -> str:
+    """Mapa de todo el país. Cada estado con expedientes es un enlace que filtra la bandeja y abre
+    su ventana con los porcentajes. Con `abreviaturas`, cada estado grande lleva su clave (BCN, SON...).
+    Con `numeros=False` no se dibujan conteos ni burbujas: solo el color (el detalle va en la ventana)."""
     geo = _geometria()
-    rellenos = relleno_por_entidad(conteos)
+    rellenos = relleno_por_entidad(conteos, criterio)
     partes = [
         '<svg class="mx-mapa" viewBox="0 0 1000 630" role="group" '
         'aria-label="Mapa de expedientes por entidad federativa" xmlns="http://www.w3.org/2000/svg">'
@@ -184,7 +222,13 @@ def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], par
                 f'aria-label="{escape(etiqueta_accesible(clave, conteo))}">{trazo}</a>'
             )
             x, y = estado.get("etiqueta", [0, 0])
-            if clave in LLAMADAS:
+            if not numeros:
+                if abreviaturas and clave not in LLAMADAS:
+                    etiquetas.append(
+                        f'<text class="mx-abr" x="{x}" y="{y}" text-anchor="middle" '
+                        f'dominant-baseline="central">{abreviatura(clave)}</text>'
+                    )
+            elif clave in LLAMADAS:
                 lx, ly = LLAMADAS[clave]
                 # Enlace duplicado solo para el mouse; el lector de pantalla ya tiene el del estado.
                 etiquetas.append(
@@ -195,10 +239,22 @@ def svg_bandeja(conteos: dict[str, ConteoEntidad], seleccion: Optional[str], par
                     f"{conteo.total}</text></a>"
                 )
             else:
+                if abreviaturas:
+                    etiquetas.append(
+                        f'<text class="mx-abr" x="{x}" y="{y - 13}" text-anchor="middle" '
+                        f'dominant-baseline="central">{abreviatura(clave)}</text>'
+                    )
+                    y += 6
                 etiquetas.append(
                     f'<text class="mx-num mx-num-halo" x="{x}" y="{y}" text-anchor="middle" '
                     f'dominant-baseline="central">{conteo.total}</text>'
                 )
+        elif abreviaturas and clave not in LLAMADAS and not (numeros and _bajo_llamada(*estado.get("etiqueta", [0, 0]))):
+            x, y = estado.get("etiqueta", [0, 0])
+            etiquetas.append(
+                f'<text class="mx-abr" x="{x}" y="{y}" text-anchor="middle" '
+                f'dominant-baseline="central">{abreviatura(clave)}</text>'
+            )
         partes.append(trazo)
     # La selección se dibuja al final para que su borde no quede tapado por los vecinos.
     if seleccion in ENTIDADES and (estado := geo["estados"].get(ENTIDADES[seleccion][0])):

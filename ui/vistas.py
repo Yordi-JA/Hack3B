@@ -18,7 +18,7 @@ from expedientes.schemas import Dictamen, Recomendacion
 
 from . import componentes as C
 from . import logica as L
-from . import mapa, store, trabajos
+from . import mapa, store, tour, trabajos
 
 FILTROS = ("entidad", "rec", "q", "ej")
 TIPOS_ARCHIVO = ["pdf", "png", "jpg", "jpeg", "tif", "tiff"]
@@ -92,15 +92,16 @@ def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
 def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
     with st.sidebar:
         html(
-            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}<b>Revisión de expedientes</b></div>'
+            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}'
+            '<span><b>Revisión de expedientes</b><small class="lateral-sub">Tiendas 3B</small></span></div>'
         )
-        html('<div class="lateral-grupo">Expedientes</div>')
+        html('<div class="lateral-grupo">Principal</div>')
         st.button(
-            "Bandeja", key="nav-bandeja", on_click=ir, args=("bandeja",),
+            "Bandeja", key="nav-bandeja", on_click=ir, args=("bandeja",), icon=":material/map:",
             type="primary" if vista == "bandeja" else "secondary", width="stretch",
         )
         st.button(
-            "Subir expediente", key="nav-nuevo", on_click=ir, args=("nuevo",),
+            "Subir expediente", key="nav-nuevo", on_click=ir, args=("nuevo",), icon=":material/upload_file:",
             type="primary" if vista == "nuevo" else "secondary", width="stretch",
         )
         if abierto:
@@ -109,12 +110,23 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
                 type="primary" if vista == "detalle" else "secondary", width="stretch",
                 help="Expediente abierto",
             )
+        html('<div class="lateral-grupo">Ayuda</div>')
+        st.button(
+            "Recorrido guiado", key="nav-tour", on_click=_iniciar_tour, icon=":material/explore:",
+            type="secondary", width="stretch",
+        )
         seguimiento()
         avisos_laterales()
         html(
             '<p class="lateral-nota">Revisión inicial automática. La decisión final sobre cada expediente '
             "es del equipo legal.</p>"
         )
+        html(C.usuario_lateral("Equipo legal", "Tiendas 3B · Expansión"))
+
+
+def _iniciar_tour() -> None:
+    tour.iniciar()
+    ir("bandeja")
 
 
 # ------------------------------------------------------------------ bandeja
@@ -134,16 +146,16 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     base = [e for e in visibles if L.coincide(e.dictamen, entidad_actual or None, None, texto)]
     ind = L.indicadores([(e.dictamen, e.es_ejemplo) for e in base])
 
-    cab, buscador = st.columns([3, 2], vertical_alignment="top")
-    with cab:
-        html(C.encabezado("Bandeja de expedientes", "Primero los que no cumplen, luego los que requieren revisión."))
-        if entradas:
-            html(C.resumen_bandeja(ind))
-    with buscador:
-        st.text_input(
-            "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
-            placeholder="Buscar por expediente, municipio, propietario o archivo",
-        )
+    # Tablero: saludo y buscador, 4 indicadores, mapa en tarjeta con ventana por estado, filtros y lista.
+    with st.container(key="b-cabecera"):
+        cab, buscador = st.columns([3, 2], vertical_alignment="center")
+        with cab:
+            html(C.saludo("equipo legal", "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
+        with buscador:
+            st.text_input(
+                "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
+                placeholder="Buscar expediente, municipio, propietario o archivo", icon=":material/search:",
+            )
 
     if invalidos:
         nombres = ", ".join(f"{seguro(i.ruta.name)}: {i.motivo}" for i in invalidos)
@@ -152,17 +164,24 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     if not entradas:
         st.info("Todavía no hay expedientes analizados. Sube los archivos de uno en Subir expediente.")
         st.button("Ir a Subir expediente", on_click=ir, args=("nuevo",), type="primary")
+        tour.mostrar(html)
         return
 
     conteos = L.conteo_por_entidad(e.dictamen for e in visibles)
     sin_entidad = sum(1 for e in visibles if L.consolidar_ubicacion(e.dictamen).entidad is None)
-
-    # El mapa va al centro y a todo lo ancho; debajo, los filtros y las tarjetas.
-    seleccion = st.session_state.get("f_entidad") or None
     enlace = dict(params_filtros(), vista="bandeja")
-    html(C.caja_mapa(mapa.svg_bandeja(conteos, seleccion, enlace), sin_entidad))
 
-    f1, f2, f3 = st.columns([1, 1.6, 1.2], vertical_alignment="bottom")
+    with st.container(key="b-kpis"):
+        html(C.kpis_bandeja(ind, enlace))
+
+    # El mapa va al centro; al seleccionar un estado se abre su ventana con los porcentajes.
+    seleccion = st.session_state.get("f_entidad") or None
+    ventana = C.ventana_entidad(seleccion, conteos[seleccion], enlace) if seleccion in conteos else ""
+    with st.container(key="b-mapa"):
+        html(C.caja_mapa_tablero(mapa.svg_bandeja(conteos, seleccion, enlace, numeros=False), ventana, sin_entidad))
+
+    filtros = st.container(key="b-filtros")
+    f1, f2, f3 = filtros.columns([1, 1.6, 1.2], vertical_alignment="bottom")
     opciones = [""] + sorted(conteos, key=mapa.nombre_entidad)
     if sin_entidad:
         opciones.append(L.SIN_ENTIDAD)
@@ -189,13 +208,20 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     filtrados = [e for e in base if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
     filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
-    if not visibles:
-        st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
-    elif not filtrados:
-        st.info("Ningún expediente coincide con los filtros.")
-        st.button("Quitar filtros", on_click=_quitar_filtros)
-    else:
-        html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+    html('<div id="expedientes" class="ancla"></div>')
+    with st.container(key="b-lista"):
+        donde = f"en {mapa.nombre_entidad(seleccion)}" if seleccion and seleccion != L.SIN_ENTIDAD else ""
+        titulo = f"Expedientes {C.txt(donde)}" if donde else "Expedientes"
+        html(f'<h2 class="lista-titulo">{titulo} <small>{len(filtrados)}</small></h2>')
+        if not visibles:
+            st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
+        elif not filtrados:
+            st.info("Ningún expediente coincide con los filtros.")
+            st.button("Quitar filtros", on_click=_quitar_filtros)
+        else:
+            html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+
+    tour.mostrar(html)
 
 
 def _quitar_filtros() -> None:
@@ -239,8 +265,8 @@ def _trabajo_pendiente() -> bool:
 
 
 def _estado_trabajo() -> None:
-    """Estado compacto del análisis en la barra lateral. Al terminar: si el usuario sigue en Nuevo
-    análisis se abre el dictamen; si está en otra pantalla, se avisa y se ofrece abrirlo."""
+    """Estado compacto del análisis en la barra lateral. Al terminar: si el usuario sigue en Subir
+    expediente se abre el dictamen; si está en otra pantalla, se avisa y se ofrece abrirlo."""
     trabajo = _trabajo()
     if not trabajo:
         return
@@ -251,13 +277,13 @@ def _estado_trabajo() -> None:
         if error is not None:
             st.session_state["error_trabajo"] = error
             if not en_nuevo:
-                st.session_state["aviso"] = "El análisis no terminó. Abre Subir expediente para ver el detalle."
+                st.session_state["aviso"] = "El análisis falló. Abre Subir expediente para ver el error."
         elif en_nuevo:
             ir("detalle", trabajo.futuro.result().clave)
         else:
             entrada = trabajo.futuro.result()
             st.session_state["listo"] = entrada.clave
-            st.session_state["aviso"] = f"Análisis terminado: {seguro(entrada.dictamen.expediente_id)}"
+            st.session_state["aviso"] = f"Dictamen listo: {seguro(entrada.dictamen.expediente_id)}"
         st.rerun(scope="app")
         return
     seg = trabajo.segundos
@@ -295,35 +321,36 @@ def _abrir_listo(clave: str) -> None:
 def _mostrar_error(error: BaseException) -> None:
     if isinstance(error, NotImplementedError):
         st.error(
-            "El análisis automático todavía no está disponible en esta versión: falta implementar alguno de "
-            "los agentes. Mientras tanto puedes abrir el dictamen de ejemplo."
+            "El análisis automático aún no está disponible: falta conectar alguno de los agentes. "
+            "Mientras tanto puedes abrir el dictamen de ejemplo."
         )
     else:
         st.error(
-            "No se pudo analizar el expediente. Revisa que los archivos sean PDF o imágenes legibles y vuelve "
-            "a intentarlo. Si el error se repite, comparte el detalle técnico con quien mantiene los agentes."
+            "No se pudo analizar el expediente. Revisa que los archivos sean PDF o imágenes legibles e intenta "
+            "de nuevo. Si vuelve a fallar, manda el detalle técnico a quien mantiene los agentes."
         )
     with st.expander("Detalle técnico"):
         st.code("".join(traceback.format_exception(error)), language=None)
 
 
-def _archivos_validos(archivos) -> list[tuple[str, bytes]]:
-    """Prepara las subidas (ver store.preparar_subidas) y avisa lo que se dejó fuera."""
+def _archivos_validos(archivos) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """Prepara las subidas (ver store.preparar_subidas). Devuelve (archivos válidos, avisos de lo que
+    se dejó fuera); vista_nuevo decide cuándo mostrar los avisos."""
     r = store.preparar_subidas([(a.name, a.getvalue()) for a in archivos])
+    avisos: list[str] = []
     if r.exceso:
-        st.warning(r.exceso)
-        return []
+        return [], [r.exceso]
     if r.omitidos:
-        st.warning(
-            "Se omitieron archivos con un nombre que Windows no acepta (por ejemplo CON, NUL o con dos puntos): "
-            + ", ".join(seguro(n) for n in r.omitidos) + ". Cámbiales el nombre y súbelos de nuevo."
+        avisos.append(
+            "Estos archivos no se analizarán porque Windows no acepta su nombre (por ejemplo CON, NUL o con "
+            "dos puntos): " + ", ".join(seguro(n) for n in r.omitidos) + ". Cámbiales el nombre y vuelve a subirlos."
         )
     if r.repetidos:
-        st.warning(
-            "Hay archivos con el mismo nombre (sin contar mayúsculas) y solo se analizará el primero: "
+        avisos.append(
+            "Estos archivos repiten el nombre de otro (sin distinguir mayúsculas) y no se analizarán: "
             + ", ".join(seguro(n) for n in r.repetidos) + "."
         )
-    return r.validos
+    return r.validos, avisos
 
 
 # Qué revisa el sistema en cada tipo, según la sección 02 del reto (CONTEXT.md).
@@ -340,7 +367,7 @@ def _documentos_esperados() -> str:
     return (
         '<div class="subir-esperados"><h3>Se esperan 4 documentos</h3>'
         f"<dl>{filas}</dl>"
-        "<p>No hace falta renombrar los archivos: el sistema reconoce el tipo de cada uno.</p></div>"
+        "<p>No hace falta renombrar los archivos: el tipo de cada documento se detecta al analizarlo.</p></div>"
     )
 
 
@@ -353,8 +380,9 @@ def vista_nuevo() -> None:
             with st.form("nuevo", border=False):
                 nombre = st.text_input(
                     "Nombre del expediente (opcional)", max_chars=80, key="subir-nombre",
-                    placeholder="Ej. TEPEJI-05. Si lo dejas vacío se usa la fecha y hora.",
-                    help="Máximo 80 caracteres. Si ya existe un expediente con ese nombre, el nuevo análisis lo reemplaza.",
+                    placeholder="Ej. TEPEJI-05",
+                    help="Máximo 80 caracteres. Si lo dejas vacío, se usa la fecha y hora. Si ya existe un "
+                         "expediente con ese nombre, se reemplaza.",
                 )
                 archivos = st.file_uploader(
                     "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
@@ -367,23 +395,37 @@ def vista_nuevo() -> None:
             html(_documentos_esperados())
 
         if pendiente:
-            st.info("Hay un análisis en curso; su avance se ve en la barra lateral. Puedes ir a la bandeja "
-                    "mientras tanto: al terminar se guarda y te avisamos.")
+            st.info("Hay un análisis en curso; el avance aparece en la barra lateral. Puedes ir a la bandeja "
+                    "mientras tanto: el dictamen se guarda al terminar y te avisamos.")
         if enviar and not pendiente:
             if not archivos:
-                st.warning("Agrega al menos un archivo del expediente antes de analizar.")
+                st.warning("Agrega al menos un archivo antes de analizar.")
             else:
-                datos = _archivos_validos(archivos)
+                datos, avisos = _archivos_validos(archivos)
+                trabajo = None
                 if datos:
                     st.session_state.pop("error_trabajo", None)
                     st.session_state.pop("listo", None)
                     trabajo = trabajos.lanzar(_analizar, datos, store.id_expediente(nombre), archivos=len(datos))
                     if trabajo is None:
-                        st.warning("Hay otro análisis en espera; intenta cuando termine.")
-                    else:
-                        st.session_state["trabajo"] = trabajo
-                        st.rerun()
+                        st.warning("Ya hay otros análisis en curso. Intenta de nuevo cuando termine alguno.")
+                if trabajo is None:
+                    for aviso in avisos:
+                        st.warning(aviso)
+                else:
+                    # Lanzar recarga la página: los avisos se guardan ligados a este análisis y se
+                    # muestran mientras siga en curso; al terminar o cambiar de análisis se descartan.
+                    st.session_state["trabajo"] = trabajo
+                    st.session_state["avisos_subida"] = (id(trabajo.futuro), avisos)
+                    st.rerun()
 
+        guardados = st.session_state.get("avisos_subida")
+        actual = _trabajo()
+        if guardados and actual is not None and guardados[0] == id(actual.futuro):
+            for aviso in guardados[1]:
+                st.warning(aviso)
+        else:
+            st.session_state.pop("avisos_subida", None)
         error = st.session_state.pop("error_trabajo", None)
         if error is not None:
             _mostrar_error(error)
