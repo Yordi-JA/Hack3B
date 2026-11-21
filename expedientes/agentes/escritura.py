@@ -82,7 +82,8 @@ class _CampoLLM(BaseModel):
 
 
 _CAMPOS_ESCRITURA_LLM = (
-    "propietario", "direccion", "superficie_terreno_m2", "clave_catastral",
+    "propietario", "direccion", "entidad_federativa", "municipio",
+    "superficie_terreno_m2", "clave_catastral",
     "numero_oficial", "fecha_emision", "autoridad_emisora",
     "numero_escritura", "volumen", "notario", "fecha_escritura",
     "tipo_acto", "folio_real", "inscripcion_rpp", "medidas_colindancias",
@@ -114,6 +115,8 @@ class _EscrituraLLM(BaseModel):
 
     propietario: _CampoLLM
     direccion: _CampoLLM
+    entidad_federativa: _CampoLLM
+    municipio: _CampoLLM
     superficie_terreno_m2: _CampoLLM
     clave_catastral: _CampoLLM
     numero_oficial: _CampoLLM
@@ -354,6 +357,8 @@ REGLAS DURAS (si las rompes, el dictamen pierde confianza):
 CAMPOS (descripciones precisas):
 - propietario: nombre completo del ADQUIRENTE / comprador / beneficiario (quien queda como titular tras la escritura). Si son varios copropietarios, pon el principal o "COPROPIEDAD: nombre1 Y nombre2".
 - direccion: dirección completa del inmueble (calle, número, colonia, municipio, estado).
+- entidad_federativa: Estado de la República del inmueble (ej. "Hidalgo", "Estado de México", "Ciudad de México"). Puede venir solo en el encabezado, sello o texto legal, no en la dirección; búscala en todo el documento.
+- municipio: municipio o alcaldía del inmueble.
 - superficie_terreno_m2: superficie del TERRENO en metros cuadrados (con la unidad tal como aparece).
 - clave_catastral: clave catastral o cuenta predial del inmueble.
 - numero_oficial: número oficial exterior asignado al inmueble.
@@ -684,6 +689,8 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
     datos = DatosInmueble(
         propietario=_construir_campo(extraido.propietario, doc.archivo, doc.paginas, _normalizar_nombre),
         direccion=_construir_campo(extraido.direccion, doc.archivo, doc.paginas, _normalizar_direccion),
+        entidad_federativa=_construir_campo(extraido.entidad_federativa, doc.archivo, doc.paginas, _upper_sin_acentos),
+        municipio=_construir_campo(extraido.municipio, doc.archivo, doc.paginas, _upper_sin_acentos),
         superficie_terreno_m2=_construir_campo(extraido.superficie_terreno_m2, doc.archivo, doc.paginas, _normalizar_superficie),
         clave_catastral=_construir_campo(extraido.clave_catastral, doc.archivo, doc.paginas, _normalizar_clave_catastral),
         numero_oficial=_construir_campo(extraido.numero_oficial, doc.archivo, doc.paginas, _normalizar_numero),
@@ -712,9 +719,9 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
 
     # Confianza global del análisis: promedio de confianzas de los campos poblados.
     campos_comunes = [
-        datos.propietario, datos.direccion, datos.superficie_terreno_m2,
-        datos.clave_catastral, datos.numero_oficial, datos.fecha_emision,
-        datos.autoridad_emisora,
+        datos.propietario, datos.direccion, datos.entidad_federativa, datos.municipio,
+        datos.superficie_terreno_m2, datos.clave_catastral, datos.numero_oficial,
+        datos.fecha_emision, datos.autoridad_emisora,
     ]
     todos_campos = campos_comunes + list(datos.especificos.values())
     confianzas = [c.confianza for c in todos_campos if c.valor]
