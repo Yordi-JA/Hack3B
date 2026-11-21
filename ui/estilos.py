@@ -596,5 +596,27 @@ a.pag-btn:hover {{ background: var(--verde); border-color: var(--verde); color: 
   [data-testid="stMainBlockContainer"] {{ padding: 56px 16px 48px; }}
   [data-testid="stMain"] {{ margin: 0; border-radius: 0; max-height: none; }}
 }}
+
+/* ---- Movimiento: poco, corto y con propósito. Solo opacidad y desplazamiento (translate), ease-out,
+   150 a 200 ms, sin repeticiones. La entrada de cada vista va en sus contenedores de arriba, que siguen
+   montados entre reruns: escribir en el buscador no la repite. La tabla y los filtros no se animan. */
+@keyframes vista-entra {{ from {{ opacity: 0; translate: 0 4px; }} }}
+@keyframes tarjeta-entra {{ from {{ opacity: 0; translate: 0 6px; }} }}
+@keyframes aparece {{ from {{ opacity: 0; }} }}
+.st-key-b-cabecera, .st-key-b-kpis, .st-key-b-mapa, .st-key-subir-marco, .st-key-estado-resumen,
+.marco-dictamen, .docs-grid {{ animation: vista-entra .15s ease-out both; }}
+.st-key-tour-card {{ animation: tarjeta-entra .18s ease-out both; }}
+[data-testid="stToast"], [data-testid="stAlert"] {{ animation: aparece .15s ease-out both; }}
+/* Estados de hover y foco: misma duración en botones, filas, tarjetas, marcos y estados del mapa. */
+.stApp button, a.kpi, .t-fila, .exp, .doc-tarjeta, a.pag-btn, a.t-motivo, .btn-acento, .btn-linea,
+.mx-estado, .mx-llamada circle {{
+  transition: background-color .14s ease-out, border-color .14s ease-out, color .14s ease-out,
+    filter .14s ease-out, transform .14s ease-out, box-shadow .14s ease-out; }}
+@media (prefers-reduced-motion: reduce) {{
+  .st-key-b-cabecera, .st-key-b-kpis, .st-key-b-mapa, .st-key-subir-marco, .st-key-estado-resumen,
+  .marco-dictamen, .docs-grid, .st-key-tour-card, [data-testid="stToast"], [data-testid="stAlert"] {{ animation: none; }}
+  .stApp button, a.kpi, .t-fila, .exp, .doc-tarjeta, a.pag-btn, a.t-motivo, .btn-acento, .btn-linea,
+  .mx-estado, .mx-llamada circle {{ transition: none; }}
+}}
 </style>
 """
