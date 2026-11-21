@@ -61,3 +61,6 @@ resultados/
 # Material de referencia visual del equipo, no se versiona.
 REFERENCIA/
 .streamlit/secrets.toml
+
+# Capturas de las pruebas end to end: muestran datos de los documentos (regla 06).
+e2e/capturas/

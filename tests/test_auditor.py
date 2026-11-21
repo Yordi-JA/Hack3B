@@ -127,3 +127,65 @@ def test_analizar_expediente_devuelve_dictamen_con_hallazgo_del_auditor(expedien
     predial = next(x for x in d.documentos if x.archivo == "pre.pdf")
     assert _aud(predial) and d.recomendacion != Recomendacion.CUMPLE  # dato descartado => no se da por bueno
     assert d.expediente_id == "T2"
+
+
+# ---------------------------------------------------------------- falso positivo reportado por Juan Pablo
+
+def test_direccion_repartida_en_dos_paginas_no_interviene():
+    l = DocumentoLeido(archivo="esc.pdf", tipo=TipoDocumento.ESCRITURA, confianza_tipo=1, legibilidad=Legibilidad.BUENA,
+                       paginas_totales=2, paginas=[
+                           Pagina(numero=1, texto="EL INMUEBLE UBICADO EN CALLE HIDALGO NUMERO 120 CON SUPERFICIE DE 300.00 M2"),
+                           Pagina(numero=2, texto="PERTENECIENTE A LA COLONIA CENTRO, MUNICIPIO DE TULTEPEC, ESTADO DE MEXICO")])
+    direccion = Campo(valor="CALLE HIDALGO 120, COL. CENTRO, TULTEPEC, MEX.", normalizado="CALLE HIDALGO 120 CENTRO TULTEPEC",
+                      confianza=0.9, evidencia=Evidencia(archivo="esc.pdf", pagina=1, cita="UBICADO EN CALLE HIDALGO NUMERO 120"))
+    r = auditor.auditar([l], [_analizado(l, DatosInmueble(direccion=direccion))])
+    assert not r.reabrir_cruce and r.intervenciones == []
+    assert r.documentos[0].datos.direccion.normalizado == "CALLE HIDALGO 120 CENTRO TULTEPEC"
+
+
+def test_propietario_abreviado_con_cita_real_no_interviene():
+    l = _leido("p.pdf", TipoDocumento.PREDIAL, "CONTRIBUYENTE: MA. GUADALUPE PEREZ SOTO")
+    prop = _c("MARIA GUADALUPE PEREZ", "CONTRIBUYENTE: MA. GUADALUPE PEREZ SOTO", "p.pdf")
+    r = auditor.auditar([l], [_analizado(l, DatosInmueble(propietario=prop))])
+    assert r.intervenciones == [] and r.documentos[0].datos.propietario.normalizado == "MARIA GUADALUPE PEREZ"
+
+
+def test_superficie_300_contra_350_se_sigue_descartando():
+    l = _leido("e.pdf", TipoDocumento.ESCRITURA, "SUPERFICIE TOTAL DE 300.00 M2")
+    a = _analizado(l, DatosInmueble(superficie_terreno_m2=_c("350.00", "SUPERFICIE TOTAL DE 300.00 M2", "e.pdf")))
+    r = auditor.auditar([l], [a])
+    assert r.reabrir_cruce and r.documentos[0].datos.superficie_terreno_m2.normalizado is None
+    assert "AUD-02" in _aud(r.documentos[0])[0].explicacion
+
+
+@pytest.mark.parametrize("valor,texto", [("1250.50", "SUPERFICIE DE 1,250.50 M2"), ("1,250.50 m2", "SUPERFICIE 1250.50"),
+                                         ("12500.00", "SUPERFICIE DE 1-25-00 HAS")])
+def test_superficie_con_otro_formato_no_interviene(valor, texto):
+    l = _leido("e.pdf", TipoDocumento.ESCRITURA, texto)
+    r = auditor.auditar([l], [_analizado(l, DatosInmueble(superficie_terreno_m2=_c(valor, texto, "e.pdf")))])
+    assert r.intervenciones == [] and not r.reabrir_cruce
+
+
+@pytest.mark.parametrize("campo,valor,texto", [("clave_catastral", "0770431012000000", "CLAVE 077 04 310 12 00 0000"),
+                                               ("numero_oficial", "104-A", "NUMERO OFICIAL 104 A"),
+                                               ("numero_oficial", "S/N", "CALLE FRESNO S/N")])
+def test_clave_y_numero_con_otro_formato_no_intervienen(campo, valor, texto):
+    l = _leido("a.pdf", TipoDocumento.ALINEAMIENTO, texto)
+    r = auditor.auditar([l], [_analizado(l, DatosInmueble(**{campo: _c(valor, texto, "a.pdf")}))])
+    assert r.intervenciones == []
+
+
+# ---------------------------------------------------------------- regresión: el "2" de la unidad "M2" (Juan Pablo)
+
+@pytest.mark.parametrize("valor,descartar", [("350.00 m2", True), ("350.00 M2", True), ("350 metros cuadrados", True),
+                                             ("350.00 m²", True), ("300.00 m2", False), ("300 M2", False)])
+def test_superficie_con_unidad_contra_pagina_con_m2(valor, descartar):
+    l = _leido("e.pdf", TipoDocumento.ESCRITURA, "SUPERFICIE TOTAL DE 300.00 M2")
+    a = _analizado(l, DatosInmueble(superficie_terreno_m2=_c(valor, "SUPERFICIE TOTAL DE 300.00 M2", "e.pdf")))
+    r = auditor.auditar([l], [a])
+    assert (r.documentos[0].datos.superficie_terreno_m2.normalizado is None) == descartar
+    assert r.reabrir_cruce == descartar
+
+
+def test_el_digito_de_la_unidad_no_es_una_superficie():
+    assert auditor._superficies_m2("350.00 m2") == {350.0}

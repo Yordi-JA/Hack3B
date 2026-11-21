@@ -49,7 +49,7 @@ graph TD
 
 - **Agentes por tipo** (LLM): extraen con cita literal y evalúan sus reglas; corren en paralelo (máx. `MAX_AGENTES_PARALELO=5`).
 - **Cruce** (Diego): compara propietario, dirección, superficie, clave y número oficial entre documentos.
-- **Auditor** (`agentes/auditor.py`, sin LLM): revisa lo que reportó cada agente contra el texto original. AUD-01 la cita existe en la página; AUD-02 en datos que se cruzan, el valor aparece en la página (cita real con valor inventado); AUD-03 un rechazo bloqueante sin evidencia baja a revisión. Si descarta datos que se cruzan, el cruce se repite. En los 17 prediales reales revisó 210 datos sin falsos positivos.
+- **Auditor** (`agentes/auditor.py`, sin LLM): revisa lo que reportó cada agente contra el texto original. AUD-01 la cita existe en la página (dirección y propietario solo pasan por aquí: los agentes los redactan o los juntan de varias páginas); AUD-02 solo en datos literales (`CAMPOS_VALOR_LITERAL`: superficie, clave catastral, número oficial) el valor aparece en la página, comparado por valor normalizado (miles, hectáreas, separadores de la clave, 'S/N'), para atrapar una cita real con valor inventado; AUD-03 un rechazo bloqueante sin evidencia baja a revisión. Si descarta datos que se cruzan, el cruce se repite. En los 6 expedientes analizados (24 documentos) revisó 350 datos sin falsos positivos.
 - **Dictamen** (Juan Pablo): consolida por tipo y decide con reglas fijas.
 
 ## Contrato

@@ -7,9 +7,14 @@ el mismo estándar a todos. Determinista: no llama al LLM.
     AUD-01  Evidencia de datos: la cita de cada dato tiene que estar en la página que dice el agente
             (si está en otra página del mismo documento, se corrige la página). Si no está, el dato
             se queda sin evidencia ni `normalizado`.
-    AUD-02  Valor en el documento: en los datos que se cruzan entre documentos, el valor tiene que
-            aparecer en la página citada. Atrapa una cita real con un valor inventado
-            ("SUPERFICIE TOTAL DE 300.00 M2" con valor "350.00").
+    AUD-02  Valor en el documento: solo para los datos puntuales que se copian literal
+            (CAMPOS_VALOR_LITERAL: superficie, clave catastral, número oficial), el valor tiene que
+            aparecer en la página citada, comparado por valor normalizado: superficie como número
+            (acepta '1,250.50' por '1250.50' y hectáreas '1-25-00 HAS' por 12500 m²), clave por sus
+            dígitos, número oficial con normalizar.numero_oficial. Atrapa una cita real con un valor
+            inventado ("SUPERFICIE TOTAL DE 300.00 M2" con valor "350.00"). Dirección y propietario
+            solo pasan por AUD-01: los agentes los arman con sus palabras o de varias páginas
+            (`exigir_valor=False`), y exigirles el valor daba falsos positivos.
     AUD-03  Hallazgo bloqueante con evidencia: un NO_CUMPLE BLOQUEANTE cuya evidencia no aparece en
             el documento baja a NO_EVALUABLE / REVISION (contrato: sin evidencia no hay hallazgo, y
             el reto castiga descartar expedientes sin sustento).
@@ -24,6 +29,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Optional
 
+from . import normalizar as nz
 from ..schemas import (
     CAMPOS_CRUZABLES,
     Campo,
@@ -37,9 +43,11 @@ from ..schemas import (
 
 FIRMA_PALABRAS = 6          # una cita larga calza si sus primeras 6 palabras están seguidas en la página
 PROPORCION_PALABRAS = 0.85  # o si el 85 % de sus palabras está en la página (OCR que rompe el orden)
-PROPORCION_VALOR = 0.75     # palabras del valor que deben estar en la página (abreviaturas: MA. / MARIA)
 CONFIANZA_DESCARTADO = 0.3
-_UNIDADES = {"M", "M2", "MTS", "MT", "METROS", "CUADRADOS", "MXN", "PESOS"}
+# AUD-02 solo para datos puntuales que se copian literal. Dirección y propietario no: el agente los
+# redacta o los junta de varias páginas, y basta con que su cita exista (AUD-01).
+CAMPOS_VALOR_LITERAL = ("superficie_terreno_m2", "clave_catastral", "numero_oficial")
+TOLERANCIA_M2 = 0.01
 
 
 # ---------------------------------------------------------------- texto
@@ -61,18 +69,51 @@ def _cita_en(cita: Optional[str], texto: str) -> bool:
     return len(toks) >= 3 and sum(t in presentes for t in toks) / len(toks) >= PROPORCION_PALABRAS
 
 
-def _valor_en(valor: Optional[str], texto: str) -> bool:
-    """Los números del valor (sin ceros de relleno ni unidades) tienen que estar todos en la página;
-    las palabras, al menos el 75 %."""
-    toks = [t for t in _tokens(valor) if t not in _UNIDADES and not re.fullmatch(r"0+", t)]
-    if not toks:
-        return True
-    pagina = set(_tokens(texto))
-    numeros = [t for t in toks if t.isdigit()]
-    palabras = [t for t in toks if not t.isdigit() and len(t) > 1]
-    if any(n not in pagina and n.lstrip("0") not in pagina for n in numeros):
-        return False
-    return not palabras or sum(p in pagina for p in palabras) / len(palabras) >= PROPORCION_VALOR
+_HECTAREAS = re.compile(r"(\d+)\s*-\s*(\d{1,2})\s*-\s*(\d{1,2}(?:\.\d+)?)\s*H", re.IGNORECASE)
+# Un dígito pegado a una letra no es número: el "2" de "M2" daba la superficie 2.0, que casi
+# siempre está en la página y dejaba pasar cualquier valor inventado con unidad.
+_NUMERO = re.compile(r"(?<![A-Za-z])\d[\d,.]*")
+
+
+def _superficies_m2(texto: str) -> set[float]:
+    """Todas las superficies que podría expresar el texto, en m²: cada número (con separador de
+    miles o decimal, vía normalizar.superficie) y cada 'H-AA-CC HAS' convertido."""
+    valores = {round(h * 10000 + a * 100 + float(c), 2) for h, a, c in
+               ((int(m[1]), int(m[2]), m[3]) for m in _HECTAREAS.finditer(texto))}
+    for m in _NUMERO.finditer(texto):
+        x = nz.superficie(m.group(0))
+        if x is not None:
+            valores.add(round(x, 2))
+    if re.search(r"\bH(A|AS|ECTAREAS?)\b", " ".join(_tokens(texto))):
+        valores |= {round(v * 10000, 2) for v in list(valores)}
+    return valores
+
+
+def _digitos_en(digitos: str, texto: str) -> bool:
+    """La clave aparece en el texto aunque cambien los separadores ('077-04-310-12' / '0770431012')."""
+    corridas = [re.sub(r"\D", "", m) for m in re.findall(r"\d[\d\s./-]*\d|\d", texto)]
+    clave = digitos.rstrip("0") or digitos
+    return any(clave in c for c in corridas)
+
+
+def _valor_en(nombre: str, valor: Optional[str], texto: str) -> bool:
+    """AUD-02: el dato literal está en la página, comparado por su valor normalizado."""
+    if nombre == "superficie_terreno_m2":
+        objetivo = _superficies_m2(valor or "")
+        return not objetivo or any(abs(a - b) <= TOLERANCIA_M2 for a in objetivo for b in _superficies_m2(texto))
+    if nombre == "clave_catastral":
+        digitos = re.sub(r"\D", "", valor or "")
+        return len(digitos) < 4 or _digitos_en(digitos, texto)
+    if nombre == "numero_oficial":
+        numero = nz.numero_oficial(valor)
+        if not numero:
+            return True
+        tokens = _tokens(texto)
+        if numero == nz.SIN_NUMERO:
+            return bool(re.search(r"\bS N\b|\bSN\b|SIN NUM", " ".join(tokens)))
+        digitos = re.match(r"\d+", numero)
+        return digitos is not None and (digitos.group(0) in tokens or numero in tokens)
+    return True
 
 
 def _textos(leido: DocumentoLeido) -> dict[int, str]:
@@ -102,7 +143,7 @@ def _auditar_campo(nombre: str, campo: Campo, textos: dict[int, str]) -> tuple[C
     pagina = _ubicar(campo.evidencia, textos)
     if pagina is None:
         motivo = f"{nombre}: la cita «{campo.evidencia.cita[:60]}» no aparece en el documento (AUD-01)"
-    elif nombre in CAMPOS_CRUZABLES and not _valor_en(campo.valor, textos[pagina]):
+    elif nombre in CAMPOS_VALOR_LITERAL and not _valor_en(nombre, campo.valor, textos[pagina]):
         motivo = f"{nombre}: el valor «{campo.valor}» no aparece en la página {pagina} citada (AUD-02)"
     else:
         if pagina != campo.evidencia.pagina:
