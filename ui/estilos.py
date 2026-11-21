@@ -32,6 +32,7 @@ def css() -> str:
 <style>
 :root {{
   --rojo: {t.ROJO_3B}; --rojo-lat: {t.ROJO_3B_SIDEBAR}; --rojo-osc: {t.ROJO_3B_OSCURO}; --tinta: {t.TINTA_3B};
+  --verde: {t.VERDE_3B}; --verde-hover: {t.VERDE_3B_HOVER};
   --panel: {t.PANEL}; --tarjeta: {t.TARJETA}; --borde: {t.BORDE}; --texto: {t.TEXTO}; --texto2: {t.TEXTO_2};
   --blanco: {t.TEXTO_SOBRE_ROJO}; --mapa-vacio: {t.MAPA_VACIO};
   --f-texto: {t.FUENTE_TEXTO}; --f-titular: {t.FUENTE_TITULAR};
@@ -103,6 +104,20 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .stApp [data-testid="stMain"] [data-testid="stBaseButton-primary"] {{ background: var(--rojo-osc); border-color: var(--rojo-osc); color: #fff; }}
 .stApp [data-testid="stMain"] [data-testid="stBaseButton-primary"]:hover {{ background: #A51118; border-color: #A51118; color: #fff; }}
 
+/* Verde de marca, con menos presencia que el rojo: solo la acción de analizar y los filtros activos
+   de la bandeja. Texto en tinta (9:1). El verde contra el fondo da 1.7:1, por eso el segmento activo
+   y el interruptor encendido llevan contorno en tinta. */
+.stApp [data-testid="stMain"] .st-key-analizar button {{ background: var(--verde); border: 1px solid var(--verde); color: var(--tinta); }}
+.stApp [data-testid="stMain"] .st-key-analizar button p {{ color: var(--tinta); font-weight: 700; }}
+.stApp [data-testid="stMain"] .st-key-analizar button:hover {{ background: var(--verde-hover); border-color: var(--verde-hover); color: var(--tinta); }}
+.stApp [data-testid="stMain"] .st-key-analizar button:disabled {{ background: {t.BORDE}; border-color: {t.BORDE}; color: var(--texto2); }}
+.stApp [data-testid="stMain"] .st-key-analizar button:disabled p {{ color: var(--texto2); font-weight: 600; }}
+.st-key-f_rec button[aria-checked="true"] {{ background: var(--verde) !important; color: var(--tinta) !important;
+  border-color: var(--tinta) !important; }}
+.st-key-f_rec button[aria-checked="true"] p {{ color: var(--tinta) !important; font-weight: 700; }}
+.st-key-f_ej [data-testid="stCheckbox"][data-selected="true"] label > span + div {{
+  background: var(--verde) !important; box-shadow: 0 0 0 1px var(--tinta); }}
+
 /* cargador de archivos en español (Streamlit no deja cambiar estos textos) */
 [data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p {{ font-size: 0; }}
 [data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p::after {{ content: "Elegir archivos"; font-size: 14px; }}
@@ -130,7 +145,7 @@ html, body, .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp butt
 .resumen-bandeja {{ font-size: 14px; color: var(--texto); margin: 6px 0 0; }}
 
 /* ---- tarjeta de expediente en la bandeja: solo la línea del marco, sobre el fondo de la página ---- */
-.lista {{ display: grid; grid-template-columns: 1fr; gap: 26px; margin-top: 22px; }}
+.lista {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; margin-top: 22px; }}
 a.exp {{ position: relative; display: block; text-decoration: none; color: var(--texto); background: transparent;
   border: 1.5px solid var(--tinta); border-radius: 4px; padding: 18px 18px 12px; }}
 a.exp:hover, a.exp:focus {{ border-color: var(--rojo-osc); }}
@@ -143,8 +158,9 @@ a.exp:hover, a.exp:focus {{ border-color: var(--rojo-osc); }}
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
 .exp-meta {{ font-size: 12px; color: var(--texto2); }}
 
-/* ---- mapa: sin caja, directo sobre el fondo de la página ---- */
-[data-testid="stColumn"]:has(.mapa-bloque) {{ position: sticky; top: 16px; align-self: flex-start; }}
+/* ---- mapa: elemento principal de la bandeja, centrado y sin caja ----
+   Ancho limitado por la altura de la ventana (64vh por la proporción 1000:630 del mapa). */
+.mapa-bloque {{ max-width: calc(64vh * 1000 / 630); margin: 18px auto 6px; }}
 .mapa-bloque h3 {{ font-size: 15px; color: var(--tinta); margin: 0; padding: 0; font-weight: 700; }}
 .mapa-bloque p {{ font-size: 12px; color: var(--texto2); margin: 4px 0 6px; }}
 .leyenda {{ display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--texto2); margin: 6px 0 8px; }}
@@ -152,11 +168,13 @@ a.exp:hover, a.exp:focus {{ border-color: var(--rojo-osc); }}
 svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .mx-estado {{ stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
 .mx-enlace, .mx-llamada {{ cursor: pointer; }}
+/* Los enlaces del SVG heredan el subrayado de los de Streamlit; los números no lo llevan. */
+.mx-mapa a, .mx-mapa a:hover, .mx-mapa a:focus, .mx-mapa a:focus-visible, .mx-mapa text {{ text-decoration: none !important; }}
 .mx-enlace:hover .mx-estado {{ stroke: var(--tinta); stroke-width: 2; }}
 .mx-borde-sel {{ fill: none; stroke: var(--tinta); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }}
-/* Números en unidades del mapa (1000 de ancho): con la columna de 330 a 390 px quedan en 12 a 14 px. */
-.mx-num {{ font: 700 36px var(--f-texto); fill: var(--tinta); pointer-events: none; }}
-.mx-num-halo {{ stroke: #fff; stroke-width: 6px; paint-order: stroke; stroke-linejoin: round; }}
+/* Números en unidades del mapa (1000 de ancho): con el mapa de 810 a 920 px quedan en 14 a 16 px. */
+.mx-num {{ font: 700 17px var(--f-texto); fill: var(--tinta); pointer-events: none; }}
+.mx-num-halo {{ stroke: #fff; stroke-width: 4px; paint-order: stroke; stroke-linejoin: round; }}
 .mx-llamada circle {{ stroke: var(--tinta); stroke-width: 1.5; vector-effect: non-scaling-stroke; }}
 .mx-llamada:hover circle {{ stroke-width: 2.5; }}
 .mx-guia {{ stroke: var(--tinta); stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }}
