@@ -148,11 +148,22 @@ def _upper_sin_acentos(s: Optional[str]) -> Optional[str]:
     return s.upper() or None
 
 
+_PERSONA_MORAL = re.compile(
+    r"\b(S\.? ?A\.?|S\.? ?C\.?|S\.? DE R\.? ?L\.?|SAPI|SOCIEDAD|INMOBILIARIA|COMERCIALIZADORA|"
+    r"ASOCIACION|FIDEICOMISO|BANCO|GRUPO|DESARROLLADORA|CONSTRUCTORA)\b"
+)
+
+
 def _normalizar_nombre(s: Optional[str]) -> Optional[str]:
-    """Pasa 'Claudia Alejandra Méndez Salazar' a 'MENDEZ SALAZAR CLAUDIA ALEJANDRA'."""
+    """Pasa 'Claudia Alejandra Méndez Salazar' a 'MENDEZ SALAZAR CLAUDIA ALEJANDRA'.
+
+    Las personas morales no se reordenan ('INMOBILIARIA XYZ SA DE CV' se queda igual).
+    """
     base = _upper_sin_acentos(s)
     if not base:
         return None
+    if _PERSONA_MORAL.search(base):
+        return re.sub(r"\s+", " ", re.sub(r"[.,]", " ", base)).strip()
     base = re.sub(r"\b(C\.?|SR\.?|SRA\.?|LIC\.?|LICENCIADO|LICENCIADA|ING\.?|ARQ\.?|MTRO\.?|DR\.?)\s+", "", base)
     base = re.sub(r"\s+", " ", base).strip()
     tokens = base.split()
@@ -218,6 +229,55 @@ def _normalizar_numero(s: Optional[str]) -> Optional[str]:
     return m.group(0) if m else None
 
 
+def _normalizar_numero_oficial(s: Optional[str]) -> Optional[str]:
+    """Como `_normalizar_numero`, pero 'S/N' o 'sin número' da 'SN' en vez de perderse:
+    así el cruce detecta 'S/N en la escritura vs 120 en el alineamiento'."""
+    if not s:
+        return None
+    if re.search(r"\bS ?N\b|SIN NUM", _compacto(s)):
+        return "SN"
+    return _normalizar_numero(s)
+
+
+def _normalizar_instrumento(s: Optional[str]) -> Optional[str]:
+    """Número de escritura con separadores de miles: '27,418' -> '27418' (no '27')."""
+    if not s:
+        return None
+    m = re.search(r"\d[\d.,]*\d|\d", s)
+    return re.sub(r"\D", "", m.group(0)) if m else None
+
+
+def _compacto(s: Optional[str]) -> str:
+    """Mayúsculas sin acentos ni signos, con un solo espacio entre palabras."""
+    return " ".join(_limpia_para_match(s).split()) if s else ""
+
+
+_ALIAS_ENTIDAD = {
+    "ESTADO DE MEXICO": "MEXICO", "EDO DE MEXICO": "MEXICO", "EDO DE MEX": "MEXICO", "EDO MEX": "MEXICO",
+    "EDOMEX": "MEXICO",
+    "ESTADO LIBRE Y SOBERANO DE MEXICO": "MEXICO", "CDMX": "CIUDAD DE MEXICO",
+    "DISTRITO FEDERAL": "CIUDAD DE MEXICO", "HGO": "HIDALGO",
+}
+
+
+def _normalizar_entidad(s: Optional[str]) -> Optional[str]:
+    """Formato del contrato, igual que los demás agentes: 'Estado de México' -> 'MEXICO',
+    'Hgo.' -> 'HIDALGO'. Antes salía 'ESTADO DE MEXICO' y no coincidía con el resto."""
+    t = _compacto(s)
+    if not t:
+        return None
+    if t in _ALIAS_ENTIDAD:
+        return _ALIAS_ENTIDAD[t]
+    t = re.sub(r"^(ESTADO|EDO)( LIBRE Y SOBERANO)? DE ", "", t)
+    return _ALIAS_ENTIDAD.get(t, t)
+
+
+def _normalizar_municipio(s: Optional[str]) -> Optional[str]:
+    t = _compacto(s)
+    t = re.sub(r"^(H )?(AYUNTAMIENTO|MUNICIPIO|MPIO)( CONSTITUCIONAL)? DE ", "", t)
+    return t or None
+
+
 def _normalizar_fecha(s: Optional[str]) -> Optional[str]:
     """ISO YYYY-MM-DD. Acepta '15 de marzo de 2019', '15/03/2019', '2019-03-15'."""
     if not s:
@@ -243,9 +303,28 @@ def _normalizar_fecha(s: Optional[str]) -> Optional[str]:
 
 # ---------------------------------------------------------------- selección de páginas
 
+def _paginas_de_otro_tipo(notas: Optional[str]) -> set[int]:
+    """Lee 'Contiene páginas de tipo predial: p4-p5, p15.' de las notas de la ingesta."""
+    paginas: set[int] = set()
+    for rangos in re.findall(r"Contiene páginas de tipo \w+: ([p\d, -]+)", notas or ""):
+        for a, b in re.findall(r"p(\d+)(?:-p(\d+))?", rangos):
+            paginas.update(range(int(a), int(b or a) + 1))
+    return paginas
+
+
+def _paginas_de_la_escritura(doc: DocumentoLeido) -> list[Pagina]:
+    """Páginas propias de la escritura: sin las vacías (borrosas o ilegibles; la ingesta descartó su
+    texto) ni las anexas de otro tipo. Si la escritura trae el predial anexo, el modelo podía tomar
+    de ahí la clave y la superficie, y el cruce las daba por coincidentes sin que la escritura lo dijera."""
+    con_texto = [p for p in doc.paginas if p.texto.strip()]
+    otras = _paginas_de_otro_tipo(doc.notas)
+    propias = [p for p in con_texto if p.numero not in otras]
+    return propias or con_texto
+
+
 def _seleccionar_paginas(doc: DocumentoLeido, maximo: int = MAX_PAGINAS_LLM) -> list[Pagina]:
     """Primeras N páginas + páginas con palabras clave, hasta `maximo` en total."""
-    paginas = list(doc.paginas)
+    paginas = _paginas_de_la_escritura(doc)
     if len(paginas) <= maximo:
         return paginas
     primeras = paginas[:PRIMERAS_PAGINAS]
@@ -680,39 +759,41 @@ def _extraer(doc: DocumentoLeido, paginas: list[Pagina]) -> _EscrituraLLM:
 
 
 def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
-    if doc.legibilidad == Legibilidad.ILEGIBLE or not doc.paginas:
+    if doc.legibilidad == Legibilidad.ILEGIBLE or not _paginas_de_la_escritura(doc):
         return _resultado_ilegible(doc)
 
     paginas_para_llm = _seleccionar_paginas(doc)
     extraido = _extraer(doc, paginas_para_llm)
+    # Las citas se verifican solo contra lo que vio el modelo: nunca contra páginas anexas de otro tipo.
+    paginas = paginas_para_llm
 
     datos = DatosInmueble(
-        propietario=_construir_campo(extraido.propietario, doc.archivo, doc.paginas, _normalizar_nombre),
-        direccion=_construir_campo(extraido.direccion, doc.archivo, doc.paginas, _normalizar_direccion),
-        entidad_federativa=_construir_campo(extraido.entidad_federativa, doc.archivo, doc.paginas, _upper_sin_acentos),
-        municipio=_construir_campo(extraido.municipio, doc.archivo, doc.paginas, _upper_sin_acentos),
-        superficie_terreno_m2=_construir_campo(extraido.superficie_terreno_m2, doc.archivo, doc.paginas, _normalizar_superficie),
-        clave_catastral=_construir_campo(extraido.clave_catastral, doc.archivo, doc.paginas, _normalizar_clave_catastral),
-        numero_oficial=_construir_campo(extraido.numero_oficial, doc.archivo, doc.paginas, _normalizar_numero),
-        fecha_emision=_construir_campo(extraido.fecha_emision, doc.archivo, doc.paginas, _normalizar_fecha),
+        propietario=_construir_campo(extraido.propietario, doc.archivo, paginas, _normalizar_nombre),
+        direccion=_construir_campo(extraido.direccion, doc.archivo, paginas, _normalizar_direccion),
+        entidad_federativa=_construir_campo(extraido.entidad_federativa, doc.archivo, paginas, _normalizar_entidad),
+        municipio=_construir_campo(extraido.municipio, doc.archivo, paginas, _normalizar_municipio),
+        superficie_terreno_m2=_construir_campo(extraido.superficie_terreno_m2, doc.archivo, paginas, _normalizar_superficie),
+        clave_catastral=_construir_campo(extraido.clave_catastral, doc.archivo, paginas, _normalizar_clave_catastral),
+        numero_oficial=_construir_campo(extraido.numero_oficial, doc.archivo, paginas, _normalizar_numero_oficial),
+        fecha_emision=_construir_campo(extraido.fecha_emision, doc.archivo, paginas, _normalizar_fecha),
         vigencia_hasta=Campo(),  # las escrituras no vencen; se deja vacío
-        autoridad_emisora=_construir_campo(extraido.autoridad_emisora, doc.archivo, doc.paginas),
+        autoridad_emisora=_construir_campo(extraido.autoridad_emisora, doc.archivo, paginas),
     )
 
     datos.especificos = {
-        "numero_escritura": _construir_campo(extraido.numero_escritura, doc.archivo, doc.paginas, _normalizar_numero),
-        "volumen": _construir_campo(extraido.volumen, doc.archivo, doc.paginas),
-        "notario": _construir_campo(extraido.notario, doc.archivo, doc.paginas),
-        "fecha_escritura": _construir_campo(extraido.fecha_escritura, doc.archivo, doc.paginas, _normalizar_fecha),
-        "tipo_acto": _construir_campo(extraido.tipo_acto, doc.archivo, doc.paginas),
-        "folio_real": _construir_campo(extraido.folio_real, doc.archivo, doc.paginas),
-        "inscripcion_rpp": _construir_campo(extraido.inscripcion_rpp, doc.archivo, doc.paginas),
-        "medidas_colindancias": _construir_campo(extraido.medidas_colindancias, doc.archivo, doc.paginas),
-        "gravamenes": _construir_campo(extraido.gravamenes, doc.archivo, doc.paginas),
-        "regimen_propiedad": _construir_campo(extraido.regimen_propiedad, doc.archivo, doc.paginas),
-        "copropiedad": _construir_campo(extraido.copropiedad, doc.archivo, doc.paginas),
-        "embargo_o_litigio": _construir_campo(extraido.embargo_o_litigio, doc.archivo, doc.paginas),
-        "usufructo": _construir_campo(extraido.usufructo, doc.archivo, doc.paginas),
+        "numero_escritura": _construir_campo(extraido.numero_escritura, doc.archivo, paginas, _normalizar_instrumento),
+        "volumen": _construir_campo(extraido.volumen, doc.archivo, paginas),
+        "notario": _construir_campo(extraido.notario, doc.archivo, paginas),
+        "fecha_escritura": _construir_campo(extraido.fecha_escritura, doc.archivo, paginas, _normalizar_fecha),
+        "tipo_acto": _construir_campo(extraido.tipo_acto, doc.archivo, paginas),
+        "folio_real": _construir_campo(extraido.folio_real, doc.archivo, paginas),
+        "inscripcion_rpp": _construir_campo(extraido.inscripcion_rpp, doc.archivo, paginas),
+        "medidas_colindancias": _construir_campo(extraido.medidas_colindancias, doc.archivo, paginas),
+        "gravamenes": _construir_campo(extraido.gravamenes, doc.archivo, paginas),
+        "regimen_propiedad": _construir_campo(extraido.regimen_propiedad, doc.archivo, paginas),
+        "copropiedad": _construir_campo(extraido.copropiedad, doc.archivo, paginas),
+        "embargo_o_litigio": _construir_campo(extraido.embargo_o_litigio, doc.archivo, paginas),
+        "usufructo": _construir_campo(extraido.usufructo, doc.archivo, paginas),
     }
 
     hallazgos = _aplicar_reglas(datos)
