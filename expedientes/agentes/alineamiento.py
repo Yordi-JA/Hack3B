@@ -115,6 +115,9 @@ presenta afectación", ampliación de calle o avenida sobre el predio, alineamie
 vial: una restricción de construcción al frente ("la restricción para este predio es de 3.00 m": eso va en \
 `restricciones_construccion`), mencionar el derecho de vía o su ancho, el frente al derecho de vía, ni la frase \
 "no constituye autorización".
+- `restricciones_construccion`: los metros al frente (o laterales) donde no se puede construir, aunque vengan en \
+notas o en el croquis: "Restricción de construcción al frente: 0.00 m", "LA RESTRICCIÓN PARA ESTE PREDIO ES DE \
+3.00 MTS". Cópialo siempre que aparezca.
 - `infraestructura`: busca de forma explícita líneas de CFE o de alta tensión, ductos de Pemex, cauces, ríos, \
 canales, barrancas o zona federal de Conagua, y vías férreas que crucen, colinden o restrinjan el predio.
 - `invasion_via_publica`: solo si el documento dice que el predio o la construcción invade la vía pública, banqueta o \
