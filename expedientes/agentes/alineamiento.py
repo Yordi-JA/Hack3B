@@ -97,9 +97,11 @@ Reglas estrictas:
 - El documento puede ser solo de Alineamiento, solo de Número Oficial, o ambos.
 - `propietario`: la persona o empresa a cuyo favor se expide. Suele aparecer como "C. NOMBRE" justo antes de \
 "Esta Dirección en contestación a su solicitud", o en un campo "Nombre del propietario / poseedor".
-- `afectaciones`: si el documento dice que el predio está afectado o restringido: ampliación de calle, derecho de vía, \
-franja donde no se permite construir, o una restricción de construcción MAYOR a 0 m. Una restricción de 0.00 m o la \
-frase "no constituye autorización" NO son afectaciones.
+- `afectaciones`: solo si el documento dice que una parte del predio queda afectada o no se puede construir en ella: \
+"el predio presenta afectación", ampliación de calle sobre el predio, o una restricción de construcción con metros \
+MAYORES a 0 ("la restricción para este predio es de 3.00 m"). NO son afectaciones: mencionar el derecho de vía o su \
+ancho, el frente del predio al derecho de vía, una restricción de 0.00 m, títulos genéricos como "restricción por \
+derecho de vía" sin medida aplicada al predio, ni la frase "no constituye autorización".
 - `numero_oficial`: el número asignado al predio. Si el documento no asigna número pero la dirección del predio trae \
 uno ("Josefa Ortiz de Domínguez, número 24"), usa ese con confianza menor. Si dice "sin número", "S/N" o "SN", normalizado = "SN".
 - `clave_catastral`: la clave catastral; si no hay, la cuenta predial o el número de boleta predial (ej. "U-04817").
