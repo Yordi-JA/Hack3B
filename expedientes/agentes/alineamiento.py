@@ -19,16 +19,19 @@ Prefijo de reglas: ALI-.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
 import sys
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from ..config import get_callbacks, get_llm
+from ..cache import nombre_archivo
+from ..config import CACHE_DIR, LLM_MODEL, get_callbacks, get_llm
 from ..schemas import (
     Campo,
     Contexto,
@@ -153,15 +156,31 @@ def _desde_llm(r: BaseModel) -> ExtraccionAlineamiento:
     return ExtraccionAlineamiento(**datos)
 
 
+def _ruta_respuesta(doc: DocumentoLeido, entrada: str) -> tuple[Path, str]:
+    """Caché de respuestas del LLM (regla 5 del README): misma entrada, mismo modelo, mismo prompt
+    y mismo esquema -> se reutiliza la respuesta guardada sin llamar a la API."""
+    huella = hashlib.sha256("\n".join([
+        LLM_MODEL, INSTRUCCIONES, json.dumps(_ExtraccionLLM.model_json_schema(), sort_keys=True), entrada,
+    ]).encode("utf-8")).hexdigest()[:16]
+    return CACHE_DIR / "analisis" / "alineamiento" / f"{nombre_archivo(doc.archivo)}.json", huella
+
+
 def extraer(doc: DocumentoLeido) -> ExtraccionAlineamiento:
+    entrada = f"Archivo: {doc.archivo}\n\n{_paginas_como_texto(doc)}"
+    ruta, huella = _ruta_respuesta(doc, entrada)
+    if ruta.exists():
+        guardado = json.loads(ruta.read_text(encoding="utf-8"))
+        if guardado.get("huella") == huella:
+            return _desde_llm(_ExtraccionLLM.model_validate(guardado["respuesta"]))
+
     # json_schema = salida estructurada nativa de Claude: el JSON siempre cumple el esquema.
     # El modo por defecto (tool calling) no puede forzarse en Opus 5.5 / Sonnet 5.5.
-    llm = get_llm(max_tokens=8000).with_structured_output(_ExtraccionLLM, method="json_schema")
-    mensajes = [
-        ("system", INSTRUCCIONES),
-        ("human", f"Archivo: {doc.archivo}\n\n{_paginas_como_texto(doc)}"),
-    ]
-    r = llm.invoke(mensajes, config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
+    llm = get_llm(effort="low", max_tokens=4000).with_structured_output(_ExtraccionLLM, method="json_schema")
+    r = llm.invoke([("system", INSTRUCCIONES), ("human", entrada)],
+                   config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(json.dumps({"huella": huella, "modelo": LLM_MODEL, "respuesta": r.model_dump()},
+                               ensure_ascii=False, indent=2), encoding="utf-8")
     return _desde_llm(r)
 
 

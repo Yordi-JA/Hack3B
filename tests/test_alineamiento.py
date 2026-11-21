@@ -140,3 +140,20 @@ def test_vigencia_en_dias():
     ext = _ext(vigencia_texto=_d("ESTA LICENCIA TENDRA UNA VIGENCIA DE 365 DIAS A PARTIR DE LA FECHA DE SU EXPEDICION"),
                fecha_emision=_d("5 de noviembre de 2024", normalizado="2024-11-05"))
     assert ali.calcular_vencimiento(ext) == (date(2025, 11, 5), "calculada")
+
+
+def test_respuesta_guardada_no_llama_a_la_api(tmp_path, monkeypatch):
+    monkeypatch.setattr(ali, "CACHE_DIR", tmp_path)
+    doc = _doc()
+    entrada = f"Archivo: {doc.archivo}\n\n{ali._paginas_como_texto(doc)}"
+    ruta, huella = ali._ruta_respuesta(doc, entrada)
+    vacio = {"encontrado": False, "valor": "", "normalizado": "", "pagina": 0, "cita": "", "confianza": 0}
+    resp = {n: (True if n.startswith("contiene_alineamiento") else False) if f.annotation is bool else dict(vacio)
+            for n, f in ali.ExtraccionAlineamiento.model_fields.items()}
+    resp["numero_oficial"] = {"encontrado": True, "valor": "210", "normalizado": "210", "pagina": 2,
+                              "cita": "NÚMERO OFICIAL: 210", "confianza": 0.9}
+    ruta.parent.mkdir(parents=True)
+    ruta.write_text(__import__("json").dumps({"huella": huella, "respuesta": resp}), encoding="utf-8")
+    monkeypatch.setattr(ali, "get_llm", lambda **k: (_ for _ in ()).throw(AssertionError("no debe llamar a la API")))
+    ext = ali.extraer(doc)
+    assert ext.numero_oficial.valor == "210" and ext.propietario is None
