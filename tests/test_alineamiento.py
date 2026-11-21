@@ -69,6 +69,7 @@ def test_vencida_contra_fecha_referencia():
     r = ali.construir(_ext(), _doc(), Contexto(fecha_referencia=date(2026, 11, 21)))
     h = _regla(r, "ALI-02")
     assert h.estado == EstadoRegla.NO_CUMPLE and "09/06/2026" in h.explicacion
+    assert h.severidad == Severidad.BLOQUEANTE  # criterio confirmado: vencido a hoy = No cumple
 
 
 def test_vigencia_indefinida_y_sin_numero():
@@ -95,6 +96,7 @@ def test_cita_inventada_baja_confianza():
     r = ali.construir(ext, _doc(), Contexto(), no_ver)
     assert _regla(r, "ALI-EVI").estado == EstadoRegla.NO_EVALUABLE
     assert r.datos.propietario.valor == "JUAN PÉREZ" and r.datos.propietario.normalizado is None
+    assert r.datos.propietario.evidencia is None
     assert r.datos.direccion.normalizado  # los verificados conservan su normalizado
 
 
@@ -119,7 +121,9 @@ def test_evaluador_compara_campos():
     r = ali.construir(_ext(), _doc(), Contexto(fecha_referencia=date(2026, 1, 15)))
     verdad = {"propietario": "SILVIA ADRIANA PEÑALOZA RUIZ", "direccion": "Avenida de las Torres S/N, Col. El Mirador",
               "numero_oficial": None, "clave_catastral": "0770431012000000", "superficie_m2": 300.0,
-              "fecha_emision": "2025-06-09", "vigencia_hasta": "2026-06-09", "afectaciones": "AFECTACIÓN DE 4.00 M"}
+              "fecha_emision": "2025-06-09", "vigencia_hasta": "2026-06-09", "afectaciones": "AFECTACIÓN DE 4.00 M",
+              "contiene_alineamiento": True,
+              "autoridad_emisora": "Dirección de Desarrollo Urbano y Obras Públicas - Ocotlán de las Torres"}
     res = comparar(verdad, r)
     assert all(x["estado"] == "ok" for x in res.values()), res
     verdad["superficie_m2"] = 450.0
@@ -179,3 +183,21 @@ def test_riesgos_explicitos_cfe_invasion_lotes_y_restriccion():
 def test_restriccion_cero_no_genera_ali11():
     r = ali.construir(_ext(restricciones_construccion=_d("Restricción de construcción al frente: 0.00 m")), _doc(), Contexto())
     assert not [h for h in r.hallazgos if h.id_regla == "ALI-11"]
+
+
+def test_evaluador_autoridad_debe_nombrar_dependencia():
+    from expedientes.agentes.evaluar_alineamiento import _iguales
+    esperado = "Dirección de Desarrollo Urbano y Metropolitano - Tepotzotlán"
+    assert _iguales("autoridad_emisora", esperado, "DIRECCIÓN DE DESARROLLO URBANO Y METROPOLITANO")
+    assert not _iguales("autoridad_emisora", esperado, "H. AYUNTAMIENTO DE TEPOTZOTLÁN")
+
+
+def test_dato_no_verificado_da_no_evaluable_no_no_cumple():
+    """Regla 3 del equipo: afectación y vigencia con citas inventadas -> NO_EVALUABLE."""
+    ext = _ext(afectaciones=_d("AFECTACIÓN INVENTADA", "texto que no está en el documento"))
+    no_ver = ali.verificar_citas(ext, _doc())
+    assert "afectaciones" in no_ver
+    r = ali.construir(ext, _doc(), Contexto(), no_ver)
+    afect = _regla(r, "ALI-03")
+    assert afect.estado == EstadoRegla.NO_EVALUABLE and afect.severidad == Severidad.REVISION
+    assert r.datos.especificos["afectaciones"].evidencia is None

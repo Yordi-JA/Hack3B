@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import unicodedata
 from datetime import date
@@ -31,16 +32,27 @@ SALIDA = RAIZ / "outputs"
 PRED = SALIDA / "pred_alineamiento.json"
 
 CAMPOS = ["propietario", "direccion", "numero_oficial", "clave_catastral", "superficie_m2",
-          "fecha_emision", "vigencia_hasta", "afectaciones"]
+          "fecha_emision", "vigencia_hasta", "afectaciones", "alineamiento", "autoridad_emisora"]
+
+# Palabras que no identifican a la autoridad (cargos, conectores, "H. Ayuntamiento").
+_VACIAS_AUTORIDAD = {"DIRECCION", "DIRECTOR", "DIRECTORA", "A", "DE", "DEL", "Y", "LA", "EL", "SU", "H",
+                     "AYUNTAMIENTO", "CONSTITUCIONAL", "MUNICIPAL", "MUNICIPALES", "MUNICIPIO", "ING", "LIC",
+                     "ARQ", "MTRA", "C", "COORDINACION", "SECRETARIA", "SECCION", "AREA"}
+
+
+def _tokens_autoridad(s: str) -> set[str]:
+    return {t for t in nz.texto(s).split() if t not in _VACIAS_AUTORIDAD and len(t) > 2}
 
 
 def _obtenido(d: DocumentoAnalizado, campo: str) -> Optional[str]:
     datos = d.datos
     if campo == "superficie_m2":
         return datos.superficie_terreno_m2.normalizado
-    if campo == "afectaciones":
-        c = datos.especificos.get("afectaciones")
+    if campo in ("afectaciones", "alineamiento"):
+        c = datos.especificos.get(campo)
         return c.valor if c else None
+    if campo == "autoridad_emisora":
+        return datos.autoridad_emisora.valor
     c = getattr(datos, campo)
     return c.normalizado if c.normalizado is not None else c.valor
 
@@ -62,8 +74,13 @@ def _iguales(campo: str, esperado, obtenido: str) -> bool:
         if str(esperado).upper() == "INDEFINIDA":
             return obtenido.upper() == "INDEFINIDA"
         return nz.fecha(str(esperado)) == nz.fecha(obtenido)
-    if campo == "afectaciones":
-        return True  # basta con que ambos digan que hay afectación
+    if campo in ("afectaciones", "alineamiento"):
+        return True  # basta con que ambos digan que existe
+    if campo == "autoridad_emisora":
+        # Debe nombrar la dependencia (Desarrollo Urbano, Obras Públicas, Catastro...), no solo el
+        # ayuntamiento ni la persona que firma.
+        dependencia = re.search(r"DESARROLLO|OBRAS|CATASTRO|LICENCIAS|ORDENAMIENTO|URBANISMO", nz.texto(obtenido))
+        return bool(dependencia) and nz.solapamiento(_tokens_autoridad(str(esperado)), _tokens_autoridad(obtenido)) >= 0.5
     return nz.texto(str(esperado)) == nz.texto(obtenido)
 
 
@@ -71,6 +88,8 @@ def comparar(verdad: dict, d: DocumentoAnalizado) -> dict[str, dict]:
     out = {}
     for campo in CAMPOS:
         esp, obt = verdad.get(campo), _obtenido(d, campo)
+        if campo == "alineamiento":  # en la verdad solo está anotado si la constancia lo trae (sí/no)
+            esp = "sí" if verdad.get("contiene_alineamiento") and not verdad.get("alineamiento_sin_datos") else None
         if esp in (None, "") and obt in (None, ""):
             estado = "ok"
         elif esp in (None, ""):
