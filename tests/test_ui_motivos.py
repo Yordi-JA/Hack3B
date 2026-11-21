@@ -149,3 +149,108 @@ def test_globo_del_recorrido_dura_40_segundos_por_sesion():
     assert segundos_globo(sesion, ahora=125.0) == 15
     assert segundos_globo(sesion, ahora=150.0) == 0  # ya no vuelve en esta sesión
     assert "sessionStorage" in GUION_GLOBO and "40000" in GUION_GLOBO
+
+
+# ---------------------------------------------------------------- revisión de 722b642
+
+def test_demos_con_etiquetas_por_significado():
+    cats = lambda d: {m.categoria for m in L.motivos_ui(d)}  # noqa: E731
+    assert Categoria.FORMALIDADES not in cats(_demo("dictamen_demo_04"))     # los bimestres van en PRE-04 (adeudo)
+    assert Categoria.IDENTIFICACION not in cats(_demo("dictamen_demo_03"))   # el contribuyente distinto es CRU-PROP
+    assert Categoria.DATOS_NO_COINCIDEN in cats(_demo("dictamen_demo_03"))
+
+
+def test_reglas_sin_evaluar_de_un_archivo_ilegible_no_son_motivo():
+    d = _demo("dictamen_demo_03")  # el alineamiento es una foto ilegible: ALI-01/02/03 sin evaluar
+    ms = L.motivos_ui(d)
+    assert not any(m.id_regla.startswith("ALI-") for m in ms)
+    assert Categoria.VIGENCIA not in {m.categoria for m in ms}
+    assert Categoria.CLARIDAD in {m.categoria for m in ms}  # el motivo real: el documento no se lee
+    assert "documento vencido" not in C.resumen_motivos(d)
+
+
+def test_cumple_no_tiene_motivos_en_ningun_lado():
+    d = _exp([("u.pdf", TipoDocumento.USO_SUELO, [_h("USO-01")])], Recomendacion.CUMPLE)
+    assert L.motivos_ui(d) == [] and L.motivo_principal(d) is None
+    assert not L.coincide(d, categoria=Categoria.USO_SUELO)
+    assert L.conteo_por_motivo([(d, False)]) == {}
+    assert "t-motivo" not in C.fila_expediente("x", d, False, _estatus(), params={})
+
+
+def test_opciones_del_filtro_con_solo_ejemplos():
+    ms = L.motivos_ui(_demo("dictamen_demo_04"))
+    valores, textos = L.opciones_motivo([(ms, True)])
+    assert "adeudo_fiscal" in valores
+    assert textos["adeudo_fiscal"] == "Adeudos de predial · solo ejemplos"
+    # con un real de la misma categoría, el texto lleva solo el conteo de reales
+    real = _exp([("p.pdf", TipoDocumento.PREDIAL, [_h("PRE-04", Severidad.BLOQUEANTE)])], Recomendacion.NO_CUMPLE)
+    valores, textos = L.opciones_motivo([(ms, True), (L.motivos_ui(real), False)])
+    assert valores[1] == "adeudo_fiscal" and textos["adeudo_fiscal"] == "Adeudos de predial · 1 descartado"
+    # la categoría activa se conserva aunque ya no haya expedientes
+    assert "uso_suelo" in L.opciones_motivo([], Categoria.USO_SUELO)[0]
+
+
+def test_enlace_del_motivo_desde_la_vista_del_estado_va_a_la_bandeja():
+    params = {"vista": "estado", "entidad": "MEXICO", "ej": "", "rec": ""}
+    html = C.fila_expediente("ejemplo:x", _demo("dictamen_demo_04"), True, _estatus(), params=params)
+    href = re.search(r'class="t-motivo[^"]*"[^>]*href="([^"]+)"', html).group(1).replace("&amp;", "&")
+    assert "vista=bandeja" in href and "entidad=MEXICO" in href and "mot=adeudo_fiscal" in href
+
+
+def test_etiqueta_del_renglon_con_la_misma_severidad():
+    d = _exp([("p.pdf", TipoDocumento.PREDIAL, [_h("PRE-04", Severidad.BLOQUEANTE)])], Recomendacion.NO_CUMPLE)
+    req = L.Requisito("PRE-04", "PRE-04", EstadoRegla.NO_CUMPLE, Severidad.REVISION, ["p.pdf"], [],
+                      tipo=TipoDocumento.PREDIAL)
+    fila = L.Pendiente("requisito", "x", Severidad.REVISION, ["p.pdf"], requisito=req)
+    m = L.motivo_de_pendiente(fila, L.motivos_ui(d))
+    assert m.etiqueta == "En revisión por adeudos de predial" and m.severidad == Severidad.REVISION
+
+
+def test_inconsistencia_se_liga_por_regla_y_archivos():
+    d = _demo("dictamen_demo_04")
+    ms = L.motivos_ui(d)
+    inc = d.inconsistencias[0]
+    fila = L.Pendiente("inconsistencia", inc.descripcion, inc.severidad, [], inconsistencia=inc)
+    assert L.motivo_de_pendiente(fila, ms) is not None
+    otra = inc.model_copy(update={"valores": inc.valores[:1]})
+    assert L.motivo_de_pendiente(L.Pendiente("inconsistencia", "x", inc.severidad, [], inconsistencia=otra), ms) is None
+
+
+def test_csv_guardia_contra_formulas_con_espacios_y_saltos():
+    for valor in ("\t=1+1", " =1+1", "\r=1", "\n@SUMA", "\"=1", "'+1"):
+        assert L._celda_csv(valor).startswith("'"), repr(valor)
+    assert L._celda_csv("Adeudo de $1,000") == "Adeudo de $1,000"
+    texto = 'Primera línea, con coma\ny "comillas"'
+    d = _exp([("p.pdf", TipoDocumento.PREDIAL, [_h("PRE-04", Severidad.BLOQUEANTE, explicacion=texto)])], Recomendacion.NO_CUMPLE)
+    filas = _filas_csv(L.csv_seguimiento([d]))
+    assert filas[1][10] == texto  # ida y vuelta sin romper columnas
+
+
+def test_guion_del_globo_es_una_constante_sin_datos():
+    from ui import vistas
+
+    g = vistas.GUION_GLOBO
+    assert "{{" not in g and "}}" not in g and "GLOBO_SEGUNDOS" not in g
+    assert str(vistas.GLOBO_SEGUNDOS * 1000) in g
+    assert g.startswith("<script>") and g.count("<script") == 1
+
+
+def test_motivos_se_calculan_una_vez_por_expediente(monkeypatch):
+    nombres = ["dictamen_demo_02", "dictamen_demo_03", "dictamen_demo_04", "dictamen_ejemplo"]
+    dictamenes = {n: _demo(n) for n in nombres}
+    llamadas = []
+    original = L.motivos
+    monkeypatch.setattr(L, "motivos", lambda d: llamadas.append(d.expediente_id) or original(d))
+    mots = L.motivos_por_clave(dictamenes.items())
+    assert len(llamadas) == 3  # el que cumple ni siquiera llama a motivos()
+
+    def prohibido(d):
+        raise AssertionError("motivos() otra vez")
+
+    monkeypatch.setattr(L, "motivos", prohibido)
+    pares = [(mots[n], False) for n in nombres]
+    L.conteo_por_motivo(pares)
+    L.opciones_motivo(pares, Categoria.USO_SUELO)
+    assert [n for n in nombres if L.coincide(dictamenes[n], categoria=Categoria.ADEUDO_FISCAL, ms=mots[n])] == ["dictamen_demo_04"]
+    L.csv_seguimiento([(dictamenes[n], mots[n]) for n in nombres], Categoria.ADEUDO_FISCAL)
+    C.tabla_expedientes([(n, dictamenes[n], True, _estatus()) for n in nombres], {}, None, mots)

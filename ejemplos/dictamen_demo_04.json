@@ -268,10 +268,10 @@
       "hallazgos": [
         {
           "id_regla": "PRE-03",
-          "descripcion": "Predial pagado del ejercicio vigente",
-          "estado": "no_cumple",
-          "severidad": "revision",
-          "explicacion": "Solo está pagado el primer bimestre de 2026; faltan los bimestres 2 a 6.",
+          "descripcion": "Fecha del pago de predial identificada",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "Comprobante de predial del ejercicio 2026 (primer bimestre). El predial no tiene vigencia: se reporta su fecha.",
           "evidencias": [
             {
               "archivo": "Predial Tultepec 2026 DEMO.pdf",
@@ -285,12 +285,17 @@
           "descripcion": "Sin adeudos de impuesto predial",
           "estado": "no_cumple",
           "severidad": "bloqueante",
-          "explicacion": "El recibo reporta adeudo de ejercicios anteriores por $14,862.00.",
+          "explicacion": "El recibo reporta adeudo de ejercicios anteriores por $14,862.00, y de 2026 solo está pagado el primer bimestre: faltan los bimestres 2 a 6.",
           "evidencias": [
             {
               "archivo": "Predial Tultepec 2026 DEMO.pdf",
               "pagina": 1,
               "cita": "ADEUDO DE EJERCICIOS ANTERIORES: $14,862.00"
+            },
+            {
+              "archivo": "Predial Tultepec 2026 DEMO.pdf",
+              "pagina": 1,
+              "cita": "PERIODO PAGADO: 2026 BIM 1 A 2026 BIM 1"
             }
           ]
         }

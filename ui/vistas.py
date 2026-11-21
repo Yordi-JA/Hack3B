@@ -79,8 +79,8 @@ def _cargar_cache(huella: tuple) -> tuple[list[store.Entrada], list[store.Archiv
     return store.cargar()
 
 
-def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
-    """Relee del disco solo si cambió algún archivo (nombre, tamaño o fecha)."""
+def _huella() -> tuple:
+    """Nombre, fecha y tamaño de cada JSON: cambia si cambia algún archivo."""
     huella = []
     for carpeta in (store.DIR_RESULTADOS, store.DIR_EJEMPLOS):
         if not carpeta.is_dir():
@@ -91,7 +91,31 @@ def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
             except FileNotFoundError:  # otra sesión lo reemplazó entre el glob y el stat
                 continue
             huella.append((str(ruta), info.st_mtime_ns, info.st_size))
-    return _cargar_cache(tuple(huella))
+    return tuple(huella)
+
+
+def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
+    """Relee del disco solo si cambió algún archivo (nombre, tamaño o fecha)."""
+    return _cargar_cache(_huella())
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _motivos_cache(huella: tuple) -> dict[str, list[L.Motivo]]:
+    return L.motivos_por_clave((e.clave, e.dictamen) for e in _cargar_cache(huella)[0])
+
+
+def motivos_por_clave() -> dict[str, list[L.Motivo]]:
+    """Motivos de cada expediente (L.motivos_ui), calculados una vez por versión de los archivos."""
+    return _motivos_cache(_huella())
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _csv_cache(huella: tuple, claves: tuple[str, ...], categoria: str) -> bytes:
+    """CSV de seguimiento de esos expedientes, en el orden de la tabla; se rehace solo si cambian los
+    archivos, la lista filtrada o el filtro de motivo."""
+    por_clave = {e.clave: e.dictamen for e in _cargar_cache(huella)[0]}
+    motivos_de = _motivos_cache(huella)
+    return L.csv_seguimiento(((por_clave[c], motivos_de[c]) for c in claves if c in por_clave), L.categoria_de(categoria))
 
 
 # ------------------------------------------------------------------ barra lateral
@@ -163,17 +187,18 @@ def segundos_globo(estado, ahora: Optional[float] = None) -> float:
     return max(0.0, GLOBO_SEGUNDOS - (ahora - desde))
 
 
-# Guion fijo (sin datos del expediente): primera vez que esta pestaña vio el globo, en sessionStorage.
-GUION_GLOBO = f"""<script>
-(() => {{
+# Guion fijo: primera vez que esta pestaña vio el globo, en sessionStorage. Es una constante literal (sin
+# f-string ni .format): no interpolar datos en tiempo de ejecución. 40000 ms = GLOBO_SEGUNDOS (hay prueba).
+GUION_GLOBO = """<script>
+(() => {
   const clave = "tour-globo-desde", ahora = Date.now();
   let desde = Number(sessionStorage.getItem(clave));
-  if (!desde) {{ desde = ahora; sessionStorage.setItem(clave, String(desde)); }}
-  const resta = Math.max(0, {GLOBO_SEGUNDOS * 1000} - (ahora - desde));
+  if (!desde) { desde = ahora; sessionStorage.setItem(clave, String(desde)); }
+  const resta = Math.max(0, 40000 - (ahora - desde));
   const raiz = document.documentElement.style;
   raiz.setProperty("--globo-restante", resta + "ms");
   if (resta === 0) raiz.setProperty("--globo-dur", "0s");
-}})();
+})();
 </script>"""
 
 
@@ -189,10 +214,13 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     if "f_rec" not in st.session_state:
         rec_url = st.query_params.get("rec")
         st.session_state["f_rec"] = rec_url if rec_url in {r.value for r in Recomendacion} else None
+    if st.query_params.get("mot") and not L.categoria_de(st.query_params.get("mot")):
+        st.query_params.pop("mot", None)  # ?mot=xyz no es una categoría: se quita en vez de arrastrarlo
     if "f_mot" not in st.session_state:
         cat_url = L.categoria_de(st.query_params.get("mot"))
         st.session_state["f_mot"] = cat_url.value if cat_url else ""
     categoria = L.categoria_de(st.session_state.get("f_mot"))
+    mots = motivos_por_clave()
     visibles = [e for e in entradas if st.session_state["f_ej"] or not e.es_ejemplo]
     texto = st.session_state.get("f_q") or ""
     base = [e for e in visibles if L.coincide(e.dictamen, entidad_actual or None, None, texto)]
@@ -231,16 +259,13 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     historial = Dec.cargar()
     est = _filtro("est")
     rec = st.session_state.get("f_rec")
-    # Todos los filtros menos el de motivo: de aquí salen los conteos de cada opción de "Motivo".
+    # Todos los filtros menos el de motivo: de aquí salen las opciones de "Motivo" (regla en L.opciones_motivo).
     sin_motivo = [
         e for e in base
         if (not rec or e.dictamen.recomendacion == Recomendacion(rec))
         and (not est or Dec.estatus(historial, e.clave).value == est)
     ]
-    por_motivo = L.conteo_por_motivo((e.dictamen, e.es_ejemplo) for e in sin_motivo)
-    opciones_motivo = [""] + [c.value for c in por_motivo]
-    if categoria and categoria.value not in opciones_motivo:
-        opciones_motivo.append(categoria.value)  # el filtro activo sigue a la vista aunque ya no tenga conteo
+    opciones_motivo, textos_motivo = L.opciones_motivo(((mots.get(e.clave, []), e.es_ejemplo) for e in sin_motivo), categoria)
     filtros = st.container(key="b-filtros")
     b1, f1, fm, b3 = filtros.columns([1.7, 1, 1.2, 1], vertical_alignment="bottom")
     with b1:
@@ -251,7 +276,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     with fm:
         st.selectbox(
             "Motivo", opciones_motivo, key="f_mot", on_change=_sincronizar, args=("mot",),
-            format_func=lambda v: L.opcion_motivo(L.Categoria(v), por_motivo.get(L.Categoria(v))) if v else "Todos",
+            format_func=lambda v: textos_motivo.get(v, v),
         )
     with b3:
         st.selectbox(
@@ -281,7 +306,7 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
             help="Los ejemplos son dictámenes inventados para probar la pantalla. Ocúltalos cuando haya resultados reales.",
         )
 
-    filtrados = [e for e in sin_motivo if not categoria or L.coincide(e.dictamen, categoria=categoria)]
+    filtrados = [e for e in sin_motivo if not categoria or L.coincide(e.dictamen, categoria=categoria, ms=mots.get(e.clave))]
     filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
     html('<div id="expedientes" class="ancla"></div>')
@@ -293,7 +318,8 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
             html(C.filtro_motivo_activo(categoria, enlace))
         if filtrados:
             st.download_button(
-                "Descargar seguimiento (CSV)", L.csv_seguimiento((e.dictamen for e in filtrados), categoria),
+                "Descargar seguimiento (CSV)",
+                _csv_cache(_huella(), tuple(e.clave for e in filtrados), categoria.value if categoria else ""),
                 file_name="seguimiento_expedientes.csv", mime="text/csv", type="tertiary", key="b-csv",
             )
         if not visibles:
@@ -302,13 +328,13 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
             st.info("Ningún expediente coincide con los filtros.")
             st.button("Quitar filtros", on_click=_quitar_filtros)
         else:
-            _tabla(filtrados, historial, enlace, categoria)
+            _tabla(filtrados, historial, enlace, categoria, mots)
 
     tour.mostrar(html)
 
 
 def _tabla(filas: list[store.Entrada], historial: dict, params: dict[str, str],
-           categoria: Optional[L.Categoria] = None) -> None:
+           categoria: Optional[L.Categoria] = None, motivos_de: Optional[dict[str, list[L.Motivo]]] = None) -> None:
     """Tabla paginada: aguanta miles de expedientes sin volverse una pared de tarjetas."""
     try:
         pagina = max(1, int(st.query_params.get("pag", "1")))
@@ -318,7 +344,7 @@ def _tabla(filas: list[store.Entrada], historial: dict, params: dict[str, str],
     pagina = min(pagina, paginas)
     tramo = filas[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
     html(C.tabla_expedientes(((e.clave, e.dictamen, e.es_ejemplo, Dec.estatus(historial, e.clave)) for e in tramo),
-                             params, categoria))
+                             params, categoria, motivos_de))
     html(C.paginador(pagina, POR_PAGINA, len(filas), params))
 
 
@@ -366,7 +392,7 @@ def vista_estado(entradas: list[store.Entrada], clave: Optional[str]) -> None:
     filtro = f" · {rec}" if rec else ""
     html(f'<h2 class="lista-titulo">Expedientes{C.txt(filtro)} <small>{len(filtrados)}</small></h2>')
     if filtrados:
-        _tabla(filtrados, historial, dict(params, rec=rec or ""))
+        _tabla(filtrados, historial, dict(params, rec=rec or ""), motivos_de=motivos_por_clave())
     else:
         st.info("Ningún expediente de este estado coincide con la búsqueda y los filtros.")
 

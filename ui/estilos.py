@@ -528,7 +528,7 @@ a.kpi.kpi-activo {{ border-color: var(--rojo-osc); box-shadow: inset 0 0 0 2px v
 .t-fila {{ position: relative; }}
 a.t-abrir {{ color: var(--tinta); text-decoration: none; }}
 a.t-abrir::after {{ content: ""; position: absolute; inset: 0; }}
-.t-fila:focus-within {{ outline: 3px solid var(--tinta); outline-offset: -3px; }}
+.t-fila:has(a.t-abrir:focus-visible) {{ outline: 3px solid var(--tinta); outline-offset: -3px; }}
 a.t-abrir:focus-visible {{ outline: none; }}
 .t-rec {{ display: block; }}
 .t-motivo-linea {{ display: block; font-size: 12px; line-height: 1.35; white-space: normal; margin-top: 2px; }}

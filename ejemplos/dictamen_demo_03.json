@@ -292,7 +292,7 @@
       "hallazgos": [
         {
           "id_regla": "PRE-03",
-          "descripcion": "Predial pagado del ejercicio vigente",
+          "descripcion": "Fecha del pago de predial identificada",
           "estado": "cumple",
           "severidad": "info",
           "explicacion": "El recibo cubre el ejercicio fiscal 2026.",
@@ -306,10 +306,10 @@
         },
         {
           "id_regla": "PRE-01",
-          "descripcion": "El contribuyente es el titular del inmueble",
-          "estado": "no_cumple",
-          "severidad": "revision",
-          "explicacion": "El predial sigue a nombre de la vendedora; el traslado de dominio en catastro no está actualizado.",
+          "descripcion": "El predial identifica al contribuyente",
+          "estado": "cumple",
+          "severidad": "info",
+          "explicacion": "El contribuyente registrado es Mercedes Aguirre Beltrán; la diferencia con la titular de la escritura se revisa en la validación cruzada.",
           "evidencias": [
             {
               "archivo": "Predial Ixmiquilpan DEMO.pdf",

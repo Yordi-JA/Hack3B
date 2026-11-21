@@ -292,7 +292,7 @@
       "hallazgos": [
         {
           "id_regla": "PRE-03",
-          "descripcion": "Predial pagado del ejercicio vigente",
+          "descripcion": "Fecha del pago de predial identificada",
           "estado": "cumple",
           "severidad": "info",
           "explicacion": "El recibo cubre los seis bimestres de 2026.",

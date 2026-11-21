@@ -25,6 +25,7 @@ from expedientes.schemas import (
 )
 
 from expedientes.motivos import MOTIVO, Categoria, Motivo, motivos
+from expedientes.motivos import etiqueta as etiqueta_motivo
 
 from .mapa import ConteoEntidad, nombre_entidad, normalizar_entidad, normalizar_texto
 
@@ -520,10 +521,12 @@ def coincide(
     recomendacion: Optional[Recomendacion] = None,
     texto: str = "",
     categoria: Optional[Categoria] = None,
+    ms: Optional[list[Motivo]] = None,
 ) -> bool:
     """Filtro de la bandeja. `entidad=SIN_ENTIDAD` deja solo los que no tienen entidad.
-    `categoria` deja los expedientes con al menos un motivo de esa categoría (expedientes/motivos.py)."""
-    if categoria and not any(m.categoria == categoria for m in motivos(dictamen)):
+    `categoria` deja los expedientes con al menos un motivo de esa categoría (`motivos_ui`: los que
+    cumplen nunca entran); `ms` son esos motivos si ya se calcularon."""
+    if categoria and not any(m.categoria == categoria for m in (motivos_ui(dictamen) if ms is None else ms)):
         return False
     ubicacion = consolidar_ubicacion(dictamen)
     if entidad == SIN_ENTIDAD and ubicacion.entidad is not None:
@@ -560,7 +563,7 @@ def orden_bandeja(dictamen: Dictamen) -> tuple:
 
 
 # ------------------------------------------------------------------ seguimiento por motivo de descarte
-# Las categorías y etiquetas vienen de expedientes/motivos.py (Juan Pablo); aquí solo se agrupan.
+# Las categorías y etiquetas vienen de expedientes/motivos.py (Juan Pablo); aquí solo se filtran y agrupan.
 
 def nombre_motivo(cat: Categoria) -> str:
     """'Uso de suelo', 'Adeudos de predial'... (MOTIVO con mayúscula inicial)."""
@@ -568,23 +571,55 @@ def nombre_motivo(cat: Categoria) -> str:
     return texto[:1].upper() + texto[1:]
 
 
-def motivo_principal(dictamen: Dictamen) -> Optional[str]:
-    """La etiqueta del motivo más grave ('Descartado por uso de suelo'); None si cumple o no hay motivos."""
+def archivos_sin_evaluar(dictamen: Dictamen) -> set[str]:
+    """Archivos que tienen su propio renglón en "Qué hay que resolver" porque no se pudieron analizar,
+    reconocer o leer (los mismos que `pendientes` cubre antes de descartar reglas)."""
+    tapados = {doc.archivo for doc in dictamen.documentos for h in doc.hallazgos if h.id_regla in ("EXP-ERROR", "EXP-TIPO")}
+    tapados |= {doc.archivo for doc in dictamen.documentos if doc.legibilidad == Legibilidad.ILEGIBLE}
+    return tapados
+
+
+def motivos_ui(dictamen: Dictamen) -> list[Motivo]:
+    """Los motivos que muestra la UI. Un expediente que cumple no tiene motivos. Como en `_se_descarta`,
+    no cuentan las reglas de revisión sin evaluar de un archivo ilegible o sin analizar: ese archivo ya
+    tiene su propio motivo (claridad, verificación manual) y "documento vencido" sería falso."""
     if dictamen.recomendacion == Recomendacion.CUMPLE:
-        return None
-    ms = motivos(dictamen)
+        return []
+    tapados = archivos_sin_evaluar(dictamen)
+
+    def descartar(m: Motivo) -> bool:
+        archivos = m.archivos or ([m.archivo] if m.archivo else [])
+        return (m.estado == EstadoRegla.NO_EVALUABLE and m.severidad != Severidad.BLOQUEANTE
+                and not m.id_regla.startswith("EXP-") and bool(archivos) and all(a in tapados for a in archivos))
+
+    return [m for m in motivos(dictamen) if not descartar(m)]
+
+
+def motivos_por_clave(entradas: Iterable[tuple[str, Dictamen]]) -> dict[str, list[Motivo]]:
+    """`motivos_ui` una sola vez por expediente: lo comparten el filtro, los conteos, la tabla y el CSV."""
+    return {clave: motivos_ui(d) for clave, d in entradas}
+
+
+def _lista(dictamen_o_motivos: "Dictamen | list[Motivo]") -> list[Motivo]:
+    return dictamen_o_motivos if isinstance(dictamen_o_motivos, list) else motivos_ui(dictamen_o_motivos)
+
+
+def motivo_principal(dictamen: Dictamen, ms: Optional[list[Motivo]] = None) -> Optional[str]:
+    """La etiqueta del motivo más grave ('Descartado por uso de suelo'); None si cumple o no hay motivos."""
+    ms = motivos_ui(dictamen) if ms is None else ms
     return ms[0].etiqueta if ms else None
 
 
-def conteo_por_motivo(dictamenes: Iterable[tuple[Dictamen, bool]]) -> dict[Categoria, dict[str, int]]:
+def conteo_por_motivo(dictamenes: Iterable[tuple["Dictamen | list[Motivo]", bool]]) -> dict[Categoria, dict[str, int]]:
     """Expedientes (no motivos) por categoría: 'descartados' si alguno de sus motivos de esa categoría es
-    bloqueante, si no 'en_revision'. Recibe pares (dictamen, es_ejemplo) y no cuenta los ejemplos."""
+    bloqueante, si no 'en_revision'. Recibe pares (dictamen o sus motivos ya calculados, es_ejemplo) y no
+    cuenta los ejemplos. Ordenado de más a menos expedientes."""
     conteo: dict[Categoria, dict[str, int]] = {}
     for d, es_ejemplo in dictamenes:
         if es_ejemplo:
             continue
         peor: dict[Categoria, bool] = {}
-        for m in motivos(d):
+        for m in _lista(d):
             peor[m.categoria] = peor.get(m.categoria, False) or m.severidad == Severidad.BLOQUEANTE
         for cat, bloquea in peor.items():
             fila = conteo.setdefault(cat, {"descartados": 0, "en_revision": 0})
@@ -592,42 +627,95 @@ def conteo_por_motivo(dictamenes: Iterable[tuple[Dictamen, bool]]) -> dict[Categ
     return dict(sorted(conteo.items(), key=lambda kv: (-(kv[1]["descartados"] + kv[1]["en_revision"]), kv[0].value)))
 
 
+def opcion_motivo(cat: Categoria, cuenta: Optional[dict[str, int]] = None, solo_ejemplos: bool = False) -> str:
+    """Texto de la opción del filtro "Motivo": 'Uso de suelo · 2 descartados · 1 en revisión'.
+    Sin cuenta queda solo el nombre, o 'Uso de suelo · solo ejemplos' si solo la tienen ejemplos."""
+    partes = [nombre_motivo(cat)]
+    if cuenta and cuenta.get("descartados"):
+        n = cuenta["descartados"]
+        partes.append(f"{n} descartado{'s' if n != 1 else ''}")
+    if cuenta and cuenta.get("en_revision"):
+        partes.append(f"{cuenta['en_revision']} en revisión")
+    if len(partes) == 1 and solo_ejemplos:
+        partes.append("solo ejemplos")
+    return " · ".join(partes)
+
+
+def opciones_motivo(
+    items: Iterable[tuple[list[Motivo], bool]], activa: Optional[Categoria] = None
+) -> tuple[list[str], dict[str, str]]:
+    """Opciones del filtro "Motivo" y su texto, para los expedientes que ya pasaron los demás filtros
+    (con o sin ejemplos, según el interruptor). Regla: salen todas las categorías presentes en esa lista;
+    los conteos son solo de expedientes reales (los ejemplos se listan pero no se cuentan), de más a menos;
+    después las que solo tienen ejemplos. La categoría activa se conserva aunque ya no tenga expedientes."""
+    items = list(items)
+    conteo = conteo_por_motivo(items)
+    presentes = {m.categoria for ms, _ in items for m in ms}
+    orden = list(conteo) + sorted(presentes - set(conteo), key=lambda c: c.value)
+    if activa and activa not in orden:
+        orden.append(activa)
+    valores = [""] + [c.value for c in orden]
+    textos = {"": "Todos"}
+    textos.update({c.value: opcion_motivo(c, conteo.get(c), solo_ejemplos=c in presentes) for c in orden})
+    return valores, textos
+
+
+def resumen_motivos_ui(ms: list[Motivo]) -> list[tuple[Categoria, Severidad, int]]:
+    """Como `resumen_por_categoria` de motivos.py, pero sobre `motivos_ui`: (categoría, severidad, total),
+    las que descartan primero y luego de más a menos."""
+    grupos: dict[Categoria, list[Motivo]] = {}
+    for m in ms:
+        grupos.setdefault(m.categoria, []).append(m)
+    filas = [(cat, Severidad.BLOQUEANTE if any(m.severidad == Severidad.BLOQUEANTE for m in g) else Severidad.REVISION, len(g))
+             for cat, g in grupos.items()]
+    return sorted(filas, key=lambda f: (f[1] != Severidad.BLOQUEANTE, -f[2]))
+
+
 COLUMNAS_CSV = ["expediente_id", "fecha_analisis", "entidad", "municipio", "recomendacion", "categoria", "etiqueta",
                 "severidad", "id_regla", "archivos", "explicacion"]
+_INICIO_FORMULA = ("=", "+", "-", "@")
 
 
 def _celda_csv(valor: object) -> str:
-    """Texto seguro para hojas de cálculo: una celda que empieza con = + - @ se lee como fórmula."""
+    """Texto seguro para hojas de cálculo: una celda que empieza con = + - @ (o con tabulador o salto de
+    línea, o con esos signos después de espacios o comillas) se interpretaría como fórmula."""
     texto = "" if valor is None else str(valor)
-    return "'" + texto if texto[:1] in ("=", "+", "-", "@") else texto
+    if texto[:1] in (*_INICIO_FORMULA, "\t", "\r", "\n") or texto.lstrip(" \t\r\n\"'").startswith(_INICIO_FORMULA):
+        return "'" + texto
+    return texto
 
 
-def csv_seguimiento(dictamenes: Iterable[Dictamen], categoria: Optional[Categoria] = None) -> bytes:
+def csv_seguimiento(
+    dictamenes: Iterable["Dictamen | tuple[Dictamen, list[Motivo]]"], categoria: Optional[Categoria] = None,
+) -> bytes:
     """Un renglón por motivo de cada expediente; los que no tienen motivos (los que cumplen) salen en un
     renglón con las columnas de motivo vacías, para que sigan en la lista. Con `categoria` (el filtro de
-    motivo activo) solo salen los motivos de esa categoría. UTF-8 con BOM para Excel. Se arma en memoria;
-    nunca se escribe a disco."""
+    motivo activo) solo salen los motivos de esa categoría. Cada elemento es un dictamen o un par
+    (dictamen, motivos ya calculados). UTF-8 con BOM para Excel. Se arma en memoria; nunca se escribe a disco."""
     salida = io.StringIO()
     escritor = csv.writer(salida)
     escritor.writerow(COLUMNAS_CSV)
-    for d in dictamenes:
+    for item in dictamenes:
+        d, ms = item if isinstance(item, tuple) else (item, motivos_ui(item))
         u = consolidar_ubicacion(d)
         base = [d.expediente_id, d.fecha_analisis.isoformat(timespec="minutes"),
                 nombre_entidad(u.entidad) if u.entidad else "", u.municipio_valor or (u.municipio or ""),
                 d.recomendacion.value]
         filas = [[m.categoria.value, m.etiqueta, m.severidad.value, m.id_regla,
                   " | ".join(m.archivos or ([m.archivo] if m.archivo else [])), m.explicacion]
-                 for m in motivos(d) if categoria is None or m.categoria == categoria]
+                 for m in ms if categoria is None or m.categoria == categoria]
         for fila in filas or [[""] * 6]:
             escritor.writerow([_celda_csv(v) for v in base + fila])
-    return ("\ufeff" + salida.getvalue()).encode("utf-8")
+    return ("﻿" + salida.getvalue()).encode("utf-8")
 
 
 def motivo_de_pendiente(it: "Pendiente", ms: list[Motivo]) -> Optional[Motivo]:
-    """El motivo que corresponde a un renglón de "Qué hay que resolver": por (regla, archivo) en reglas
-    y archivos sin analizar o no reconocidos, y por regla en inconsistencias. None si no hay uno claro."""
+    """El motivo de un renglón de "Qué hay que resolver": por (regla, archivo) en reglas y archivos sin
+    analizar o no reconocidos; por regla y los mismos archivos en inconsistencias. La etiqueta dice la
+    misma severidad que el renglón. None si no hay uno claro."""
     if it.inconsistencia is not None:
-        candidatos = [m for m in ms if m.id_regla == it.inconsistencia.id_regla]
+        archivos = {v.archivo for v in it.inconsistencia.valores}
+        candidatos = [m for m in ms if m.id_regla == it.inconsistencia.id_regla and set(m.archivos) == archivos]
     elif it.requisito is not None:
         r = it.requisito
         candidatos = [m for m in ms if m.id_regla == r.id_regla
@@ -637,24 +725,18 @@ def motivo_de_pendiente(it: "Pendiente", ms: list[Motivo]) -> Optional[Motivo]:
         candidatos = [m for m in ms if m.id_regla == regla and m.archivo in it.archivos]
     else:
         candidatos = []
-    return candidatos[0] if candidatos else None  # motivos() ya viene con los que descartan primero
+    if not candidatos:
+        return None
+    igual = next((m for m in candidatos if m.severidad == it.severidad), None)
+    if igual is not None or it.severidad not in (Severidad.BLOQUEANTE, Severidad.REVISION):
+        return igual or candidatos[0]
+    m = candidatos[0]
+    return m.model_copy(update={"severidad": it.severidad, "etiqueta": etiqueta_motivo(m.categoria, it.severidad)})
 
 
-def opcion_motivo(cat: Categoria, cuenta: Optional[dict[str, int]] = None) -> str:
-    """Texto de la opción del filtro "Motivo": 'Uso de suelo · 2 descartados · 1 en revisión'.
-    Sin cuenta (o en cero) queda solo el nombre."""
-    partes = [nombre_motivo(cat)]
-    if cuenta and cuenta.get("descartados"):
-        n = cuenta["descartados"]
-        partes.append(f"{n} descartado{'s' if n != 1 else ''}")
-    if cuenta and cuenta.get("en_revision"):
-        partes.append(f"{cuenta['en_revision']} en revisión")
-    return " · ".join(partes)
-
-
-def motivo_de_categoria(dictamen: Dictamen, categoria: Categoria) -> Optional[Motivo]:
-    """El motivo más grave del expediente en esa categoría (el que explica por qué sale con el filtro)."""
-    return next((m for m in motivos(dictamen) if m.categoria == categoria), None)
+def motivo_de_categoria(ms: list[Motivo], categoria: Categoria) -> Optional[Motivo]:
+    """El motivo más grave en esa categoría (el que explica por qué el expediente sale con el filtro)."""
+    return next((m for m in ms if m.categoria == categoria), None)
 
 
 def categoria_de(valor: Optional[str]) -> Optional[Categoria]:

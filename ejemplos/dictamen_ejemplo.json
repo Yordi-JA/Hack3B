@@ -90,11 +90,11 @@
       "hallazgos": [
         {
           "id_regla": "PRE-01",
-          "descripcion": "Predial pagado del ejercicio vigente",
+          "descripcion": "El predial identifica al contribuyente",
           "estado": "cumple",
           "severidad": "info",
-          "explicacion": "El recibo cubre los 6 bimestres de 2026, que es el ejercicio de la fecha de referencia.",
-          "evidencias": [{"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "AÑO 2026 BIM. INI 1 BIM. FIN 6"}]
+          "explicacion": "El contribuyente registrado es Claudia Alejandra Méndez Salazar, la misma titular de la escritura.",
+          "evidencias": [{"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "PROPIETARIO / POSEEDOR MENDEZ SALAZAR CLAUDIA ALEJANDRA"}]
         }
       ],
       "confianza": 0.95

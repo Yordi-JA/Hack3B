@@ -164,16 +164,17 @@ def insignia_estatus(e: "Dec.Estatus") -> str:
     return f'<span class="insignia est-{clase_tono(Dec.TONO[e])}" style="background:{Dec.TONO[e].fondo}">{txt(e.value)}</span>'
 
 
-def _motivo_fila(d: Dictamen, params: dict[str, str], categoria: Optional["L.Categoria"]) -> str:
-    """Debajo de la recomendación: el motivo principal como enlace que filtra por su categoría. Con un
-    filtro de motivo activo se muestra el motivo de esa categoría y, si no es el principal, también éste."""
-    ms = L.motivos(d) if d.recomendacion != Recomendacion.CUMPLE else []
+def _motivo_fila(ms: list["L.Motivo"], params: dict[str, str], categoria: Optional["L.Categoria"]) -> str:
+    """Debajo de la recomendación: el motivo principal (el primero de `L.motivos_ui`) como enlace que filtra
+    la bandeja por su categoría. Con un filtro de motivo activo se muestra el motivo de esa categoría y, si
+    no es el principal, también éste. El enlace siempre lleva a la bandeja (también desde la vista de un
+    estado, que no tiene filtro de motivo) con los demás filtros de `params`."""
     principal = ms[0] if ms else None
-    mostrado = L.motivo_de_categoria(d, categoria) if categoria else principal
+    mostrado = L.motivo_de_categoria(ms, categoria) if categoria else principal
     if mostrado is None:
         return ""
     tono = t.SEVERIDAD[mostrado.severidad]
-    href = url(**L.aplicar_filtro(params, "mot", mostrado.categoria.value))
+    href = url(**L.aplicar_filtro(dict(params, vista="bandeja"), "mot", mostrado.categoria.value))
     extra = ""
     if categoria and principal and principal.categoria != categoria:
         extra = f' <span class="t-tambien">(también: {txt(L.MOTIVO[principal.categoria])})</span>'
@@ -184,7 +185,8 @@ def _motivo_fila(d: Dictamen, params: dict[str, str], categoria: Optional["L.Cat
 
 
 def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Estatus",
-                    params: Optional[dict[str, str]] = None, categoria: Optional["L.Categoria"] = None) -> str:
+                    params: Optional[dict[str, str]] = None, categoria: Optional["L.Categoria"] = None,
+                    ms: Optional[list["L.Motivo"]] = None) -> str:
     """Una fila de la tabla. La fila es un div: el enlace del identificador se estira sobre toda la fila
     para abrir el detalle, y el enlace del motivo queda encima para filtrar sin abrir el detalle (un
     enlace dentro de otro no es HTML válido)."""
@@ -192,7 +194,7 @@ def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Est
     recibidos = sum(1 for tr in L.documentos_por_tipo(d) if tr.recibido)
     tono = t.ESTADO[d.recomendacion]
     ejemplo = ' <small class="t-ej">Ejemplo</small>' if es_ejemplo else ""
-    motivo = _motivo_fila(d, params or {}, categoria)
+    motivo = _motivo_fila(L.motivos_ui(d) if ms is None else ms, params or {}, categoria)
     celdas = (
         f'<a class="t-id t-abrir" href="{escape(url(vista="detalle", exp=clave))}" target="_self">'
         f'{txt(d.expediente_id)}{ejemplo}</a>',
@@ -210,11 +212,13 @@ def fila_expediente(clave: str, d: Dictamen, es_ejemplo: bool, estatus: "Dec.Est
 
 
 def tabla_expedientes(filas: Iterable[tuple[str, Dictamen, bool, "Dec.Estatus"]],
-                      params: Optional[dict[str, str]] = None, categoria: Optional["L.Categoria"] = None) -> str:
+                      params: Optional[dict[str, str]] = None, categoria: Optional["L.Categoria"] = None,
+                      motivos_de: Optional[dict[str, list["L.Motivo"]]] = None) -> str:
+    """`motivos_de`: motivos ya calculados por clave (L.motivos_por_clave), para no repetirlos por fila."""
     cab = "".join(f'<span class="t-celda" role="columnheader">{n}</span>' for n in COLUMNAS_TABLA)
     return (
         f'<div class="t-tabla" role="table" aria-label="Expedientes"><div class="t-cab" role="row">{cab}</div>'
-        + "".join(fila_expediente(*f, params=params, categoria=categoria) for f in filas)
+        + "".join(fila_expediente(*f, params=params, categoria=categoria, ms=(motivos_de or {}).get(f[0])) for f in filas)
         + "</div>"
     )
 
@@ -510,12 +514,10 @@ def _evidencia(it: L.Pendiente) -> str:
 
 def resumen_motivos(d: Dictamen) -> str:
     """'Descartado por: uso de suelo (2) · adeudos de predial (1)' y 'En revisión por: ...'."""
-    from expedientes.motivos import resumen_por_categoria
-
-    filas = resumen_por_categoria(d)
+    filas = L.resumen_motivos_ui(L.motivos_ui(d))
     lineas = []
     for sev, titulo, tono in ((Severidad.BLOQUEANTE, "Descartado por", "vino"), (Severidad.REVISION, "En revisión por", "ambar")):
-        partes = [f"{txt(L.MOTIVO[f.categoria])} ({f.total})" for f in filas if f.severidad == sev]
+        partes = [f"{txt(L.MOTIVO[cat])} ({total})" for cat, s, total in filas if s == sev]
         if partes:
             lineas.append(f'<p class="motivos-resumen"><b class="est-{tono}">{titulo}:</b> {" · ".join(partes)}</p>')
     return "".join(lineas)
@@ -523,7 +525,7 @@ def resumen_motivos(d: Dictamen) -> str:
 
 def lista_pendientes(d: Dictamen, pend: Optional[tuple] = None) -> str:
     items, sueltas = pend or L.pendientes(d)
-    ms = L.motivos(d)
+    ms = L.motivos_ui(d)
     if items:
         filas = []
         for it in items:
