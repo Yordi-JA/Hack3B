@@ -510,7 +510,7 @@ def _estado_documento(doc: DocumentoAnalizado) -> str:
     )
 
 
-def _tarjeta_documento(titulo: str, doc: DocumentoAnalizado) -> str:
+def _tarjeta_documento(titulo: str, doc: DocumentoAnalizado, ver: Optional[str] = None) -> str:
     campos = "".join(
         f"<dt>{txt(L.nombre_campo(c))}</dt><dd>{txt(campo.valor or '')}</dd>" for c, campo in L.campos_clave(doc)
     )
@@ -525,15 +525,21 @@ def _tarjeta_documento(titulo: str, doc: DocumentoAnalizado) -> str:
         )
     return (
         f'<div class="doc-tarjeta"><span class="doc-titulo">{txt(titulo)}</span>'
-        f'<p class="doc-archivo">{txt(doc.archivo)}</p>{_estado_documento(doc)}'
+        + (
+            f'<a class="doc-archivo doc-ver" href="{escape(ver)}" target="_self">{txt(doc.archivo)}'
+            '<span class="doc-ver-txt">Ver documento →</span></a>' if ver
+            else f'<p class="doc-archivo">{txt(doc.archivo)}</p>'
+        )
+        + f"{_estado_documento(doc)}"
         + (f'<dl class="doc-campos">{campos}</dl>' if campos else "")
         + f"{pie}</div>"
     )
 
 
-def documentos(d: Dictamen) -> str:
+def documentos(d: Dictamen, enlaces: Optional[dict[str, str]] = None) -> str:
     """Una tarjeta por archivo de cada tipo requerido; una tarjeta punteada por tipo faltante; al final
-    los archivos que no se reconocieron."""
+    los archivos que no se reconocieron. `enlaces`: archivo -> URL de su vista, si el original existe."""
+    enlaces = enlaces or {}
     faltan = set(L.faltantes(d))
     tarjetas = []
     for tr in L.documentos_por_tipo(d):
@@ -549,10 +555,10 @@ def documentos(d: Dictamen) -> str:
             )
         for doc in d.documentos:
             if doc.tipo == tr.tipo:
-                tarjetas.append(_tarjeta_documento(nombre, doc))
+                tarjetas.append(_tarjeta_documento(nombre, doc, enlaces.get(doc.archivo)))
     for doc in d.documentos:
         if doc.tipo == TipoDocumento.OTRO:
-            tarjetas.append(_tarjeta_documento("Otro archivo", doc))
+            tarjetas.append(_tarjeta_documento("Otro archivo", doc, enlaces.get(doc.archivo)))
     return f'<div class="docs-grid">{"".join(tarjetas)}</div>'
 
 

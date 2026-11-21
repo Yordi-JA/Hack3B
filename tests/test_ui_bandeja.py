@@ -117,3 +117,27 @@ def test_decisiones_archivo_danado_no_rompe(tmp_path):
     from ui import decisiones as Dec
     (tmp_path / Dec.ARCHIVO).write_text("{no es json", encoding="utf-8")
     assert Dec.cargar(tmp_path) == {}
+
+
+# ------------------------------------------------------------------ archivos originales
+
+def test_ubicar_original_solo_por_nombre(tmp_path):
+    from ui import archivos as A
+    base, docs = tmp_path / "archivos", tmp_path / "Documentos"
+    A.guardar_originales("EXP/1", [("../../x/01 Escritura.pdf", b"%PDF-1.4")], base)
+    assert A.ubicar("EXP/1", "01 Escritura.pdf", base, docs).read_bytes() == b"%PDF-1.4"
+    assert A.ubicar("EXP/1", "../01 Escritura.pdf", base, docs).parent == A.carpeta("EXP/1", base)
+    (docs / "Predial").mkdir(parents=True)
+    (docs / "Predial" / "02 Predial.pdf").write_bytes(b"%PDF")
+    A._indice_documentos.cache_clear()
+    assert A.ubicar("OTRO", "02 Predial.pdf", base, docs) == (docs / "Predial" / "02 Predial.pdf").resolve()
+    assert A.ubicar("OTRO", "no existe.pdf", base, docs) is None and A.ubicar("OTRO", "notas.txt", base, docs) is None
+    A._indice_documentos.cache_clear()
+
+
+def test_documentos_enlaza_solo_archivos_disponibles():
+    d = analizar_expediente([], usar_ejemplo=True)
+    primero = d.documentos[0].archivo
+    html = C.documentos(d, {primero: "?vista=documento&exp=e&doc=x"})
+    assert html.count('class="doc-archivo doc-ver"') == 1 and "Ver documento" in html
+    assert "Ver documento" not in C.documentos(d)

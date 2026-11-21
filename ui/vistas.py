@@ -18,6 +18,7 @@ from expedientes.schemas import Dictamen, Recomendacion
 
 from . import componentes as C
 from . import logica as L
+from . import archivos as A
 from . import decisiones as Dec
 from . import mapa, store, tour, trabajos
 
@@ -112,7 +113,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
         if abierto:
             st.button(
                 seguro(abierto.dictamen.expediente_id) or "Expediente abierto", key="nav-detalle", on_click=ir, args=("detalle", abierto.clave),
-                type="primary" if vista == "detalle" else "secondary", width="stretch",
+                type="primary" if vista in ("detalle", "documento") else "secondary", width="stretch",
                 help="Expediente abierto",
             )
         html('<div class="lateral-grupo">Ayuda</div>')
@@ -343,7 +344,12 @@ def _analizar(archivos: list[tuple[str, bytes]], expediente_id: str) -> store.En
             destino.write_bytes(contenido)
             rutas.append(destino)
         dictamen = analizar_expediente(rutas, expediente_id=expediente_id)
-        return store.guardar(store.fijar_id(dictamen, expediente_id))
+        entrada = store.guardar(store.fijar_id(dictamen, expediente_id))
+    try:  # los originales se guardan para abrirlos desde el detalle; si falla, el dictamen ya quedó
+        A.guardar_originales(entrada.dictamen.expediente_id, archivos)
+    except OSError:
+        _log.exception("No se pudieron guardar los archivos originales de %s", expediente_id)
+    return entrada
 
 
 def _trabajo() -> Optional[trabajos.Trabajo]:
@@ -568,7 +574,11 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
 
     # 3. Documentos recibidos y faltantes
     html(C.seccion("Documentos", "documentos"))
-    html(C.documentos(d))
+    enlaces = {
+        doc.archivo: C.url(vista="documento", exp=entrada.clave, doc=doc.archivo)
+        for doc in d.documentos if A.ubicar(d.expediente_id, doc.archivo)
+    }
+    html(C.documentos(d, enlaces))
 
     # 4. Todo lo demás, plegado
     with st.expander("Ver detalle completo", key="detalle-completo"):
@@ -578,6 +588,43 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
         "Descargar dictamen (JSON)", d.model_dump_json(indent=2), file_name=store.nombre_archivo(d.expediente_id),
         mime="application/json", type="tertiary", key="detalle-descargar",
     )
+
+
+@st.cache_data(max_entries=8, show_spinner="Abriendo el documento…")
+def _paginas(ruta: str, modificado: float) -> tuple[list[bytes], int]:
+    return A.paginas_jpg(Path(ruta))
+
+
+def vista_documento(entrada: Optional[store.Entrada], archivo: Optional[str]) -> None:
+    """El archivo original, página por página, con botón para descargarlo."""
+    if entrada is None:
+        st.button("Volver al inicio", on_click=ir, args=("bandeja",), icon=":material/arrow_back:")
+        st.info("No existe ese expediente.")
+        return
+    st.button(
+        f"Volver a {seguro(entrada.dictamen.expediente_id)}", key="doc-volver", on_click=ir, args=("detalle", entrada.clave),
+        icon=":material/arrow_back:",
+    )
+    ruta = A.ubicar(entrada.dictamen.expediente_id, archivo or "")
+    html(C.encabezado(archivo or "Documento", f"Expediente {entrada.dictamen.expediente_id}"))
+    if ruta is None:
+        st.info("El archivo original no está en este equipo: solo se conservan los que se suben desde Subir expediente.")
+        return
+    st.download_button(
+        "Descargar archivo original", ruta.read_bytes(), file_name=ruta.name, key="doc-descargar",
+        icon=":material/download:",
+    )
+    try:
+        paginas, total = _paginas(str(ruta), ruta.stat().st_mtime)
+    except Exception:  # archivo dañado o formato que PyMuPDF no abre
+        _log.exception("No se pudo abrir %s", ruta)
+        st.error("No se pudo mostrar este archivo. Descárgalo para abrirlo en tu equipo.")
+        return
+    if total > len(paginas):
+        st.caption(f"Se muestran las primeras {len(paginas)} de {total} páginas. Descarga el archivo para verlo completo.")
+    with st.container(key="doc-paginas"):
+        for i, img in enumerate(paginas, start=1):
+            st.image(img, caption=f"Página {i} de {total}", width="stretch")
 
 
 def seccion_decision(entrada: store.Entrada) -> None:
@@ -623,7 +670,7 @@ def main() -> None:
     trabajos.motor()  # deja listos el ejecutor y el log a consola desde la primera visita
     entradas, invalidos = cargar()
     vista = st.query_params.get("vista", "bandeja")
-    if vista not in ("bandeja", "nuevo", "detalle", "estado"):
+    if vista not in ("bandeja", "nuevo", "detalle", "estado", "documento"):
         vista = "bandeja"
     abierto = store.buscar(entradas, st.query_params.get("exp"))
     barra_lateral(vista, abierto)
@@ -631,6 +678,8 @@ def main() -> None:
         vista_nuevo()
     elif vista == "detalle":
         vista_detalle(abierto)
+    elif vista == "documento":
+        vista_documento(abierto, st.query_params.get("doc"))
     elif vista == "estado":
         vista_estado(entradas, st.query_params.get("entidad"))
     else:

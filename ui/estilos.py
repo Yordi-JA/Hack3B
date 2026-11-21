@@ -254,6 +254,12 @@ details.ev-celda summary {{ font-size: 12px; color: var(--texto2); margin-top: 2
   padding: 0 8px; font-family: var(--f-titular); font-weight: 900; font-size: 15px; line-height: 1.1; color: var(--tinta);
   text-transform: uppercase; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
 .doc-archivo {{ font-size: 13px; color: var(--texto2); margin: 0 0 4px; overflow-wrap: anywhere; }}
+a.doc-ver {{ display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--tinta); font-weight: 600;
+  text-decoration: underline; text-underline-offset: 3px; }}
+a.doc-ver:hover {{ color: var(--rojo-osc); }}
+.doc-ver-txt {{ font-size: 12px; font-weight: 700; color: var(--rojo-osc); text-decoration: none; }}
+.st-key-doc-paginas [data-testid="stImage"] {{ max-width: 880px; margin: 0 auto 18px; }}
+.st-key-doc-paginas img {{ border: 2px solid var(--tinta); border-radius: 6px; background: #fff; }}
 .doc-estado {{ font-size: 14px; color: var(--texto); margin: 0 0 10px; overflow-wrap: anywhere; }}
 .doc-campos {{ display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 10px; }}
 .doc-campos dt {{ color: var(--texto2); }}
