@@ -104,9 +104,9 @@ def test_detecta_adeudo_ejercicio_atrasado_y_sello_anterior_al_pago(llm_falso):
 
     assert r.datos.entidad_federativa.normalizado == "MEXICO"
     assert r.datos.superficie_terreno_m2.normalizado == "300.00"
-    assert r.datos.vigencia_hasta.normalizado == "2023-12-31"
-    assert _hallazgo(r, "PRE-03").estado == EstadoRegla.NO_CUMPLE
-    assert "2024-2024" in _hallazgo(r, "PRE-03").explicacion
+    assert r.datos.vigencia_hasta.valor is None  # el predial no tiene vigencia
+    pre03 = _hallazgo(r, "PRE-03")  # solo reporta la fecha: un pago de 2023 no es incumplimiento por sí solo
+    assert pre03.estado == EstadoRegla.CUMPLE and "14/01/2023" in pre03.explicacion
     assert _hallazgo(r, "PRE-04").estado == EstadoRegla.NO_CUMPLE
     assert _hallazgo(r, "PRE-05").estado == EstadoRegla.NO_CUMPLE
     assert "baldío" in _hallazgo(r, "PRE-08").explicacion
