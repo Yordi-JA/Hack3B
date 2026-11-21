@@ -186,6 +186,17 @@ class TestVerificarCita:
         paginas = [self._pagina(1, "x y z")]
         assert _verificar_cita("hola", paginas) is None
 
+    def test_cita_corta_pero_completa_se_acepta(self):
+        """Fix: una cita corta como '300.00 m²' se acepta si aparece literal."""
+        paginas = [self._pagina(1, "superficie de 300.00 m² conforme al plano")]
+        r = _verificar_cita("300.00 m²", paginas)
+        assert r is not None and r[0] == 1
+
+    def test_cita_corta_notaria_aceptada(self):
+        paginas = [self._pagina(1, "ante la Notaría 101 del Estado")]
+        r = _verificar_cita("Notaría 101", paginas)
+        assert r is not None and r[0] == 1
+
     def test_cita_nula(self):
         paginas = [self._pagina(1, "cualquier cosa")]
         assert _verificar_cita(None, paginas) is None
@@ -263,17 +274,19 @@ class TestConstruirCampo:
         # Normalizador aplicado
         assert campo.normalizado and "COL" not in campo.normalizado.split()  # "COL" solo si abreviatura
 
-    def test_cita_inventada_pierde_evidencia_y_confianza(self):
+    def test_cita_inventada_pierde_evidencia_confianza_y_normalizado(self):
+        """Regla 4 del equipo: cita no verificada → normalizado=None (no entra al cruce)."""
         extraido = _CampoLLM(
             valor="algo",
             cita="esta cita no está en el documento",
             pagina=1,
             confianza=0.9,
         )
-        campo = _construir_campo(extraido, "a.pdf", self._paginas())
+        campo = _construir_campo(extraido, "a.pdf", self._paginas(), _normalizar_direccion)
         assert campo.valor == "algo"
         assert campo.evidencia is None
-        assert campo.confianza == pytest.approx(0.5, abs=0.01)  # 0.9 - 0.4
+        assert campo.normalizado is None  # <- clave: no entra al cruce
+        assert campo.confianza == pytest.approx(0.5, abs=0.01)
 
 
 # ============================================================ reglas ESC-
@@ -310,13 +323,20 @@ class TestReglasESC:
     def _hallazgo_de(self, hallazgos, id_regla):
         return next((h for h in hallazgos if h.id_regla == id_regla), None)
 
-    def test_datos_completos_todas_cumplen(self):
+    def test_datos_completos_cumplen_las_aplicables(self):
+        """ESC-01..ESC-09 cumplen con _datos_completos(). ESC-11 y ESC-12 son
+        NO_EVALUABLE porque el documento no menciona embargo ni usufructo
+        (comportamiento alineado al contrato: ausencia != CUMPLE)."""
         h = _aplicar_reglas(_datos_completos())
         for id_regla in ("ESC-01", "ESC-02", "ESC-03", "ESC-04", "ESC-05",
-                         "ESC-06", "ESC-07", "ESC-08", "ESC-09", "ESC-11", "ESC-12"):
+                         "ESC-06", "ESC-07", "ESC-08", "ESC-09"):
             hallazgo = self._hallazgo_de(h, id_regla)
             assert hallazgo is not None, f"Falta {id_regla}"
-            assert hallazgo.estado == EstadoRegla.CUMPLE, f"{id_regla} no cumple"
+            assert hallazgo.estado == EstadoRegla.CUMPLE, f"{id_regla} esperaba CUMPLE y fue {hallazgo.estado}"
+        for id_regla in ("ESC-11", "ESC-12"):
+            hallazgo = self._hallazgo_de(h, id_regla)
+            assert hallazgo is not None
+            assert hallazgo.estado == EstadoRegla.NO_EVALUABLE
 
     def test_sin_propietario_ESC01_no_evaluable(self):
         datos = _datos_completos()
@@ -394,6 +414,28 @@ class TestReglasESC:
         assert h.estado == EstadoRegla.NO_CUMPLE
         assert h.severidad == Severidad.BLOQUEANTE
 
+    def test_regimen_ejidal_con_dominio_pleno_ESC09_cumple(self):
+        """Caso QUMA: ejido con dominio pleno ya es propiedad desincorporada, no bloqueante."""
+        datos = _datos_completos()
+        datos.especificos["regimen_propiedad"] = Campo(
+            valor="Ejido con dominio pleno (desincorporado)",
+            normalizado="EJIDO CON DOMINIO PLENO DESINCORPORADO",
+            evidencia=Evidencia(archivo="a.pdf", pagina=1, cita="dominio pleno"),
+            confianza=0.9,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-09")
+        assert h.estado == EstadoRegla.CUMPLE
+
+    def test_regimen_con_valor_pero_sin_evidencia_ESC09_no_evaluable(self):
+        """Si el modelo cita algo pero no se verificó, no afirmamos ni descartamos."""
+        datos = _datos_completos()
+        datos.especificos["regimen_propiedad"] = Campo(
+            valor="Ejidal", normalizado=None,  # normalizado=None indica cita no verificada
+            evidencia=None, confianza=0.5,
+        )
+        h = self._hallazgo_de(_aplicar_reglas(datos), "ESC-09")
+        assert h.estado == EstadoRegla.NO_EVALUABLE
+
     def test_sin_regimen_ESC09_no_evaluable(self):
         datos = _datos_completos()
         datos.especificos["regimen_propiedad"] = Campo()
@@ -439,9 +481,11 @@ class TestReglasESC:
         assert h.estado == EstadoRegla.NO_CUMPLE
         assert h.severidad == Severidad.BLOQUEANTE
 
-    def test_sin_embargo_ESC11_cumple(self):
+    def test_sin_embargo_ESC11_no_evaluable(self):
+        """Contrato: ausencia de mención no afirma 'sin embargo', queda NO_EVALUABLE."""
         h = self._hallazgo_de(_aplicar_reglas(_datos_completos()), "ESC-11")
-        assert h.estado == EstadoRegla.CUMPLE
+        assert h.estado == EstadoRegla.NO_EVALUABLE
+        assert h.severidad == Severidad.INFO  # ausencia es INFO, no REVISION
 
     def test_usufructo_ESC12_revision(self):
         datos = _datos_completos()
@@ -454,9 +498,11 @@ class TestReglasESC:
         assert h.estado == EstadoRegla.NO_CUMPLE
         assert h.severidad == Severidad.REVISION
 
-    def test_sin_usufructo_ESC12_cumple(self):
+    def test_sin_usufructo_ESC12_no_evaluable(self):
+        """Contrato: ausencia de mención no afirma 'sin usufructo', queda NO_EVALUABLE."""
         h = self._hallazgo_de(_aplicar_reglas(_datos_completos()), "ESC-12")
-        assert h.estado == EstadoRegla.CUMPLE
+        assert h.estado == EstadoRegla.NO_EVALUABLE
+        assert h.severidad == Severidad.INFO
 
 
 # ============================================================ entrada completa
