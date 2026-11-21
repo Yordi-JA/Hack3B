@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from statistics import mean
 from typing import Iterable, Optional
 
+import csv
+import io
 import re
 
 from expedientes.schemas import (
@@ -22,7 +24,9 @@ from expedientes.schemas import (
     TipoDocumento,
 )
 
-from .mapa import ConteoEntidad, normalizar_entidad, normalizar_texto
+from expedientes.motivos import MOTIVO, Categoria, Motivo, motivos
+
+from .mapa import ConteoEntidad, nombre_entidad, normalizar_entidad, normalizar_texto
 
 NOMBRE_TIPO = {
     TipoDocumento.ESCRITURA: "Escritura",
@@ -515,8 +519,12 @@ def coincide(
     entidad: Optional[str] = None,
     recomendacion: Optional[Recomendacion] = None,
     texto: str = "",
+    categoria: Optional[Categoria] = None,
 ) -> bool:
-    """Filtro de la bandeja. `entidad=SIN_ENTIDAD` deja solo los que no tienen entidad."""
+    """Filtro de la bandeja. `entidad=SIN_ENTIDAD` deja solo los que no tienen entidad.
+    `categoria` deja los expedientes con al menos un motivo de esa categoría (expedientes/motivos.py)."""
+    if categoria and not any(m.categoria == categoria for m in motivos(dictamen)):
+        return False
     ubicacion = consolidar_ubicacion(dictamen)
     if entidad == SIN_ENTIDAD and ubicacion.entidad is not None:
         return False
@@ -549,3 +557,118 @@ def coincide(
 def orden_bandeja(dictamen: Dictamen) -> tuple:
     """Primero lo que requiere atención (No cumple, luego revisión), y lo más reciente arriba."""
     return (-rango_recomendacion(dictamen.recomendacion), -dictamen.fecha_analisis.timestamp())
+
+
+# ------------------------------------------------------------------ seguimiento por motivo de descarte
+# Las categorías y etiquetas vienen de expedientes/motivos.py (Juan Pablo); aquí solo se agrupan.
+
+def nombre_motivo(cat: Categoria) -> str:
+    """'Uso de suelo', 'Adeudos de predial'... (MOTIVO con mayúscula inicial)."""
+    texto = MOTIVO[cat]
+    return texto[:1].upper() + texto[1:]
+
+
+def motivo_principal(dictamen: Dictamen) -> Optional[str]:
+    """La etiqueta del motivo más grave ('Descartado por uso de suelo'); None si cumple o no hay motivos."""
+    if dictamen.recomendacion == Recomendacion.CUMPLE:
+        return None
+    ms = motivos(dictamen)
+    return ms[0].etiqueta if ms else None
+
+
+def conteo_por_motivo(dictamenes: Iterable[tuple[Dictamen, bool]]) -> dict[Categoria, dict[str, int]]:
+    """Expedientes (no motivos) por categoría: 'descartados' si alguno de sus motivos de esa categoría es
+    bloqueante, si no 'en_revision'. Recibe pares (dictamen, es_ejemplo) y no cuenta los ejemplos."""
+    conteo: dict[Categoria, dict[str, int]] = {}
+    for d, es_ejemplo in dictamenes:
+        if es_ejemplo:
+            continue
+        peor: dict[Categoria, bool] = {}
+        for m in motivos(d):
+            peor[m.categoria] = peor.get(m.categoria, False) or m.severidad == Severidad.BLOQUEANTE
+        for cat, bloquea in peor.items():
+            fila = conteo.setdefault(cat, {"descartados": 0, "en_revision": 0})
+            fila["descartados" if bloquea else "en_revision"] += 1
+    return dict(sorted(conteo.items(), key=lambda kv: (-(kv[1]["descartados"] + kv[1]["en_revision"]), kv[0].value)))
+
+
+COLUMNAS_CSV = ["expediente_id", "fecha_analisis", "entidad", "municipio", "recomendacion", "categoria", "etiqueta",
+                "severidad", "id_regla", "archivos", "explicacion"]
+
+
+def _celda_csv(valor: object) -> str:
+    """Texto seguro para hojas de cálculo: una celda que empieza con = + - @ se lee como fórmula."""
+    texto = "" if valor is None else str(valor)
+    return "'" + texto if texto[:1] in ("=", "+", "-", "@") else texto
+
+
+def csv_seguimiento(dictamenes: Iterable[Dictamen], categoria: Optional[Categoria] = None) -> bytes:
+    """Un renglón por motivo de cada expediente; los que no tienen motivos (los que cumplen) salen en un
+    renglón con las columnas de motivo vacías, para que sigan en la lista. Con `categoria` (el filtro de
+    motivo activo) solo salen los motivos de esa categoría. UTF-8 con BOM para Excel. Se arma en memoria;
+    nunca se escribe a disco."""
+    salida = io.StringIO()
+    escritor = csv.writer(salida)
+    escritor.writerow(COLUMNAS_CSV)
+    for d in dictamenes:
+        u = consolidar_ubicacion(d)
+        base = [d.expediente_id, d.fecha_analisis.isoformat(timespec="minutes"),
+                nombre_entidad(u.entidad) if u.entidad else "", u.municipio_valor or (u.municipio or ""),
+                d.recomendacion.value]
+        filas = [[m.categoria.value, m.etiqueta, m.severidad.value, m.id_regla,
+                  " | ".join(m.archivos or ([m.archivo] if m.archivo else [])), m.explicacion]
+                 for m in motivos(d) if categoria is None or m.categoria == categoria]
+        for fila in filas or [[""] * 6]:
+            escritor.writerow([_celda_csv(v) for v in base + fila])
+    return ("\ufeff" + salida.getvalue()).encode("utf-8")
+
+
+def motivo_de_pendiente(it: "Pendiente", ms: list[Motivo]) -> Optional[Motivo]:
+    """El motivo que corresponde a un renglón de "Qué hay que resolver": por (regla, archivo) en reglas
+    y archivos sin analizar o no reconocidos, y por regla en inconsistencias. None si no hay uno claro."""
+    if it.inconsistencia is not None:
+        candidatos = [m for m in ms if m.id_regla == it.inconsistencia.id_regla]
+    elif it.requisito is not None:
+        r = it.requisito
+        candidatos = [m for m in ms if m.id_regla == r.id_regla
+                      and ((m.archivo is None and r.tipo is None) or (m.archivo is not None and m.archivo in r.archivos))]
+    elif it.clase in ("sin_analizar", "no_reconocido"):
+        regla = "EXP-ERROR" if it.clase == "sin_analizar" else "EXP-TIPO"
+        candidatos = [m for m in ms if m.id_regla == regla and m.archivo in it.archivos]
+    else:
+        candidatos = []
+    return candidatos[0] if candidatos else None  # motivos() ya viene con los que descartan primero
+
+
+def opcion_motivo(cat: Categoria, cuenta: Optional[dict[str, int]] = None) -> str:
+    """Texto de la opción del filtro "Motivo": 'Uso de suelo · 2 descartados · 1 en revisión'.
+    Sin cuenta (o en cero) queda solo el nombre."""
+    partes = [nombre_motivo(cat)]
+    if cuenta and cuenta.get("descartados"):
+        n = cuenta["descartados"]
+        partes.append(f"{n} descartado{'s' if n != 1 else ''}")
+    if cuenta and cuenta.get("en_revision"):
+        partes.append(f"{cuenta['en_revision']} en revisión")
+    return " · ".join(partes)
+
+
+def motivo_de_categoria(dictamen: Dictamen, categoria: Categoria) -> Optional[Motivo]:
+    """El motivo más grave del expediente en esa categoría (el que explica por qué sale con el filtro)."""
+    return next((m for m in motivos(dictamen) if m.categoria == categoria), None)
+
+
+def categoria_de(valor: Optional[str]) -> Optional[Categoria]:
+    """La categoría de un parámetro de URL (?mot=uso_suelo); None si no es válida."""
+    try:
+        return Categoria(valor) if valor else None
+    except ValueError:
+        return None
+
+
+def aplicar_filtro(params: dict[str, str], nombre: str, valor: Optional[str]) -> dict[str, str]:
+    """Parámetros de la bandeja con un filtro puesto (o quitado si `valor` es vacío). Siempre vuelve a la
+    primera página: un filtro nuevo cambia cuántas páginas hay."""
+    nuevo = {k: v for k, v in params.items() if k not in (nombre, "pag")}
+    if valor:
+        nuevo[nombre] = valor
+    return nuevo
