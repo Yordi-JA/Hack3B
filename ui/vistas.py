@@ -354,7 +354,7 @@ def vista_nuevo() -> None:
                 nombre = st.text_input(
                     "Nombre del expediente (opcional)", max_chars=80, key="subir-nombre",
                     placeholder="Ej. TEPEJI-05. Si lo dejas vacío se usa la fecha y hora.",
-                    help="Si ya existe un expediente con ese nombre, el nuevo análisis lo reemplaza.",
+                    help="Máximo 80 caracteres. Si ya existe un expediente con ese nombre, el nuevo análisis lo reemplaza.",
                 )
                 archivos = st.file_uploader(
                     "Archivos del expediente", type=TIPOS_ARCHIVO, accept_multiple_files=True,
