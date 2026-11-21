@@ -101,6 +101,7 @@ class Ubicacion:
     municipio: Optional[str]         # normalizado mayoritario
     confirmada: bool                 # todos los documentos que la mencionan coinciden
     valores: list[str] = field(default_factory=list)  # entidades distintas encontradas, mayoritaria primero
+    municipio_valor: Optional[str] = None  # el municipio como lo escribe el documento (con acentos)
 
 
 def _mayoritario(valores: list[str]) -> tuple[Optional[str], bool]:
@@ -132,12 +133,18 @@ def consolidar_ubicacion(dictamen: Dictamen) -> Ubicacion:
         for d in dictamen.documentos
     ]
     municipio, empate_mun = _mayoritario([m for m in municipios if m])
+    municipio_valor = next(
+        (d.datos.municipio.valor for d, m in zip(dictamen.documentos, municipios)
+         if municipio and m == municipio and d.datos.municipio.valor),
+        None,
+    )
 
     return Ubicacion(
         entidad=None if empate else entidad,
         municipio=None if empate_mun else municipio,
         confirmada=len(distintas) == 1,
         valores=distintas,
+        municipio_valor=None if empate_mun else municipio_valor,
     )
 
 
