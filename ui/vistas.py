@@ -18,7 +18,7 @@ from expedientes.schemas import Dictamen, Recomendacion
 
 from . import componentes as C
 from . import logica as L
-from . import mapa, store, trabajos
+from . import mapa, store, tour, trabajos
 
 FILTROS = ("entidad", "rec", "q", "ej")
 TIPOS_ARCHIVO = ["pdf", "png", "jpg", "jpeg", "tif", "tiff"]
@@ -92,15 +92,16 @@ def cargar() -> tuple[list[store.Entrada], list[store.ArchivoInvalido]]:
 def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
     with st.sidebar:
         html(
-            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}<b>Revisión de expedientes</b></div>'
+            f'<div class="lateral-marca">{C.logo_3b(invertido=True)}'
+            '<span><b>Revisión de expedientes</b><small class="lateral-sub">Tiendas 3B</small></span></div>'
         )
-        html('<div class="lateral-grupo">Expedientes</div>')
+        html('<div class="lateral-grupo">Principal</div>')
         st.button(
-            "Bandeja", key="nav-bandeja", on_click=ir, args=("bandeja",),
+            "Bandeja", key="nav-bandeja", on_click=ir, args=("bandeja",), icon=":material/map:",
             type="primary" if vista == "bandeja" else "secondary", width="stretch",
         )
         st.button(
-            "Subir expediente", key="nav-nuevo", on_click=ir, args=("nuevo",),
+            "Subir expediente", key="nav-nuevo", on_click=ir, args=("nuevo",), icon=":material/upload_file:",
             type="primary" if vista == "nuevo" else "secondary", width="stretch",
         )
         if abierto:
@@ -109,12 +110,23 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
                 type="primary" if vista == "detalle" else "secondary", width="stretch",
                 help="Expediente abierto",
             )
+        html('<div class="lateral-grupo">Ayuda</div>')
+        st.button(
+            "Recorrido guiado", key="nav-tour", on_click=_iniciar_tour, icon=":material/explore:",
+            type="secondary", width="stretch",
+        )
         seguimiento()
         avisos_laterales()
         html(
             '<p class="lateral-nota">Revisión inicial automática. La decisión final sobre cada expediente '
             "es del equipo legal.</p>"
         )
+        html(C.usuario_lateral("Equipo legal", "Tiendas 3B · Expansión"))
+
+
+def _iniciar_tour() -> None:
+    tour.iniciar()
+    ir("bandeja")
 
 
 # ------------------------------------------------------------------ bandeja
@@ -134,16 +146,16 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     base = [e for e in visibles if L.coincide(e.dictamen, entidad_actual or None, None, texto)]
     ind = L.indicadores([(e.dictamen, e.es_ejemplo) for e in base])
 
-    cab, buscador = st.columns([3, 2], vertical_alignment="top")
-    with cab:
-        html(C.encabezado("Bandeja de expedientes", "Primero los que no cumplen, luego los que requieren revisión."))
-        if entradas:
-            html(C.resumen_bandeja(ind))
-    with buscador:
-        st.text_input(
-            "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
-            placeholder="Buscar por expediente, municipio, propietario o archivo",
-        )
+    # Tablero: saludo y buscador, 4 indicadores, mapa en tarjeta con ventana por estado, filtros y lista.
+    with st.container(key="b-cabecera"):
+        cab, buscador = st.columns([3, 2], vertical_alignment="center")
+        with cab:
+            html(C.saludo("equipo legal", "Revisión inicial de expedientes de inmuebles para Tiendas 3B."))
+        with buscador:
+            st.text_input(
+                "Buscar", key="f_q", on_change=_sincronizar, args=("q",), label_visibility="collapsed",
+                placeholder="Buscar expediente, municipio, propietario o archivo", icon=":material/search:",
+            )
 
     if invalidos:
         nombres = ", ".join(f"{seguro(i.ruta.name)}: {i.motivo}" for i in invalidos)
@@ -152,17 +164,24 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     if not entradas:
         st.info("Todavía no hay expedientes analizados. Sube los archivos de uno en Subir expediente.")
         st.button("Ir a Subir expediente", on_click=ir, args=("nuevo",), type="primary")
+        tour.mostrar(html)
         return
 
     conteos = L.conteo_por_entidad(e.dictamen for e in visibles)
     sin_entidad = sum(1 for e in visibles if L.consolidar_ubicacion(e.dictamen).entidad is None)
-
-    # El mapa va al centro y a todo lo ancho; debajo, los filtros y las tarjetas.
-    seleccion = st.session_state.get("f_entidad") or None
     enlace = dict(params_filtros(), vista="bandeja")
-    html(C.caja_mapa(mapa.svg_bandeja(conteos, seleccion, enlace), sin_entidad))
 
-    f1, f2, f3 = st.columns([1, 1.6, 1.2], vertical_alignment="bottom")
+    with st.container(key="b-kpis"):
+        html(C.kpis_bandeja(ind, enlace))
+
+    # El mapa va al centro; al seleccionar un estado se abre su ventana con los porcentajes.
+    seleccion = st.session_state.get("f_entidad") or None
+    ventana = C.ventana_entidad(seleccion, conteos[seleccion], enlace) if seleccion in conteos else ""
+    with st.container(key="b-mapa"):
+        html(C.caja_mapa_tablero(mapa.svg_bandeja(conteos, seleccion, enlace), ventana, sin_entidad))
+
+    filtros = st.container(key="b-filtros")
+    f1, f2, f3 = filtros.columns([1, 1.6, 1.2], vertical_alignment="bottom")
     opciones = [""] + sorted(conteos, key=mapa.nombre_entidad)
     if sin_entidad:
         opciones.append(L.SIN_ENTIDAD)
@@ -189,13 +208,20 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
     filtrados = [e for e in base if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
     filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
 
-    if not visibles:
-        st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
-    elif not filtrados:
-        st.info("Ningún expediente coincide con los filtros.")
-        st.button("Quitar filtros", on_click=_quitar_filtros)
-    else:
-        html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+    html('<div id="expedientes" class="ancla"></div>')
+    with st.container(key="b-lista"):
+        donde = f"en {mapa.nombre_entidad(seleccion)}" if seleccion and seleccion != L.SIN_ENTIDAD else ""
+        titulo = f"Expedientes {C.txt(donde)}" if donde else "Expedientes"
+        html(f'<h2 class="lista-titulo">{titulo} <small>{len(filtrados)}</small></h2>')
+        if not visibles:
+            st.info("Solo hay expedientes de ejemplo y están ocultos. Activa “Incluir expedientes de ejemplo” para verlos.")
+        elif not filtrados:
+            st.info("Ningún expediente coincide con los filtros.")
+            st.button("Quitar filtros", on_click=_quitar_filtros)
+        else:
+            html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+
+    tour.mostrar(html)
 
 
 def _quitar_filtros() -> None:
