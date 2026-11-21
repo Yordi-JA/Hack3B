@@ -2,7 +2,8 @@
 en los documentos (transcritos a mano, sin LLM). Esperado:
 
 - ""  (San Jerónimo Atlaco): los 4 documentos coinciden -> sin inconsistencias.
-- "!!" (Ocotlán de las Torres): los 4 coinciden (sus problemas son de cada documento) -> nada.
+- "!!" (Ocotlán de las Torres): mismo inmueble, pero la constancia de número oficial asigna el 210
+        ("Calle Torres") y los otros 3 dicen S/N -> solo CRU-NUM, sin CRU-INM.
 - "v"  (Huehuetlán del Monte): el predial es de OTRO inmueble (clave ...223 19..., Jorge Armando,
         Laureles 51, 290 m²) -> CRU-CLAVE, CRU-PROP, CRU-SUP, CRU-NUM y CRU-INM señalando el predial.
 """
@@ -60,10 +61,11 @@ def _bang():
         _doc("02 Predial!!.pdf", T.PREDIAL,
              propietario="PEÑALOZA RUIZ SILVIA ADRIANA", direccion="AV DE LAS TORRES SN LT 12 MZ 3, COL. EL MIRADOR",
              superficie_terreno_m2="300.00", clave_catastral="077 04 310 12 00 0000", numero_oficial="SN"),
+        # pág. 2 (constancia de número oficial): "Calle Torres ... NÚMERO OFICIAL: 210"
         _doc("03 Alineamiento y Numero Oficial!!.pdf", T.ALINEAMIENTO,
              propietario="C. SILVIA ADRIANA PEÑALOZA RUIZ",
              direccion="Avenida de las Torres No. S/N, Lote 12, Manzana 3, Col. El Mirador",
-             superficie_terreno_m2="300.00 m²", clave_catastral="077 04 310 12 00 0000", numero_oficial="S/N"),
+             superficie_terreno_m2="300.00 m²", clave_catastral="077 04 310 12 00 0000", numero_oficial="210"),
         _doc("04 Licencia de Uso de Suelo!!.pdf", T.USO_SUELO,
              propietario="SILVIA ADRIANA PEÑALOZA RUIZ",
              direccion="Avenida de las Torres No. S/N, Lote 12, Manzana 3, Col. El Mirador",
@@ -91,9 +93,15 @@ def _v():
     ]
 
 
-@pytest.mark.parametrize("expediente", [_base, _bang], ids=["base", "bang"])
-def test_expedientes_consistentes_sin_falsas_alarmas(expediente):
-    assert cruce.validar_cruzado(expediente(), Contexto()) == []
+def test_base_consistente_sin_falsas_alarmas():
+    assert cruce.validar_cruzado(_base(), Contexto()) == []
+
+
+def test_bang_numero_210_contra_sin_numero():
+    """Mismo inmueble (clave, propietaria, superficie): solo difiere el número oficial."""
+    incs = cruce.validar_cruzado(_bang(), Contexto())
+    assert [i.id_regla for i in incs] == ["CRU-NUM"]
+    assert "«210»" in incs[0].descripcion and "sin número" in incs[0].descripcion
 
 
 def test_v_predial_de_otro_inmueble():

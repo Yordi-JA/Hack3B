@@ -200,7 +200,8 @@ def _describir(campo: str, grupos: list[list[_Item]]) -> str:
         dif = max(vals) - min(vals)
         texto += f" Diferencia de {dif:,.2f} m² ({dif / max(vals):.0%}); tolerancia {TOLERANCIA_SUP_REL:.0%}."
     if campo == "numero_oficial" and any(g[0].comparable == nz.SIN_NUMERO for g in grupos):
-        texto += " Un documento lo consigna sin número oficial."
+        texto += (" Algunos documentos lo consignan sin número: puede que el número se haya asignado después "
+                  "y los demás documentos no estén actualizados, o que se refieran a otro predio. Verificar.")
     if campo == "propietario":
         texto += " Puede deberse a una compraventa posterior o a que el contribuyente no es el titular: verificar."
     return texto
