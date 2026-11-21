@@ -10,12 +10,12 @@ Que cada responsable la resuelva, la anote aquí y avise en el grupo.
 
 | # | Decisión | Responsable | Para | Estado |
 | :- | :--- | :--- | :--- | :--- |
-| 1 | Proveedor y modelo del LLM, y de quién es la API key con créditos. Propuesta: `claude-opus-5-5` con `effort` bajo en OCR. Ver nota abajo. | Carlos | 10:15 | Pendiente |
+| 1 | Proveedor y modelo del LLM, y de quién es la API key con créditos. | Carlos | 10:15 | **Resuelto**: Anthropic, `claude-haiku-5-5` con `effort="low"` y `max_tokens=4000`. Key cargada por el equipo. |
 | 2 | Langfuse: instancia de la organización, cloud propia o local con Docker. Una cuenta cloud propia recibiría el contenido de los documentos (regla 06). | Juan Pablo | 10:30 | Pendiente |
-| 3 | Orquestador con LangGraph o con LangChain puro. Confirmar con los jueces que LangGraph cuenta como "sobre LangChain". | Carlos | 11:00 | Pendiente |
+| 3 | Orquestador con LangGraph o con LangChain puro. | Carlos | 11:00 | **Resuelto**: LangChain puro. El orquestador es un pipeline determinista con `ThreadPoolExecutor(max_workers=5)` para paralelizar los 4 agentes por tipo; el flujo es lineal y no requiere grafo. |
 | 4 | UI en Streamlit (llama directo a `analizar_expediente`, sin API). | Yordi | 10:15 | Propuesto |
 | 5 | Guías y criterios oficiales por tipo: ¿dónde están? Sin ellas las reglas son suposiciones. | Todos | Ya | Pendiente |
-| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | Pendiente |
+| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | **Resuelto**: 15 páginas máximo (primeras 5 + hasta 10 con palabras clave: superficie, colindancias, catastral, folio real, gravamen, notario, etc.). |
 | 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | Pendiente |
 
 Nota sobre el LLM: 57 de 62 PDFs son escaneos, así que el modelo tiene que tener visión. Cambiar de proveedor es cambiar `LLM_PROVIDER` y `LLM_MODEL` en el `.env` (`expedientes/config.py`). Una key nueva tiene límites bajos por minuto: el OCR masivo debe correr con 5-10 llamadas en paralelo como máximo.

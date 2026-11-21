@@ -13,6 +13,8 @@ Prefijo de reglas: ESC-.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 import unicodedata
@@ -21,7 +23,7 @@ from typing import Callable, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, model_validator
 
-from ..config import get_callbacks, get_llm
+from ..config import CACHE_DIR, LLM_MODEL, get_callbacks, get_llm
 from ..schemas import (
     Campo,
     Contexto,
@@ -37,6 +39,10 @@ from ..schemas import (
 )
 
 log = logging.getLogger(__name__)
+
+# Caché de respuestas del LLM (regla 5 del equipo): clave = hash de
+# modelo + prompt + esquema + texto. Repetir una corrida no gasta créditos.
+DIR_ANALISIS = CACHE_DIR / "analisis" / "escritura"
 
 # Palabras cuya presencia en una página sugiere datos clave del inmueble
 PALABRAS_CLAVE_PAGINA = (
@@ -69,9 +75,10 @@ TIPOS_ACTO_TRASLATIVOS = {
 
 class _CampoLLM(BaseModel):
     valor: Optional[str] = Field(description="Dato tal como aparece en el documento. null si no aparece.")
-    cita: Optional[str] = Field(description="Texto literal del documento que sustenta el dato (5-20 palabras). null si no aparece.")
+    cita: Optional[str] = Field(description="Texto literal del documento que sustenta el dato (3-20 palabras). null si no aparece.")
     pagina: Optional[int] = Field(description="Número de página 1-indexado donde aparece la cita. null si no aparece.")
-    confianza: float = Field(description="Confianza del extractor sobre este campo, 0.0 si no aparece.", ge=0, le=1)
+    # Sin ge/le: method="json_schema" no acepta constraints numéricos; se clippea al construir Campo.
+    confianza: float = Field(description="Confianza del extractor sobre este campo (0..1). 0.0 si no aparece.")
 
 
 _CAMPOS_ESCRITURA_LLM = (
@@ -258,18 +265,35 @@ def _limpia_para_match(s: str) -> str:
 
 
 def _verificar_cita(cita: Optional[str], paginas: list[Pagina]) -> Optional[tuple[int, str]]:
-    """Busca la cita en cada página. Devuelve (pagina, cita_original) si una firma de 6+ palabras calza."""
+    """Busca la cita en cada página.
+
+    - Cita corta (<=6 palabras): acepta si APARECE COMPLETA y textual en alguna página
+      (necesario para datos como "300.00 m²" o "Notaría 101" que el matcher antes rechazaba).
+    - Cita larga: basta con que las primeras 6 palabras aparezcan en alguna página; se
+      queda con la página de ese primer match.
+
+    Devuelve (num_pagina, cita_original_strip) o None si no encaja en ninguna página.
+    """
     if not cita or not cita.strip():
         return None
     limpio = _limpia_para_match(cita)
     palabras = limpio.split()
-    if len(palabras) < 4:
+    if not palabras:
         return None
-    firma = " ".join(palabras[: min(10, len(palabras))])
-    firma_corta = " ".join(palabras[:6])
+    # Cita corta: debe aparecer literal y completa.
+    if len(palabras) <= 6:
+        if len(limpio) < 3:
+            return None
+        for p in paginas:
+            if limpio in _limpia_para_match(p.texto):
+                return (p.numero, cita.strip())
+        return None
+    # Cita larga: validamos por firma de 6 palabras iniciales.
+    firma = " ".join(palabras[:6])
+    firma_amplia = " ".join(palabras[: min(10, len(palabras))])
     for p in paginas:
         tx = _limpia_para_match(p.texto)
-        if firma in tx or firma_corta in tx:
+        if firma in tx or firma_amplia in tx:
             return (p.numero, cita.strip())
     return None
 
@@ -282,27 +306,35 @@ def _construir_campo(
     paginas: list[Pagina],
     normalizador: Optional[Callable[[Optional[str]], Optional[str]]] = None,
 ) -> Campo:
-    """Convierte un _CampoLLM a Campo del contrato, verificando evidencia."""
+    """Convierte un _CampoLLM a Campo del contrato, verificando evidencia.
+
+    Regla 4 del equipo: si la cita no se verifica, el campo queda SIN evidencia y
+    SIN normalizado. Así `cruce.validar_cruzado` ignora el dato posiblemente inventado
+    (ignora campos con `normalizado is None`). El valor literal se conserva solo
+    para mostrarlo al revisor humano.
+    """
     if not extraido.valor or not extraido.valor.strip():
         return Campo()
 
     match = _verificar_cita(extraido.cita, paginas)
-    if match is not None:
-        pagina, cita = match
-        evidencia = Evidencia(archivo=archivo, pagina=pagina, cita=cita)
-        confianza = extraido.confianza
-    else:
-        # La cita del LLM no se encontró en el texto: la evidencia es inválida.
-        # Degradamos la confianza; el valor se conserva pero sin evidencia que lo respalde.
-        evidencia = None
-        confianza = max(0.0, extraido.confianza - 0.4)
+    conf_cruda = max(0.0, min(1.0, float(extraido.confianza)))  # clip a [0,1]: el schema no lo valida
 
+    if match is None:
+        # Sin evidencia confirmada: el dato NO entra al cruce ni al dictamen cruzado.
+        return Campo(
+            valor=extraido.valor,
+            normalizado=None,
+            evidencia=None,
+            confianza=round(max(0.0, conf_cruda - 0.4), 2),
+        )
+
+    pagina, cita = match
     normalizado = normalizador(extraido.valor) if normalizador else _upper_sin_acentos(extraido.valor)
     return Campo(
         valor=extraido.valor,
         normalizado=normalizado,
-        evidencia=evidencia,
-        confianza=round(confianza, 2),
+        evidencia=Evidencia(archivo=archivo, pagina=pagina, cita=cita),
+        confianza=round(conf_cruda, 2),
     )
 
 
@@ -432,9 +464,11 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                     "No se identificó el tipo de acto en la escritura."))
 
-    # ESC-06 gravámenes (hipotecas, servidumbres u otras cargas; sin contar embargo/litigio, ese va en ESC-11)
+    # ESC-06 gravámenes (hipotecas, servidumbres u otras cargas; embargo/litigio va en ESC-11).
+    # Si el modelo cita algo pero no se pudo verificar en el texto (evidencia=None), no afirmamos
+    # ni descartamos: NO_EVALUABLE. Solo con evidencia verificada subimos a NO_CUMPLE.
     gravamenes = datos.especificos.get("gravamenes")
-    if gravamenes and gravamenes.valor:
+    if gravamenes and gravamenes.valor and gravamenes.evidencia:
         t_low = gravamenes.valor.lower()
         libre = any(k in t_low for k in ("libre", "no reporta", "sin gravamen", "sin carga"))
         hipoteca = "hipotec" in t_low
@@ -449,10 +483,14 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
                         Severidad.BLOQUEANTE if hipoteca else Severidad.REVISION,
                         f"Se declaran gravámenes o limitaciones: {gravamenes.valor}.",
                         (gravamenes.evidencia,)))
+    elif gravamenes and gravamenes.valor:  # citado pero cita no verificada
+        h.append(_h("ESC-06", "Gravámenes o limitaciones al dominio",
+                    EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
+                    "El modelo mencionó gravámenes pero la cita no se encontró en el documento; requiere verificación manual."))
     else:
         h.append(_h("ESC-06", "Gravámenes o limitaciones al dominio",
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
-                    "No se extrajo información explícita sobre gravámenes."))
+                    "No se extrajo información explícita sobre gravámenes; verificar en el documento original."))
 
     # ESC-07 datos del notario y número de escritura
     num_esc = datos.especificos.get("numero_escritura")
@@ -499,28 +537,36 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
                     EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                     "No se extrajo folio real ni constancia de inscripción en el RPP; requiere verificación."))
 
-    # ESC-09 régimen de propiedad (privada vs ejidal/comunal)
+    # ESC-09 régimen de propiedad (privada vs ejidal/comunal).
+    # Solo marcamos BLOQUEANTE si hay evidencia LITERAL de ejidal/comunal en el documento;
+    # ausencia o cita no verificada va a NO_EVALUABLE con severidad INFO (es el default urbano).
     regimen = datos.especificos.get("regimen_propiedad")
-    if regimen and regimen.normalizado:
+    if regimen and regimen.normalizado and regimen.evidencia:
         es_no_privado = any(t in regimen.normalizado for t in _REGIMENES_NO_PRIVADOS)
-        if es_no_privado:
+        # "Dominio pleno" dentro del texto significa ejido ya desincorporado -> no bloqueante.
+        texto = (regimen.valor or "").lower()
+        dominio_pleno = "dominio pleno" in texto or "desincorporad" in texto
+        if es_no_privado and not dominio_pleno:
             h.append(_h("ESC-09", "Régimen de propiedad del inmueble",
                         EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE,
-                        f"Régimen detectado: {regimen.valor}. Tiendas 3B requiere propiedad privada; el régimen ejidal o comunal exige procedimiento especial de desincorporación.",
+                        f"Régimen detectado: {regimen.valor}. Tiendas 3B requiere propiedad privada; el régimen ejidal o comunal exige procedimiento de desincorporación previa.",
                         (regimen.evidencia,)))
         else:
+            explic = f"Régimen: {regimen.valor}."
+            if es_no_privado and dominio_pleno:
+                explic += " El documento indica dominio pleno (ejido ya desincorporado)."
             h.append(_h("ESC-09", "Régimen de propiedad del inmueble",
                         EstadoRegla.CUMPLE, Severidad.INFO,
-                        f"Régimen: {regimen.valor}.",
-                        (regimen.evidencia,)))
+                        explic, (regimen.evidencia,)))
     else:
         h.append(_h("ESC-09", "Régimen de propiedad del inmueble",
-                    EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
-                    "No se extrajo el régimen de propiedad; verificar que sea propiedad privada."))
+                    EstadoRegla.NO_EVALUABLE, Severidad.INFO,
+                    "No se extrajo mención explícita del régimen; las escrituras urbanas suelen ser propiedad privada por default."))
 
-    # ESC-10 copropiedad con poder unificado
+    # ESC-10 copropiedad con poder unificado. Si el modelo citó algo pero no se verifica,
+    # no asumimos copropiedad: queda como NO_EVALUABLE (y la regla no aplica si es titular único).
     copropiedad = datos.especificos.get("copropiedad")
-    if copropiedad and copropiedad.valor:
+    if copropiedad and copropiedad.valor and copropiedad.evidencia:
         t_low = copropiedad.valor.lower()
         hay_poder = any(k in t_low for k in ("poder", "representante común", "apoderado"))
         if hay_poder:
@@ -533,31 +579,40 @@ def _aplicar_reglas(datos: DatosInmueble) -> list[Hallazgo]:
                         EstadoRegla.NO_CUMPLE, Severidad.REVISION,
                         f"Se detectó copropiedad sin evidencia de poder unificado: {copropiedad.valor}. Se requiere consentimiento de todos los copropietarios.",
                         (copropiedad.evidencia,)))
-    # Si copropiedad.valor es None, es un solo titular: no se emite hallazgo (no aplica).
+    # Sin valor o sin evidencia: titular único (regla no aplica, no se emite hallazgo).
 
-    # ESC-11 embargo o litigio
+    # ESC-11 embargo o litigio. Solo NO_CUMPLE con evidencia verificada; ausencia =
+    # NO_EVALUABLE INFO (no afirmamos que no haya embargo sin leer todo el documento).
     embargo = datos.especificos.get("embargo_o_litigio")
-    if embargo and embargo.valor:
+    if embargo and embargo.valor and embargo.evidencia:
         h.append(_h("ESC-11", "Embargo, juicio o anotación preventiva sobre el inmueble",
                     EstadoRegla.NO_CUMPLE, Severidad.BLOQUEANTE,
                     f"Se detectó embargo o litigio: {embargo.valor}. Impide la libre disposición del inmueble.",
                     (embargo.evidencia,)))
+    elif embargo and embargo.valor:
+        h.append(_h("ESC-11", "Embargo, juicio o anotación preventiva sobre el inmueble",
+                    EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
+                    "El modelo mencionó embargo o litigio pero la cita no se verificó en el documento; requiere revisión manual."))
     else:
         h.append(_h("ESC-11", "Embargo, juicio o anotación preventiva sobre el inmueble",
-                    EstadoRegla.CUMPLE, Severidad.INFO,
-                    "No se detectaron embargos ni litigios en el texto extraído."))
+                    EstadoRegla.NO_EVALUABLE, Severidad.INFO,
+                    "No se detectó mención de embargo o litigio en las páginas analizadas; confirmar con el RPP al cierre."))
 
-    # ESC-12 usufructo o limitación del dominio
+    # ESC-12 usufructo o limitación del dominio. Mismo tratamiento: NO_CUMPLE solo con evidencia.
     usufructo = datos.especificos.get("usufructo")
-    if usufructo and usufructo.valor:
+    if usufructo and usufructo.valor and usufructo.evidencia:
         h.append(_h("ESC-12", "Usufructo u otra limitación al dominio",
                     EstadoRegla.NO_CUMPLE, Severidad.REVISION,
                     f"Se detectó usufructo o limitación al dominio: {usufructo.valor}. El titular no tiene disposición plena.",
                     (usufructo.evidencia,)))
+    elif usufructo and usufructo.valor:
+        h.append(_h("ESC-12", "Usufructo u otra limitación al dominio",
+                    EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
+                    "El modelo mencionó usufructo pero la cita no se verificó en el documento; requiere revisión manual."))
     else:
         h.append(_h("ESC-12", "Usufructo u otra limitación al dominio",
-                    EstadoRegla.CUMPLE, Severidad.INFO,
-                    "No se detectaron usufructos ni limitaciones al dominio en el texto extraído."))
+                    EstadoRegla.NO_EVALUABLE, Severidad.INFO,
+                    "No se detectó mención de usufructo ni limitación al dominio en las páginas analizadas."))
 
     return h
 
@@ -583,25 +638,40 @@ def _resultado_ilegible(doc: DocumentoLeido) -> DocumentoAnalizado:
 
 # ---------------------------------------------------------------- entry point
 
-def _guardar_respuesta_cruda(archivo: str, extraido: _EscrituraLLM) -> None:
-    """Guarda el JSON de la respuesta del LLM en cache_respuestas/<archivo>.json para debug.
+def _extraer(doc: DocumentoLeido, paginas: list[Pagina]) -> _EscrituraLLM:
+    """Llama al LLM con caché por hash de (modelo + prompt + schema + texto).
 
-    No falla el agente si la escritura en disco falla (p.ej. permisos).
+    Patrón del equipo (igual al de predial.py y uso_suelo.py). Si existe el JSON
+    en `cache/analisis/escritura/<archivo>.<hash12>.json` lo lee y evita el gasto
+    de API. El hash incluye el texto completo enviado, así cambiar el OCR o el
+    prompt invalida el caché automáticamente.
     """
-    import json
-    import os
-    from pathlib import Path
+    texto = _formatear_paginas(paginas)
+    firma = json.dumps(
+        [LLM_MODEL, _PROMPT_SISTEMA, _EscrituraLLM.model_json_schema(), texto],
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    hash12 = hashlib.sha256(firma.encode("utf-8")).hexdigest()[:12]
+    ruta = DIR_ANALISIS / f"{doc.archivo}.{hash12}.json"
+    if ruta.exists():
+        log.info("Caché HIT para %s (hash %s)", doc.archivo, hash12)
+        return _EscrituraLLM.model_validate_json(ruta.read_text(encoding="utf-8"))
 
+    log.info("Caché MISS para %s (hash %s); llamando LLM", doc.archivo, hash12)
+    llm = get_llm(effort="low", max_tokens=4000).with_structured_output(
+        _EscrituraLLM, method="json_schema"
+    )
+    extraido: _EscrituraLLM = llm.invoke(
+        [SystemMessage(content=_PROMPT_SISTEMA), HumanMessage(content=texto)],
+        config={"callbacks": get_callbacks()},
+    )
     try:
-        from ..config import RAIZ
-        destino = RAIZ / "cache_respuestas"
-        destino.mkdir(parents=True, exist_ok=True)
-        ruta = destino / f"{archivo}.escritura.json"
-        tmp = ruta.with_name(ruta.name + ".tmp")
-        tmp.write_text(extraido.model_dump_json(indent=2), encoding="utf-8")
-        os.replace(tmp, ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(extraido.model_dump_json(indent=2), encoding="utf-8")
     except Exception:
-        log.exception("No se pudo guardar respuesta cruda del LLM para %s", archivo)
+        log.exception("No se pudo escribir cache de respuesta para %s", doc.archivo)
+    return extraido
 
 
 def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
@@ -609,14 +679,7 @@ def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
         return _resultado_ilegible(doc)
 
     paginas_para_llm = _seleccionar_paginas(doc)
-    texto = _formatear_paginas(paginas_para_llm)
-
-    llm = get_llm().with_structured_output(_EscrituraLLM)
-    extraido: _EscrituraLLM = llm.invoke(
-        [SystemMessage(content=_PROMPT_SISTEMA), HumanMessage(content=texto)],
-        config={"callbacks": get_callbacks()},
-    )
-    _guardar_respuesta_cruda(doc.archivo, extraido)
+    extraido = _extraer(doc, paginas_para_llm)
 
     datos = DatosInmueble(
         propietario=_construir_campo(extraido.propietario, doc.archivo, doc.paginas, _normalizar_nombre),

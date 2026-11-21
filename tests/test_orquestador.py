@@ -151,3 +151,58 @@ class TestAnalizarEnParalelo:
         resultados = orquestador._analizar_en_paralelo(leidos, Contexto())
         assert len(resultados) == 1
         assert resultados[0].hallazgos[0].id_regla == "EXP-TIPO"
+
+    def test_ingesta_fallida_devuelve_exp_ingesta(self):
+        """Si la ingesta marcó el doc con _PREFIJO_INGESTA_ROTA, el hallazgo
+        es EXP-INGESTA con la razón del error (no EXP-TIPO engañoso)."""
+        doc_roto = DocumentoLeido(
+            archivo="roto.pdf",
+            tipo=TipoDocumento.OTRO,
+            confianza_tipo=0.0,
+            legibilidad=Legibilidad.ILEGIBLE,
+            paginas=[],
+            paginas_totales=0,
+            notas=f"{orquestador._PREFIJO_INGESTA_ROTA}TimeoutError: la API tardó demasiado",
+        )
+        resultados = orquestador._analizar_en_paralelo([doc_roto], Contexto())
+        assert len(resultados) == 1
+        hallazgo = resultados[0].hallazgos[0]
+        assert hallazgo.id_regla == "EXP-INGESTA"
+        assert "TimeoutError" in hallazgo.explicacion
+
+
+class TestLeer:
+    def test_leer_atrapa_excepcion(self, monkeypatch, tmp_path):
+        """_leer convierte una excepción de ingesta.leer_documento en un
+        DocumentoLeido tipo OTRO con el prefijo de ingesta rota."""
+
+        def explosivo(ruta):
+            raise ConnectionError("API caída")
+
+        monkeypatch.setattr(orquestador.ingesta, "leer_documento", explosivo)
+        p = tmp_path / "x.pdf"
+        p.write_bytes(b"dummy")
+
+        doc = orquestador._leer(p)
+
+        assert doc.tipo == TipoDocumento.OTRO
+        assert doc.legibilidad == Legibilidad.ILEGIBLE
+        assert doc.notas.startswith(orquestador._PREFIJO_INGESTA_ROTA)
+        assert "ConnectionError" in doc.notas
+        assert doc.archivo == "x.pdf"
+
+    def test_leer_exitoso_devuelve_documento_del_ingesta(self, monkeypatch, tmp_path):
+        def bueno(ruta):
+            return DocumentoLeido(
+                archivo=ruta.name, tipo=TipoDocumento.ESCRITURA,
+                confianza_tipo=1.0, legibilidad=Legibilidad.BUENA,
+                paginas=[Pagina(numero=1, texto="hola")], paginas_totales=1,
+            )
+
+        monkeypatch.setattr(orquestador.ingesta, "leer_documento", bueno)
+        p = tmp_path / "ok.pdf"
+        p.write_bytes(b"dummy")
+
+        doc = orquestador._leer(p)
+        assert doc.tipo == TipoDocumento.ESCRITURA
+        assert doc.notas is None

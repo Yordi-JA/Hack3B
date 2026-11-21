@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Optional
 
 from .agentes import alineamiento, cruce, dictamen, escritura, ingesta, predial, uso_suelo
+from .cache import nombre_archivo
 from .config import RAIZ
 from .schemas import (
     TIPOS_REQUERIDOS,
@@ -40,9 +41,14 @@ from .schemas import (
     DocumentoLeido,
     EstadoRegla,
     Hallazgo,
+    Legibilidad,
     Severidad,
     TipoDocumento,
 )
+
+# Prefijo en `DocumentoLeido.notas` para marcar que la ingesta falló; `_analizar`
+# lo detecta y emite el hallazgo EXP-INGESTA en lugar de EXP-TIPO.
+_PREFIJO_INGESTA_ROTA = "[ingesta-fallida] "
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +88,34 @@ def _sin_analisis(doc: DocumentoLeido, id_regla: str, explicacion: str) -> Docum
     )
 
 
+def _leer(ruta: Path) -> DocumentoLeido:
+    """Wrap de `ingesta.leer_documento` que tolera fallas (timeout, 429, PDF dañado).
+
+    Si la ingesta explota, devuelve un DocumentoLeido de tipo OTRO con las notas
+    marcadas con `_PREFIJO_INGESTA_ROTA` para que `_analizar` emita EXP-INGESTA
+    y el revisor humano sepa que el problema fue el OCR, no el agente.
+    """
+    try:
+        return ingesta.leer_documento(ruta)
+    except Exception as e:
+        log.exception("Falló la ingesta de %s", ruta)
+        return DocumentoLeido(
+            archivo=nombre_archivo(ruta),
+            tipo=TipoDocumento.OTRO,
+            confianza_tipo=0.0,
+            legibilidad=Legibilidad.ILEGIBLE,
+            paginas=[],
+            paginas_totales=0,
+            notas=f"{_PREFIJO_INGESTA_ROTA}{type(e).__name__}: {e}",
+        )
+
+
 def _analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
+    # La ingesta puede haber fallado antes del clasificador; lo detectamos por las notas
+    # para dar una explicación precisa al revisor.
+    if doc.notas and doc.notas.startswith(_PREFIJO_INGESTA_ROTA):
+        razon = doc.notas[len(_PREFIJO_INGESTA_ROTA):]
+        return _sin_analisis(doc, "EXP-INGESTA", f"Falló la lectura del documento: {razon}.")
     agente = AGENTES_POR_TIPO.get(doc.tipo)
     if agente is None:
         return _sin_analisis(doc, "EXP-TIPO", "No se reconoció como uno de los 4 tipos requeridos.")
@@ -126,7 +159,7 @@ def analizar_expediente(
         return Dictamen.model_validate_json(EJEMPLO.read_text(encoding="utf-8"))
 
     expediente_id = expediente_id or datetime.now().strftime("EXP-%Y%m%d-%H%M%S")
-    leidos = [ingesta.leer_documento(Path(r)) for r in rutas]
+    leidos = [_leer(Path(r)) for r in rutas]
     analizados = _analizar_en_paralelo(leidos, ctx)
     presentes = {d.tipo for d in leidos}
     faltantes = [t for t in TIPOS_REQUERIDOS if t not in presentes]
