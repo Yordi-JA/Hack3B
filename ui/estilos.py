@@ -179,12 +179,17 @@ a.exp:hover, a.exp:focus {{ border-color: var(--rojo-osc); }}
 .leyenda {{ display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--texto2); margin: 6px 0 8px; }}
 .leyenda i {{ display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid rgba(0,0,0,.15); }}
 svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
-.mx-estado {{ stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
+/* Borde base fino y del mismo color en todos: los bordes compartidos se pintan dos veces sin notarse. */
+.mx-estado {{ stroke: #fff; stroke-width: 1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }}
 .mx-enlace, .mx-llamada {{ cursor: pointer; }}
 /* Los enlaces del SVG heredan el subrayado de los de Streamlit; los números no lo llevan. */
 .mx-mapa a, .mx-mapa a:hover, .mx-mapa a:focus, .mx-mapa a:focus-visible, .mx-mapa text {{ text-decoration: none !important; }}
-.mx-enlace:hover .mx-estado {{ stroke: var(--tinta); stroke-width: 2; }}
-.mx-borde-sel {{ fill: none; stroke: var(--tinta); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }}
+/* Hover solo oscurece el relleno: un trazo propio quedaría medio tapado por los vecinos que se pintan
+   después y se vería más grueso donde el estado tiene menos vecinos. */
+.mx-enlace:hover .mx-estado {{ filter: brightness(.88); }}
+/* La selección es un solo contorno encima de todo (se dibuja al final), igual en cualquier estado. */
+.mx-borde-sel {{ fill: none; stroke: var(--tinta); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+  pointer-events: none; }}
 /* Números en unidades del mapa (1000 de ancho): con el mapa de 810 a 920 px quedan en 14 a 16 px. */
 .mx-num {{ font: 700 17px var(--f-texto); fill: var(--tinta); pointer-events: none; }}
 .mx-num-halo {{ stroke: #fff; stroke-width: 4px; paint-order: stroke; stroke-linejoin: round; }}
@@ -224,7 +229,7 @@ svg.mx-mapa {{ width: 100%; height: auto; display: block; }}
 .marco-media svg {{ width: 100%; max-height: 300px; }}
 .marco-media figcaption {{ font-size: 13px; color: var(--tinta); font-weight: 600; margin-top: 8px; text-align: center; }}
 .mx-vecino {{ fill: var(--mapa-vacio); stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }}
-.mx-resaltado {{ stroke: var(--tinta); stroke-width: 2; vector-effect: non-scaling-stroke; }}
+.mx-resaltado {{ stroke: var(--tinta); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }}
 
 /* dictamen: bloque rojo, todo el texto en blanco puro (6.26:1) */
 .marco-dictamen {{ background: var(--rojo-osc); border-color: var(--rojo-osc); color: #fff; }}
