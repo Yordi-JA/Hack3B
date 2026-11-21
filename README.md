@@ -59,6 +59,14 @@ Reglas del contrato:
 
 ## Arranque
 
+**Un solo comando, Windows o Mac** (crea `.venv`, instala dependencias, crea `.env`, descomprime los zip con los nombres bien y corre la prueba):
+
+```bash
+python configurar.py --zips RUTA/A/LA/CARPETA/DE/LOS/ZIP     # en Windows, si no hay "python": py configurar.py ...
+```
+
+Luego: pegar la `ANTHROPIC_API_KEY` en `.env` y copiar la carpeta `cache/` compartida. Pasos manuales equivalentes:
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
@@ -66,6 +74,32 @@ pip install -r requirements.txt
 copy .env.example .env      # y llenar las llaves
 python -m pytest -q         # valida que el ejemplo cumple el contrato
 ```
+
+En macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env        # y llenar ANTHROPIC_API_KEY
+python -m pytest -q
+```
+
+## Caché OCR (Julián)
+
+Nadie necesita correr el OCR: se comparte la carpeta `cache/` por USB o Drive y se copia en la raíz del repo. `leer_documento()` la usa sola.
+
+Para regenerarlo (solo quien lo genera):
+
+```bash
+python -m expedientes.agentes.ingesta                     # Claude con visión, llena cache/
+python -m expedientes.agentes.ingesta --motor tesseract   # respaldo local sin API key (brew install tesseract tesseract-lang; pip install pytesseract)
+```
+
+- Se puede interrumpir y volver a correr: solo procesa lo que falta.
+- Tope de 15 páginas por documento (`--max-paginas`, decisión 6), anotado en `notas` del `DocumentoLeido`.
+- Las llamadas del OCR no se mandan a Langfuse salvo con `OCR_LANGFUSE=1` (la traza llevaría la imagen del documento).
+- Para descomprimir los zip en Mac usar doble clic o `ditto -x -k archivo.zip Documentos/`: así los nombres con acento coinciden con las llaves del caché.
 
 ## Documentos (regla 06)
 
