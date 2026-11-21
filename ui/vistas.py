@@ -164,7 +164,7 @@ def _iniciar_tour() -> None:
 def boton_recorrido() -> None:
     """Botón flotante con la cara del gallo 3B para abrir el recorrido guiado. Se oculta mientras el
     recorrido está activo, para no tapar sus tarjetas."""
-    if tour.activo() is not None:
+    if tour.activo() is not None or _carga_visible():
         return
     restante = segundos_globo(st.session_state)
     if restante > 0:
@@ -503,13 +503,83 @@ def _estado_trabajo() -> None:
             st.session_state["aviso"] = f"Dictamen listo: {seguro(entrada.dictamen.expediente_id)}"
         st.rerun(scope="app")
         return
+    if _carga_visible():
+        return
     seg = trabajo.segundos
-    texto = "Analizando…" if trabajo.futuro.running() else "En espera…"
+    corriendo = trabajo.futuro.running()
     ultima = trabajo.lineas[-1] if trabajo.lineas else ""
-    html(
-        f'<div class="lateral-estado"><b>{texto} {seg // 60}:{seg % 60:02d}</b>'
-        f"<small>{C.txt(ultima)}</small></div>"
-    )
+    html('<div class="lateral-estado">' + C.loader_3b(
+        "Analizando…" if corriendo else "En espera…", f"{seg // 60}:{seg % 60:02d}", ultima,
+        chico=True, en_espera=not corriendo, invertido=True) + "</div>")
+
+
+CARGA_SEGUNDOS_FONDO = 90  # a partir de aquí la pantalla de carga ofrece "Seguir en segundo plano"
+
+# Guion fijo (constante literal: no interpolar datos en tiempo de ejecución): pasa el foco a la pantalla
+# de carga y, cuando aparece, al botón "Seguir en segundo plano".
+GUION_CARGA = """<script>
+(() => {
+  const preparar = (intentos) => {
+    const caja = document.querySelector(".st-key-carga");
+    if (!caja) { if (intentos > 0) setTimeout(() => preparar(intentos - 1), 60); return; }
+    const boton = caja.querySelector(".st-key-carga-fondo button");
+    if (boton) { if (document.activeElement !== boton) boton.focus({preventScroll: true}); return; }
+    const texto = caja.querySelector(".loader3b");
+    if (texto && !caja.contains(document.activeElement)) texto.focus({preventScroll: true});
+  };
+  preparar(10);
+})();
+</script>"""
+
+
+def _carga_visible() -> bool:
+    """Hay un análisis de esta sesión en curso y no se mandó a segundo plano. Va ligado al trabajo: una
+    sesión nueva (recargar la página) no tiene trabajo y no muestra una pantalla vieja."""
+    trabajo = _trabajo()
+    return bool(trabajo) and not trabajo.futuro.done() and st.session_state.get("carga_oculta") != id(trabajo.futuro)
+
+
+def _a_segundo_plano() -> None:
+    trabajo = _trabajo()
+    if trabajo:
+        st.session_state["carga_oculta"] = id(trabajo.futuro)
+
+
+def _pantalla_carga() -> None:
+    """Pantalla completa mientras corre el análisis. Al terminar no dibuja nada: el fragmento de la barra
+    lateral abre el dictamen o deja el error para Subir expediente."""
+    if not _carga_visible():
+        return
+    trabajo = _trabajo()
+    seg = trabajo.segundos
+    corriendo = trabajo.futuro.running()
+    with st.container(key="carga"):
+        html(C.loader_3b(
+            "Analizando el expediente…" if corriendo else "En espera: hay otro análisis en curso",
+            f"{seg // 60}:{seg % 60:02d}", trabajo.lineas[-1] if trabajo.lineas else "",
+            en_espera=not corriendo, pantalla=True,
+        ))
+        boton = seg >= CARGA_SEGUNDOS_FONDO
+        if boton:
+            st.button("Seguir en segundo plano", key="carga-fondo", type="tertiary", on_click=_a_segundo_plano)
+        with st.container(key=f"carga-guion-{'boton' if boton else 'caja'}"):
+            st.html(GUION_CARGA, unsafe_allow_javascript=True)
+
+
+def _progreso_subir() -> None:
+    """Avance del análisis en Subir expediente (se refresca cada segundo mientras dura). Al terminar no
+    dibuja nada: el fragmento de la barra lateral abre el dictamen o muestra el error."""
+    trabajo = _trabajo()
+    if not trabajo or trabajo.futuro.done() or _carga_visible():
+        return
+    seg = trabajo.segundos
+    corriendo = trabajo.futuro.running()
+    with st.container(key="subir-progreso"):
+        html(C.loader_3b(
+            "Analizando el expediente…" if corriendo else "En espera…", f"{seg // 60}:{seg % 60:02d}",
+            trabajo.lineas[-1] if trabajo.lineas else "", en_espera=not corriendo,
+        ) + '<p class="subir-progreso-nota">Puedes ir al inicio mientras tanto: el dictamen se guarda al '
+            "terminar y te avisamos.</p>")
 
 
 def seguimiento() -> None:
@@ -612,8 +682,7 @@ def vista_nuevo() -> None:
             html(_documentos_esperados())
 
         if pendiente:
-            st.info("Hay un análisis en curso; el avance aparece en la barra lateral. Puedes ir al inicio "
-                    "mientras tanto: el dictamen se guarda al terminar y te avisamos.")
+            st.fragment(_progreso_subir, run_every=1)()
         if enviar and not pendiente:
             if not archivos:
                 st.warning("Agrega al menos un archivo antes de analizar.")
@@ -808,5 +877,7 @@ def main() -> None:
         vista_estado(entradas, st.query_params.get("entidad"))
     else:
         vista_bandeja(entradas, invalidos)
+    if _trabajo_pendiente():
+        st.fragment(_pantalla_carga, run_every=1)()
     boton_recorrido()  # antes del paisaje: el paisaje tiene que ser lo último para llegar al borde del panel
     st.html(C.paisaje())  # pie de todas las vistas, también los estados vacíos y "no encontrado"

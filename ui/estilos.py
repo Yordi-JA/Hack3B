@@ -597,6 +597,43 @@ a.pag-btn:hover {{ background: var(--verde); border-color: var(--verde); color: 
   [data-testid="stMain"] {{ margin: 0; border-radius: 0; max-height: none; }}
 }}
 
+/* ---- Indicador de análisis: logo 3B quieto y un anillo fino que gira (solo mientras hay un análisis).
+   En espera el anillo se detiene y se atenúa; con movimiento reducido no gira. */
+@keyframes giro-3b {{ to {{ transform: rotate(360deg); }} }}
+.loader3b {{ display: flex; align-items: center; gap: 16px; }}
+.loader3b-logo {{ position: relative; flex: none; width: 56px; height: 56px; }}
+.loader3b-logo svg {{ display: block; width: 100%; height: 100%; }}
+.loader3b-anillo {{ position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(192,20,27,.16);
+  border-top-color: var(--rojo-osc); animation: giro-3b 900ms linear infinite; }}
+.loader3b-espera .loader3b-anillo {{ animation-play-state: paused; opacity: .45; }}
+.loader3b-texto {{ min-width: 0; }}
+.loader3b-texto b {{ font-size: 16px; color: var(--tinta); }}
+.loader3b-tiempo {{ font-size: 14px; font-weight: 700; color: var(--texto2); font-variant-numeric: tabular-nums; margin-left: 6px; }}
+.loader3b-texto small {{ display: block; font-size: 13px; color: var(--texto2); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.loader3b-chico {{ gap: 12px; }}
+.loader3b-chico .loader3b-logo {{ width: 28px; height: 28px; }}
+.loader3b-chico .loader3b-anillo {{ inset: -4px; }}
+.loader3b-chico .loader3b-texto b {{ font-size: 14px; }}
+.st-key-subir-progreso {{ border: 2px solid var(--tinta); border-radius: var(--radio); background: #fff; padding: 18px 20px; margin-top: 18px; }}
+.subir-progreso-nota {{ font-size: 13px; color: var(--texto2); margin: 10px 0 0; }}
+.lateral-estado .loader3b-anillo {{ border-color: rgba(255,255,255,.3); border-top-color: #fff; }}
+.lateral-estado .loader3b-texto b, .lateral-estado .loader3b-tiempo {{ color: var(--blanco); }}
+.lateral-estado .loader3b-texto small {{ color: var(--blanco); }}
+/* Pantalla de carga: cubre toda la app (barra lateral incluida) mientras corre el análisis de esta sesión. */
+.st-key-carga {{ position: fixed; inset: 0; z-index: 1000050; background: rgba(244,245,241,.96);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }}
+.st-key-carga > div {{ width: auto !important; }}
+.loader3b-pantalla {{ flex-direction: column; text-align: center; gap: 26px; outline: none; }}
+.loader3b-pantalla .loader3b-logo {{ width: 120px; height: 120px; }}
+.loader3b-pantalla .loader3b-anillo {{ inset: -12px; border-width: 3px; }}
+.loader3b-pantalla .loader3b-texto b {{ display: block; font-family: var(--f-titular); font-weight: 900; font-size: 26px; }}
+.loader3b-pantalla .loader3b-tiempo {{ display: block; margin: 8px 0 0; font-size: 18px; }}
+.loader3b-pantalla .loader3b-texto small {{ max-width: 60ch; margin: 6px auto 0; font-size: 14px; }}
+.st-key-carga-fondo button {{ color: var(--texto2); text-decoration: underline; }}
+.st-key-carga-guion-caja, .st-key-carga-guion-boton {{ display: none; }}
+@media (prefers-reduced-motion: reduce) {{ .loader3b-anillo {{ animation: none; }} }}
+
 /* ---- Movimiento: poco, corto y con propósito. Solo opacidad y desplazamiento (translate), ease-out,
    150 a 200 ms, sin repeticiones. La entrada de cada vista va en sus contenedores de arriba, que siguen
    montados entre reruns: escribir en el buscador no la repite. La tabla y los filtros no se animan. */

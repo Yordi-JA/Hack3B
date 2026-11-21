@@ -66,6 +66,25 @@ def fecha(valor) -> str:
     return valor.strftime("%d/%m/%Y %H:%M") if hasattr(valor, "hour") else valor.strftime("%d/%m/%Y")
 
 
+def loader_3b(texto: str, tiempo: str = "", detalle: str = "", chico: bool = False,
+              en_espera: bool = False, invertido: bool = False, pantalla: bool = False) -> str:
+    """Indicador de análisis en curso: el logo 3B quieto y un anillo fino que gira alrededor. `texto` es
+    la región viva (role=status) y cambia poco ("Analizando el expediente…"); `tiempo` (mm:ss) y `detalle`
+    (última línea del registro) van fuera de ella para que un lector de pantalla no repita cada segundo.
+    `en_espera`: el anillo se queda quieto y atenuado. `invertido`: logo blanco para la barra lateral.
+    `pantalla`: versión grande y centrada de la pantalla de carga (el texto como encabezado)."""
+    clases = ("loader3b" + (" loader3b-chico" if chico else "") + (" loader3b-pantalla" if pantalla else "")
+              + (" loader3b-espera" if en_espera else ""))
+    extra = f' <span class="loader3b-tiempo">{txt(tiempo)}</span>' if tiempo else ""
+    return (
+        f'<div class="{clases}" tabindex="-1"><span class="loader3b-logo" aria-hidden="true">{logo_3b(invertido)}'
+        '<i class="loader3b-anillo"></i></span><div class="loader3b-texto">'
+        f'<b role="status" aria-live="polite">{txt(texto)}</b>{extra}'
+        + (f"<small>{txt(detalle)}</small>" if detalle else "")
+        + "</div></div>"
+    )
+
+
 def logo_3b(invertido: bool = False) -> str:
     """Círculo con B sobre BB, dibujado aquí porque las imágenes de marca no se versionan.
 

@@ -172,3 +172,23 @@ def test_guion_del_recorrido_es_constante_y_lee_el_objetivo_de_la_tarjeta():
     assert 'data-objetivo="b-filtros"' in tour.tarjeta(i)
     assert "data-objetivo" not in tour.tarjeta(0)  # bienvenida: sin objetivo
 
+
+def test_loader_3b_accesible_y_quieto_en_espera():
+    html = C.loader_3b("Analizando el expediente…", "1:05", "Paso 3 de 8")
+    assert 'aria-hidden="true"' in html and 'role="status" aria-live="polite">Analizando el expediente…</b>' in html
+    assert "1:05" in html.split("aria-live")[1].split("</b>", 1)[1]  # el reloj va fuera de la región viva
+    assert "loader3b-anillo" in html and "loader3b-espera" not in html
+    assert "loader3b-espera" in C.loader_3b("En espera…", en_espera=True, chico=True)
+    assert "\n" not in html
+
+
+def test_pantalla_de_carga_grande_y_guion_constante():
+    from ui import vistas
+
+    html = C.loader_3b("Analizando el expediente…", "0:42", "Paso 3 de 8", pantalla=True)
+    assert "loader3b-pantalla" in html and 'tabindex="-1"' in html and 'role="status"' in html
+    assert "<script" not in C.txt("<script>x</script>")  # la última línea del registro va escapada
+    g = vistas.GUION_CARGA
+    assert g.count("<script") == 1 and "{{" not in g and "carga-fondo" in g
+    assert vistas.CARGA_SEGUNDOS_FONDO == 90
+
