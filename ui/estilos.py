@@ -204,6 +204,7 @@ q.cita, .cita {{ display: block; quotes: "\\201C" "\\201D"; font-style: italic; 
   border-left: 3px solid var(--borde); padding: 6px 10px; margin: 4px 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }}
 .fuente {{ font-size: 12px; color: var(--texto2); }}
 
+.aviso-req {{ background: {t.AMBAR.fondo}; color: var(--texto); border-radius: 8px; padding: 8px 12px; margin: 0 0 8px; font-size: 14px; }}
 .resumen-req {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
 
 .inc {{ background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }}
