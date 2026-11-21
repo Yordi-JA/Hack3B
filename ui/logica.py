@@ -163,6 +163,12 @@ class Requisito:
     archivos: list[str]
     hallazgos: list[Hallazgo]
     tipo: Optional[TipoDocumento] = None  # None: regla del expediente completo
+    origen: list[Optional[str]] = field(default_factory=list)  # archivo de cada hallazgo (None: expediente)
+
+    def decisivo(self) -> Hallazgo:
+        """El hallazgo que decide el estado; si hay varios, el más severo."""
+        return max((h for h in self.hallazgos if h.estado == self.estado),
+                   key=lambda h: _RANGO_SEVERIDAD[h.severidad])
 
 
 def consolidar_requisitos(dictamen: Dictamen) -> list[Requisito]:
@@ -194,11 +200,12 @@ def consolidar_requisitos(dictamen: Dictamen) -> list[Requisito]:
         else:
             estado = EstadoRegla.NO_EVALUABLE
         decisivos = [h for h in hallazgos if h.estado == estado]
-        severidad = max((h.severidad for h in decisivos), key=_RANGO_SEVERIDAD.__getitem__)
+        principal = max(decisivos, key=lambda h: _RANGO_SEVERIDAD[h.severidad])
         archivos = list(dict.fromkeys(a for a, _ in items if a))
-        requisitos.append(
-            Requisito(id_regla, decisivos[0].descripcion, estado, severidad, archivos, hallazgos, tipo)
-        )
+        requisitos.append(Requisito(
+            id_regla, principal.descripcion, estado, principal.severidad, archivos, hallazgos, tipo,
+            [a for a, _ in items],
+        ))
 
     orden_estado = {EstadoRegla.NO_CUMPLE: 0, EstadoRegla.NO_EVALUABLE: 1, EstadoRegla.CUMPLE: 2}
     requisitos.sort(key=lambda r: (orden_estado[r.estado], -_RANGO_SEVERIDAD[r.severidad], r.id_regla))
@@ -319,42 +326,63 @@ class Pendiente:
     relacionados: list[Requisito] = field(default_factory=list)  # reglas que dicen lo mismo que la inconsistencia
 
 
-_PALABRAS_VACIAS = {
-    "para", "porque", "entre", "sobre", "desde", "hasta", "como", "este", "esta", "estos", "estas", "pero",
-    "cuando", "donde", "todos", "todas", "tiene", "tienen", "bloqueante", "revision", "documento", "documentos",
-}
-
-
-def _palabras(texto: str) -> set[str]:
-    """Palabras con significado para comparar textos: sin acentos, de 4 letras o más, y números."""
-    norm = normalizar_texto(texto).lower()
-    return {w for w in norm.split() if (len(w) >= 4 or w.isdigit()) and w not in _PALABRAS_VACIAS}
+# Abreviaturas frecuentes en documentos inmobiliarios: un punto después de ellas no cierra la oración.
+# Cada una va en su propio lookbehind porque Python solo acepta lookbehinds de ancho fijo.
+_ABREVIATURAS = ["Av", "No", "Núm", "Num", "Col", "Lic", "Mpio", "Edo", "Ing", "Arq", "Dr", "Sr", "Sra",
+                 "C.V", "S.A", "Fracc", "Mz", "Lt"]
+_NO_ABREVIATURA = "".join(rf"(?<!\b{re.escape(a)}\.)" for a in _ABREVIATURAS)
+_FIN_ORACION = re.compile(rf"(?<=\.){_NO_ABREVIATURA}\s+(?=[A-ZÁÉÍÓÚÑ¿¡])")
 
 
 def primera_oracion(texto: str) -> str:
     """La primera oración de una explicación: lo que se lee en la lista; el resto va en la evidencia."""
-    partes = re.split(r"(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ¿¡])", " ".join(texto.split()), maxsplit=1)
+    partes = _FIN_ORACION.split(" ".join(texto.split()), maxsplit=1)
     return partes[0] if partes else ""
 
 
+def _norm(texto: str) -> str:
+    return normalizar_texto(texto or "").lower()
+
+
 def _menciona_tipo(texto: str, tipo: TipoDocumento) -> bool:
-    clave = normalizar_texto(NOMBRE_TIPO_CORTO[tipo]).lower()
-    return clave in normalizar_texto(texto).lower()
+    return _norm(NOMBRE_TIPO_CORTO[tipo]) in _norm(texto)
+
+
+def _contiene_palabra(texto_norm: str, valor: str) -> bool:
+    valor_norm = _norm(valor)
+    return bool(valor_norm) and re.search(rf"(?<![a-z0-9]){re.escape(valor_norm)}(?![a-z0-9])", texto_norm) is not None
+
+
+def _regla_repite_inconsistencia(r: Requisito, inc: Inconsistencia) -> bool:
+    """Solo se une una regla a una inconsistencia si su explicación nombra los valores en conflicto.
+
+    Nunca reglas del expediente (EXP-*) ni reglas más severas que la inconsistencia: ante la duda,
+    la regla queda como renglón propio (un duplicado es aceptable; un bloqueante oculto no).
+    """
+    if r.id_regla.startswith("EXP-") or _RANGO_SEVERIDAD[r.severidad] > _RANGO_SEVERIDAD[inc.severidad]:
+        return False
+    texto = _norm(" ".join(h.explicacion for h in r.hallazgos))
+    valores = {v.valor for v in inc.valores if v.valor}
+    presentes = [v for v in valores if _contiene_palabra(texto, v)]
+    if len(presentes) >= 2:
+        return True
+    palabras_campo = _norm(nombre_campo(inc.campo)).split()
+    return bool(presentes) and all(_contiene_palabra(texto, w) for w in palabras_campo)
 
 
 def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
-    """Lista única y priorizada de lo que el equipo legal tiene que resolver, sin duplicados.
+    """Lista priorizada de lo que el equipo legal tiene que resolver.
 
     Junta: requisitos no cumplidos o sin evaluar que pesan (revisión o bloqueante), inconsistencias
-    entre documentos, archivos que no se pudieron analizar, leer o reconocer, y tipos faltantes que
-    ninguna regla del expediente ya menciona. Las reglas sin evaluar de un archivo ilegible o sin
-    analizar no se repiten: las cubre el renglón de ese archivo.
+    entre documentos, archivos que no se pudieron analizar, leer o reconocer, y tipos faltantes.
+    Principio: ante la duda se muestra. Solo se omite algo cuando otro renglón emitido lo dice de forma
+    explícita, con reglas estructurales (mismo archivo, mismo hallazgo), nunca por parecido de palabras.
 
-    Devuelve (pendientes ordenados: bloqueante, revisión, resto; razones del dictamen que ningún
-    renglón cubre, para mostrarlas aparte sin perderlas).
+    Devuelve (pendientes ordenados: bloqueante, revisión, resto; razones del dictamen que no son
+    idénticas a un renglón, para mostrarlas aparte).
     """
     items: list[Pendiente] = []
-    tapados: set[str] = set()   # archivos ilegibles o sin analizar: sus reglas sin evaluar no se listan
+    tapados: set[str] = set()   # archivos con un renglón propio que ya dice que sus reglas no se evaluaron
 
     for doc in dictamen.documentos:
         for h in doc.hallazgos:
@@ -370,49 +398,65 @@ def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
                     h.severidad, [doc.archivo], h.explicacion))
                 tapados.add(doc.archivo)
 
-    reglas_exp = [h for h in dictamen.hallazgos_expediente if h.estado != EstadoRegla.CUMPLE]
-    texto_exp = " ".join(f"{h.descripcion} {h.explicacion}" for h in reglas_exp)
-
-    for doc in dictamen.documentos:
-        if doc.legibilidad == Legibilidad.ILEGIBLE and doc.archivo not in tapados:
-            tapados.add(doc.archivo)
-            ya_dicho = _menciona_tipo(texto_exp, doc.tipo) and "ilegib" in normalizar_texto(texto_exp).lower()
-            if not ya_dicho:
-                items.append(Pendiente(
-                    "ilegible", f"{doc.archivo} es ilegible: sus reglas quedaron sin evaluar. Pide una copia legible.",
-                    Severidad.REVISION, [doc.archivo]))
-
+    reglas: list[Pendiente] = []
     for r in consolidar_requisitos(dictamen):
         if r.estado == EstadoRegla.CUMPLE:
             continue
-        if r.estado == EstadoRegla.NO_EVALUABLE:
-            if r.severidad == Severidad.INFO:
-                continue
-            if r.archivos and all(a in tapados for a in r.archivos):
-                continue
-        decisivo = next(h for h in r.hallazgos if h.estado == r.estado)
+        if r.estado == EstadoRegla.NO_EVALUABLE and r.severidad == Severidad.INFO:
+            continue
+        decisivo = r.decisivo()
         # Las reglas del expediente no tienen archivo propio: se usan los de sus citas.
         archivos = r.archivos or list(dict.fromkeys(e.archivo for h in r.hallazgos for e in h.evidencias))
-        items.append(Pendiente(
+        reglas.append(Pendiente(
             "requisito", primera_oracion(decisivo.explicacion) or r.descripcion, r.severidad, archivos,
             decisivo.explicacion, requisito=r))
+
+    # Archivos ilegibles: si un renglón emitido ya lo dice (un mismo hallazgo nombra el tipo y "ilegible"),
+    # ese renglón lo cubre; si no, se agrega uno propio.
+    for doc in dictamen.documentos:
+        if doc.legibilidad != Legibilidad.ILEGIBLE or doc.archivo in tapados:
+            continue
+        cubierto = any(
+            _menciona_tipo(f"{h.descripcion} {h.explicacion}", doc.tipo)
+            and "ilegib" in _norm(f"{h.descripcion} {h.explicacion}")
+            for it in reglas for h in it.requisito.hallazgos if h.estado != EstadoRegla.CUMPLE
+        )
+        if not cubierto:
+            items.append(Pendiente(
+                "ilegible", f"{doc.archivo} es ilegible: sus reglas quedaron sin evaluar. Pide una copia legible.",
+                Severidad.REVISION, [doc.archivo]))
+        tapados.add(doc.archivo)
+
+    # Reglas sin evaluar de archivos ya cubiertos: solo las de revisión (un bloqueante nunca se omite).
+    for it in reglas:
+        r = it.requisito
+        if (r.estado == EstadoRegla.NO_EVALUABLE and r.severidad != Severidad.BLOQUEANTE
+                and not r.id_regla.startswith("EXP-") and r.archivos and all(a in tapados for a in r.archivos)):
+            continue
+        items.append(it)
 
     for inc in dictamen.inconsistencias:
         archivos = list(dict.fromkeys(v.archivo for v in inc.valores))
         nuevo = Pendiente("inconsistencia", inc.descripcion, inc.severidad, archivos, inconsistencia=inc)
-        # Una regla que dice lo mismo que la inconsistencia (ej. número oficial 17 contra 15) se une a ella.
-        palabras_inc = _palabras(inc.descripcion)
         for it in [i for i in items if i.clase == "requisito"]:
-            propias = _palabras(it.texto)
-            if propias and len(propias & palabras_inc) >= len(propias) / 2:
+            if _regla_repite_inconsistencia(it.requisito, inc):
                 items.remove(it)
                 nuevo.relacionados.append(it.requisito)
-                if _RANGO_SEVERIDAD[it.severidad] > _RANGO_SEVERIDAD[nuevo.severidad]:
-                    nuevo.severidad = it.severidad
+                nuevo.archivos = list(dict.fromkeys([*nuevo.archivos, *it.archivos]))
         items.append(nuevo)
 
+    # Tipos faltantes: se omite el renglón solo si una regla del expediente emitida habla de que falta ese tipo.
+    emitidas_exp = [h for it in items if it.requisito and it.requisito.tipo is None
+                    for h in it.requisito.hallazgos if h.estado != EstadoRegla.CUMPLE]
     for tr in documentos_por_tipo(dictamen):
-        if tr.tipo not in faltantes(dictamen) or _menciona_tipo(texto_exp, tr.tipo):
+        if tr.tipo not in faltantes(dictamen):
+            continue
+        ya_dicho = any(
+            _menciona_tipo(f"{h.descripcion} {h.explicacion}", tr.tipo)
+            and re.search(r"falt|no se recibi", _norm(f"{h.descripcion} {h.explicacion}"))
+            for h in emitidas_exp
+        )
+        if ya_dicho:
             continue
         nombre = NOMBRE_TIPO[tr.tipo]
         if tr.recibido:
@@ -424,26 +468,10 @@ def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
     rango = {Severidad.BLOQUEANTE: 0, Severidad.REVISION: 1}
     items = [it for _, it in sorted(enumerate(items), key=lambda p: (rango.get(p[1].severidad, 2), p[0]))]
 
-    cubiertas = [_palabras(_texto_busqueda(it)) for it in items]
-    sueltas = []
-    for razon in dictamen.razones:
-        palabras = _palabras(razon)
-        if not palabras or not any(len(palabras & c) >= max(2, len(palabras) / 2) for c in cubiertas):
-            sueltas.append(razon)
+    # Razones: se muestran todas, salvo las idénticas al texto de un renglón.
+    textos = {" ".join(it.texto.split()).casefold() for it in items}
+    sueltas = [r for r in dictamen.razones if " ".join(r.split()).casefold() not in textos]
     return items, sueltas
-
-
-def _texto_busqueda(it: Pendiente) -> str:
-    partes = [it.texto, it.explicacion, *it.archivos]
-    if it.requisito:
-        partes += [it.requisito.descripcion, *(h.explicacion for h in it.requisito.hallazgos)]
-    for r in it.relacionados:
-        partes += [r.descripcion, *(h.explicacion for h in r.hallazgos)]
-    if it.inconsistencia:
-        inc = it.inconsistencia
-        partes += [nombre_campo(inc.campo), inc.descripcion, *(v.valor or "" for v in inc.valores),
-                   *(NOMBRE_TIPO[v.tipo] for v in inc.valores)]
-    return " ".join(partes)
 
 
 # ------------------------------------------------------------------ bandeja

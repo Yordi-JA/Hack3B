@@ -286,13 +286,13 @@ def _archivos(archivos: list[str]) -> str:
     return txt(", ".join(archivos)) if archivos else "Expediente completo"
 
 
-def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool) -> str:
+def tarjeta_dictamen(d: Dictamen, es_ejemplo: bool, pend: Optional[tuple] = None) -> str:
     u = L.consolidar_ubicacion(d)
     tono = t.ESTADO[d.recomendacion]
     # Cada parte de la ceja se queda en una pieza: si no cabe, el corte cae entre partes.
     partes_ceja = [d.expediente_id, texto_ubicacion(u)] + (["datos de ejemplo"] if es_ejemplo else [])
     ceja = " · ".join(f'<span class="nobr">{txt(p)}</span>' for p in partes_ceja)
-    n = len(L.pendientes(d)[0])
+    n = len((pend or L.pendientes(d))[0])
     if n:
         botones = f'<a class="btn-acento" href="#resolver" target="_self">Qué resolver ({n})</a>'
     else:
@@ -345,8 +345,12 @@ def tabla_inconsistencia(inc: Inconsistencia) -> str:
 
 def _evidencia_requisito(r: L.Requisito) -> str:
     partes = [f'<p class="ev-regla">{txt(r.descripcion)} <span class="fuente">({txt(r.id_regla)})</span></p>']
-    for h in r.hallazgos:
-        partes.append(f"<p>{txt(h.explicacion)}</p>")
+    origen = r.origen or [None] * len(r.hallazgos)
+    for archivo, h in zip(origen, r.hallazgos):
+        partes.append(
+            f'<p><span class="fuente">{txt(archivo or "Expediente")} · {L.NOMBRE_ESTADO_REGLA[h.estado]}</span><br>'
+            f"{txt(h.explicacion)}</p>"
+        )
         partes.extend(cita(e) for e in h.evidencias)
     return "".join(partes)
 
@@ -361,8 +365,8 @@ def _evidencia(it: L.Pendiente) -> str:
     return ""
 
 
-def lista_pendientes(d: Dictamen) -> str:
-    items, sueltas = L.pendientes(d)
+def lista_pendientes(d: Dictamen, pend: Optional[tuple] = None) -> str:
+    items, sueltas = pend or L.pendientes(d)
     if items:
         filas = []
         for it in items:
@@ -435,7 +439,6 @@ def documentos(d: Dictamen) -> str:
                 f'<div class="doc-tarjeta doc-falta"><span class="doc-titulo">{txt(nombre)}</span>'
                 f'<p class="doc-estado"><b class="est-vino">{txt(texto)}</b></p></div>'
             )
-            continue
         for doc in d.documentos:
             if doc.tipo == tr.tipo:
                 tarjetas.append(_tarjeta_documento(nombre, doc))

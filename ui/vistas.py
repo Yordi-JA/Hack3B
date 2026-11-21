@@ -461,13 +461,14 @@ def vista_detalle(entrada: Optional[store.Entrada]) -> None:
     d: Dictamen = entrada.dictamen
     st.button("Volver al inicio", on_click=ir, args=("bandeja",))
 
-    # 1. El dictamen
-    html(C.tarjeta_dictamen(d, entrada.es_ejemplo))
+    pend = L.pendientes(d)
 
-    # 2. Qué hay que resolver: una sola lista, priorizada y sin duplicados
-    n = len(L.pendientes(d)[0])
-    html(C.seccion(f"Qué hay que resolver ({n})", "resolver"))
-    html(C.lista_pendientes(d))
+    # 1. El dictamen
+    html(C.tarjeta_dictamen(d, entrada.es_ejemplo, pend))
+
+    # 2. Qué hay que resolver: una sola lista, priorizada
+    html(C.seccion(f"Qué hay que resolver ({len(pend[0])})", "resolver"))
+    html(C.lista_pendientes(d, pend))
 
     # 3. Documentos recibidos y faltantes
     html(C.seccion("Documentos", "documentos"))
