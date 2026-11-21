@@ -377,19 +377,6 @@ def _se_descarta(r: Requisito, tapados: set[str]) -> bool:
             and not r.id_regla.startswith("EXP-") and bool(r.archivos) and all(a in tapados for a in r.archivos))
 
 
-def _dice_ilegible(r: Requisito, archivo: str) -> bool:
-    """Un hallazgo de la regla dice que ESE archivo es ilegible: es del archivo, o es del expediente y
-    lo nombra o lo cita."""
-    for origen, h in zip(r.origen or [None] * len(r.hallazgos), r.hallazgos):
-        if h.estado == EstadoRegla.CUMPLE or "ilegib" not in _norm(f"{h.descripcion} {h.explicacion}"):
-            continue
-        if origen == archivo:
-            return True
-        if origen is None and (_norm(archivo) in _norm(h.explicacion) or any(e.archivo == archivo for e in h.evidencias)):
-            return True
-    return False
-
-
 def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
     """Lista priorizada de lo que el equipo legal tiene que resolver.
 
@@ -431,20 +418,14 @@ def pendientes(dictamen: Dictamen) -> tuple[list[Pendiente], list[str]]:
             "requisito", primera_oracion(decisivo.explicacion) or r.descripcion, r.severidad, archivos,
             decisivo.explicacion, requisito=r))
 
-    # Archivos ilegibles: lo cubre un renglón de regla que diga que ESE archivo es ilegible y que no se
-    # vaya a descartar; si no hay, se agrega uno propio.
+    # Cada archivo ilegible tiene siempre su propio renglón, igual que los que no se pudieron analizar. Con
+    # todos esos archivos en `tapados` antes de filtrar, sus reglas sin evaluar de revisión sobran.
     for doc in dictamen.documentos:
-        if doc.legibilidad != Legibilidad.ILEGIBLE or doc.archivo in tapados:
-            continue
-        con_archivo = tapados | {doc.archivo}
-        cubierto = any(
-            _dice_ilegible(it.requisito, doc.archivo) and not _se_descarta(it.requisito, con_archivo) for it in reglas
-        )
-        if not cubierto:
+        if doc.legibilidad == Legibilidad.ILEGIBLE and doc.archivo not in tapados:
             items.append(Pendiente(
                 "ilegible", f"{doc.archivo} es ilegible: sus reglas quedaron sin evaluar. Pide una copia legible.",
                 Severidad.REVISION, [doc.archivo]))
-        tapados.add(doc.archivo)
+            tapados.add(doc.archivo)
 
     # Reglas sin evaluar de archivos ya cubiertos: solo las de revisión (un bloqueante nunca se omite).
     items.extend(it for it in reglas if not _se_descarta(it.requisito, tapados))
