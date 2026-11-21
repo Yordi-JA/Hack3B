@@ -186,9 +186,10 @@ def test_cita_inventada_deja_el_dato_sin_normalizado(llm_falso):
 
 
 def test_folio_de_otro_anio_sugiere_alteracion(llm_falso):
-    llm_falso(_extraccion(fecha_emision=_c("15 de marzo de 2021", cita="LICENCIA DE USO DEL SUELO",
+    llm_falso(_extraccion(fecha_emision=_c("15 de marzo de 2021", cita="expedida el 15 de marzo de 2021",
                                            iso="2021-03-15")))
-    h = _hallazgo(us.analizar(_doc(), CTX_2023), "USO-03")
+    doc = _doc(paginas=[Pagina(numero=1, texto=P1 + "\nexpedida el 15 de marzo de 2021"), Pagina(numero=2, texto=P2)])
+    h = _hallazgo(us.analizar(doc, CTX_2023), "USO-03")
     assert (h.estado, h.severidad) == (EstadoRegla.NO_CUMPLE, Severidad.REVISION)
     assert "periodo de gobierno" in h.explicacion and "folio" in h.explicacion
 
@@ -287,8 +288,8 @@ def test_criterios_3b_detectan_banderas(llm_falso):
 
 
 def test_criterios_3b_sin_banderas(llm_falso):
-    llm_falso(_extraccion(cos=_c("70 %", cita="superficie total de predio de 350.00 M²")))
-    r = us.analizar(_doc(), CTX_2023)
+    llm_falso(_extraccion(cos=_c("70 %", cita="COS: 70 %")))
+    r = us.analizar(_doc(paginas=[Pagina(numero=1, texto=P1 + "\nCOS: 70 %"), Pagina(numero=2, texto=P2)]), CTX_2023)
     assert _hallazgo(r, "USO-07").estado == EstadoRegla.NO_EVALUABLE
     assert _hallazgo(r, "USO-08").estado == EstadoRegla.CUMPLE
     h = _hallazgo(r, "USO-09")
@@ -302,11 +303,43 @@ def test_criterios_3b_sin_banderas(llm_falso):
     ("500 m2", EstadoRegla.CUMPLE, Severidad.INFO),
 ])
 def test_superficie_comercial_umbral(llm_falso, m2, estado, severidad):
-    llm_falso(_extraccion(superficie_maxima_giro_m2=_c(m2, cita="superficie total de predio de 350.00 M²")))
-    h = _hallazgo(us.analizar(_doc(), CTX_2023), "USO-07")
+    cita = f"SUPERFICIE MAXIMA COMERCIAL {m2}"
+    llm_falso(_extraccion(superficie_maxima_giro_m2=_c(m2, cita=cita)))
+    doc = _doc(paginas=[Pagina(numero=1, texto=P1 + "\n" + cita), Pagina(numero=2, texto=P2)])
+    h = _hallazgo(us.analizar(doc, CTX_2023), "USO-07")
     assert (h.estado, h.severidad) == (estado, severidad)
 
 
 @pytest.mark.parametrize("s, esperado", [("20%", 20.0), ("70 %", 70.0), ("0.7", 70.0), ("1.4 VECES", 1.4), (None, None)])
 def test_porcentaje(s, esperado):
     assert us._porcentaje(s) == esperado
+
+
+
+# ---------------------------------------------------------------- verificación de valor en la cita
+
+PAG_NOTARIA = [Pagina(numero=1, texto="TITULAR DE LA NOTARIA PUBLICA NUMERO 101 DEL ESTADO DE HIDALGO.\n"
+                                      "EL INMUEBLE CUENTA CON UNA SUPERFICIE TOTAL DE TERRENO DE 450.00 M2 Y COLINDANCIAS.\n"
+                                      "Fecha: 12 de marzo de 2025\n"
+                                      "ESTACIONAMIENTO | 1 CAJÓN / 40 M²")]
+
+
+@pytest.mark.parametrize("valor, cita, acepta", [
+    ("450.00 m2", "DE 450.00 M2", True),
+    ("Notaría 10", "NOTARIA PUBLICA NUMERO 10", False),                                     # 10 no es 101
+    ("999.00 m2", "EL INMUEBLE CUENTA CON UNA SUPERFICIE TOTAL DE TERRENO DE 999.00 M2", False),  # valor inventado al final
+    ("JUAN PEREZ", "TITULAR DE LA NOTARIA PUBLICA", False),                                 # cita real, valor ajeno
+    ("450.00 M2", "EL INMUEBLE CUENTA CON UNA SUPERFICIE TOTAL DE TERRENO DE 450.00 M2", True),
+])
+def test_cita_debe_contener_el_valor(valor, cita, acepta):
+    assert (us._verificar_cita(cita, 1, PAG_NOTARIA, valor) is not None) is acepta
+
+
+def test_respaldo_por_valor_solo_si_es_distintivo():
+    # Cita que el modelo juntó de una tabla: no calza, pero el valor largo sí está en el documento.
+    campo = us._campo(_c("1 CAJÓN / 40 M²", cita="ESTACIONAMIENTO 1 CAJÓN / 40 M² POR LOCAL"), ARCHIVO, PAG_NOTARIA)
+    assert campo.evidencia and campo.evidencia.cita == "ESTACIONAMIENTO | 1 CAJÓN / 40 M²"
+    assert campo.confianza <= us.CONF_SOLO_VALOR
+    # Número corto inventado: el único 12 es de una fecha. No debe pasar como verificado.
+    corto = us._campo(_c("12", cita="NUMERO OFICIAL 12"), ARCHIVO, PAG_NOTARIA)
+    assert corto.evidencia is None and corto.normalizado is None

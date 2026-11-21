@@ -307,12 +307,27 @@ def _limpia(s: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^A-Z0-9]", " ", base)).strip()
 
 
-def _verificar_cita(cita: Optional[str], pagina_llm: Optional[int],
-                    paginas: list[Pagina]) -> Optional[int]:
+# Respaldo por valor: solo para valores que no aparecen por casualidad (no '12' ni '2025').
+MIN_CARACTERES_VALOR_DISTINTIVO = 6
+CONF_SOLO_VALOR = 0.6
+VENTANA_VALOR = 40  # caracteres después de la cita donde puede caer el valor (el OCR corta el final)
+
+
+def _buscar(fragmento: str, texto: str) -> int:
+    """Posición de `fragmento` en `texto` (ambos ya limpios) respetando palabras completas, o -1.
+    'NOTARIA 10' no calza dentro de 'NOTARIA 101'."""
+    # Los dos espacios agregados se compensan: el índice sale sobre `texto`.
+    return f" {texto} ".find(f" {fragmento} ")
+
+
+def _verificar_cita(cita: Optional[str], pagina_llm: Optional[int], paginas: list[Pagina],
+                    valor: Optional[str] = None) -> Optional[int]:
     """Página donde aparece la cita, o None. Se prueba primero la página que dijo el LLM.
 
     Cita corta (encabezados como 'ESTADO DE MÉXICO'): tiene que aparecer completa.
     Cita larga: basta con las primeras 6 palabras, porque el OCR suele romper el final.
+    Con `valor`, además el valor tiene que estar en la cita y en el texto junto a ella: una cita
+    real con un valor inventado al final ('...SUPERFICIE TOTAL DE 999.00 M2') no pasa.
     """
     if not cita:
         return None
@@ -321,27 +336,76 @@ def _verificar_cita(cita: Optional[str], pagina_llm: Optional[int],
     if not palabras or len(limpia) < 3:
         return None
     firma = limpia if len(palabras) <= 6 else " ".join(palabras[:6])
-    orden = sorted(paginas, key=lambda p: p.numero != pagina_llm)
-    for p in orden:
-        if firma in _limpia(p.texto):
+    v = _limpia(valor) if valor else ""
+    if v and _buscar(v, limpia) < 0:
+        return None
+    for p in sorted(paginas, key=lambda p: p.numero != pagina_llm):
+        tx = _limpia(p.texto)
+        i = _buscar(firma, tx)
+        if i < 0:
+            continue
+        if not v or _buscar(v, tx[i:i + len(limpia) + VENTANA_VALOR]) >= 0:
             return p.numero
     return None
 
 
+def _plano(t: str) -> str:
+    """Mayúsculas sin acentos con la MISMA longitud que `t`, para recortar el texto original."""
+    return "".join((unicodedata.normalize("NFKD", c)[:1] or c).upper()[:1] or c for c in t)
+
+
+def _localizar_valor(valor: str, pagina_llm: Optional[int], paginas: list[Pagina]) -> Optional[tuple[int, str]]:
+    """Respaldo cuando la cita no calza (tablas que el modelo junta o corta): busca el valor solo,
+    si es distintivo. Devuelve (página, fragmento literal alrededor del valor) como evidencia."""
+    v = _limpia(valor)
+    if len(v) < MIN_CARACTERES_VALOR_DISTINTIVO or len(v.split()) < 2 and not re.search(r"[A-Z]", v):
+        return None  # corto, o un solo número: aparecería en fechas, folios o importes
+    patron = re.compile(r"(?<![A-Z0-9])" + r"[^A-Z0-9]+".join(map(re.escape, v.split())) + r"(?![A-Z0-9])")
+    for p in sorted(paginas, key=lambda p: p.numero != pagina_llm):
+        m = patron.search(_plano(p.texto))
+        if m:
+            return p.numero, _recorte(p.texto, m.start(), m.end())
+    return None
+
+
+def _recorte(texto: str, inicio: int, fin: int, antes: int = 60, despues: int = 30) -> str:
+    """Fragmento alrededor de [inicio, fin) sin salirse de la línea ni partir palabras."""
+    linea_ini = texto.rfind("\n", 0, inicio) + 1
+    linea_fin = texto.find("\n", fin)
+    linea_fin = len(texto) if linea_fin < 0 else linea_fin
+    a, b = max(linea_ini, inicio - antes), min(linea_fin, fin + despues)
+    while linea_ini < a < inicio and not texto[a - 1].isspace():
+        a += 1
+    while fin < b < linea_fin and not texto[b].isspace():
+        b -= 1
+    return re.sub(r"\s+", " ", texto[a:b]).strip(" |")
+
+
 def _campo(extraido: _CampoLLM, archivo: str, paginas: list[Pagina],
            normalizador: Callable[[Optional[str]], Optional[str]] = _upper_sin_acentos,
-           normalizado: Optional[str] = None) -> Campo:
-    """_CampoLLM -> Campo del contrato. Sin cita verificable no hay evidencia ni `normalizado`."""
+           normalizado: Optional[str] = None, exigir_valor: bool = True) -> Campo:
+    """_CampoLLM -> Campo del contrato. Sin evidencia verificable no hay evidencia ni `normalizado`.
+
+    `exigir_valor=False` para texto libre (condicionantes) que el modelo resume con sus palabras:
+    ahí basta con que la cita exista.
+    """
     if not extraido.valor or not extraido.valor.strip():
         return Campo()
     confianza = min(max(extraido.confianza, 0.0), 1.0)
-    pagina = _verificar_cita(extraido.cita, extraido.pagina, paginas)
+    valor = extraido.valor if exigir_valor else None
+    pagina = _verificar_cita(extraido.cita, extraido.pagina, paginas, valor)
+    cita = extraido.cita.strip() if pagina else None
+    if pagina is None:  # también en texto libre: el valor completo es una frase del documento
+        encontrado = _localizar_valor(extraido.valor, extraido.pagina, paginas)
+        if encontrado:
+            pagina, cita = encontrado
+            confianza = min(confianza, CONF_SOLO_VALOR)
     if pagina is None:
         return Campo(valor=extraido.valor, confianza=round(min(confianza, 0.3), 2))
     return Campo(
         valor=extraido.valor,
         normalizado=normalizado if normalizado is not None else normalizador(extraido.valor),
-        evidencia=Evidencia(archivo=archivo, pagina=pagina, cita=extraido.cita.strip()),
+        evidencia=Evidencia(archivo=archivo, pagina=pagina, cita=cita),
         confianza=round(confianza, 2),
     )
 
@@ -703,12 +767,13 @@ def _construir_datos(ex: _UsoSueloLLM, archivo: str, paginas: list[Pagina]) -> D
         "vigencia_texto": c(ex.vigencia_texto),
     }
     especificos["area_libre"] = c(ex.area_libre)
-    especificos["derechos_adquiridos"] = c(ex.derechos_adquiridos)
-    especificos["zona_protegida"] = c(ex.zona_protegida)
+    libre = lambda campo: _campo(campo, archivo, paginas, exigir_valor=False)  # noqa: E731
+    especificos["derechos_adquiridos"] = libre(ex.derechos_adquiridos)
+    especificos["zona_protegida"] = libre(ex.zona_protegida)
     for i, prohibicion in enumerate(ex.prohibiciones_giro[:5], start=1):
-        especificos[f"prohibicion_{i}"] = c(prohibicion)
+        especificos[f"prohibicion_{i}"] = libre(prohibicion)
     for i, cond in enumerate(ex.condicionantes[:8], start=1):
-        especificos[f"condicionante_{i}"] = c(cond)
+        especificos[f"condicionante_{i}"] = libre(cond)
     datos.especificos = {k: v for k, v in especificos.items() if v.valor}
     if ex.compatibilidad_comercial != _Compatibilidad.NO_DETERMINABLE:
         datos.especificos["compatibilidad_comercial"] = Campo(
