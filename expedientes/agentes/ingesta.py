@@ -44,8 +44,8 @@ from typing import Union
 import pymupdf
 from pydantic import BaseModel, Field
 
-from ..cache import guardar_cache, leer_cache, nombre_archivo
-from ..config import CACHE_DIR, DOCUMENTOS_DIR, get_callbacks, get_llm
+from ..cache import guardar_cache, leer_cache, migrar_legado, nombre_archivo, ruta_paginas
+from ..config import DOCUMENTOS_DIR, get_callbacks, get_llm
 from ..schemas import DocumentoLeido, Legibilidad, Pagina, TipoDocumento
 
 MOTOR = os.getenv("OCR_MOTOR", "llm")                # "llm" (visión) o "tesseract" (local)
@@ -59,7 +59,6 @@ LADO_MAX_PX = 1800         # resolución de la imagen que se manda a OCR
 # borrosos dan 2.3-3.1 y el documento real más bajo 8.3. Por debajo del umbral la página se
 # marca ILEGIBLE y se descarta el texto: un modelo con visión "lee" páginas borrosas inventando datos.
 UMBRAL_NITIDEZ = float(os.getenv("UMBRAL_NITIDEZ", "5.0"))
-DIR_PAGINAS = CACHE_DIR / "_paginas"
 
 
 # ---------------------------------------------------------------- lectura de una página
@@ -180,7 +179,8 @@ def clasificar_por_texto(texto: str) -> tuple[TipoDocumento, float]:
 # ---------------------------------------------------------------- checkpoints por página
 
 def _ruta_pagina(ruta: Path, indice: int, motor: str) -> Path:
-    return DIR_PAGINAS / nombre_archivo(ruta) / f"{indice + 1:04d}.{motor}.json"
+    # Por contenido (cache.ruta_paginas): un PDF distinto con el mismo nombre no reusa páginas ajenas.
+    return ruta_paginas(ruta) / f"{indice + 1:04d}.{motor}.json"
 
 
 def _guardar_pagina(ruta: Path, indice: int, motor: str, lectura: _Lectura) -> None:
@@ -333,7 +333,7 @@ def leer_documento(ruta: Path) -> DocumentoLeido:
     with ThreadPoolExecutor(max_workers=PARALELO) as pool:
         total, pendientes, nitideces = _preparar(ruta, pool, MOTOR, MAX_PAGINAS)
         doc = _ensamblar(ruta, total, _resolver(pendientes), MAX_PAGINAS, nitideces)
-    guardar_cache(doc)
+    guardar_cache(doc, ruta)
     return doc
 
 
@@ -364,10 +364,9 @@ def construir_cache(
     reintenta solo lo que falta.
     """
     rutas = listar_documentos(carpeta)
-    nombres = Counter(nombre_archivo(r) for r in rutas)
-    for nombre, n in nombres.items():
-        if n > 1:
-            print(f"AVISO: {n} archivos se llaman '{nombre}'; comparten entrada de caché.", file=sys.stderr)
+    migradas = migrar_legado()
+    if migradas:
+        print(f"{migradas} entradas del caché anterior (solo por nombre) pasaron al formato con huella.")
 
     por_hacer = [r for r in rutas if leer_cache(r) is None]
     print(f"{len(rutas)} documentos en {carpeta}; {len(rutas) - len(por_hacer)} ya en caché; "
@@ -390,7 +389,7 @@ def construir_cache(
                 print(f"  [{k}/{len(trabajos)}] ERROR {ruta.name}: {type(e).__name__}: {e}", file=sys.stderr)
                 fallidos.append(nombre_archivo(ruta))
                 continue
-            guardar_cache(doc)
+            guardar_cache(doc, ruta)
             print(f"  [{k}/{len(trabajos)}] {doc.archivo}: {doc.tipo.value} ({doc.confianza_tipo:.2f}), "
                   f"{doc.legibilidad.value}, {len(doc.paginas)}/{doc.paginas_totales} págs")
 
