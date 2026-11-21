@@ -56,7 +56,7 @@ def test_afectacion_y_vigencia_vigente():
     assert r.tipo == TipoDocumento.ALINEAMIENTO
     assert _regla(r, "ALI-02").estado == EstadoRegla.CUMPLE           # vence 09/06/2026
     afect = _regla(r, "ALI-03")
-    assert afect.estado == EstadoRegla.NO_CUMPLE and afect.severidad == Severidad.REVISION
+    assert afect.estado == EstadoRegla.NO_CUMPLE and afect.severidad == Severidad.BLOQUEANTE
     assert afect.evidencias and afect.evidencias[0].archivo == ARCHIVO
     assert _regla(r, "ALI-07").estado == EstadoRegla.CUMPLE
     assert r.datos.vigencia_hasta.normalizado == "2026-06-09"
@@ -93,7 +93,9 @@ def test_cita_inventada_baja_confianza():
     no_ver = ali.verificar_citas(ext, _doc())
     assert no_ver == ["propietario"] and ext.propietario.confianza == 0.45
     r = ali.construir(ext, _doc(), Contexto(), no_ver)
-    assert _regla(r, "ALI-EVI").estado == EstadoRegla.NO_CUMPLE
+    assert _regla(r, "ALI-EVI").estado == EstadoRegla.NO_EVALUABLE
+    assert r.datos.propietario.valor == "JUAN PÉREZ" and r.datos.propietario.normalizado is None
+    assert r.datos.direccion.normalizado  # los verificados conservan su normalizado
 
 
 def test_ilegible_no_llama_al_llm(monkeypatch):
@@ -140,3 +142,40 @@ def test_vigencia_en_dias():
     ext = _ext(vigencia_texto=_d("ESTA LICENCIA TENDRA UNA VIGENCIA DE 365 DIAS A PARTIR DE LA FECHA DE SU EXPEDICION"),
                fecha_emision=_d("5 de noviembre de 2024", normalizado="2024-11-05"))
     assert ali.calcular_vencimiento(ext) == (date(2025, 11, 5), "calculada")
+
+
+def test_respuesta_guardada_no_llama_a_la_api(tmp_path, monkeypatch):
+    monkeypatch.setattr(ali, "CACHE_DIR", tmp_path)
+    doc = _doc()
+    entrada = f"Archivo: {doc.archivo}\n\n{ali._paginas_como_texto(doc)}"
+    ruta, huella = ali._ruta_respuesta(doc, entrada)
+    vacio = {"encontrado": False, "valor": "", "normalizado": "", "pagina": 0, "cita": "", "confianza": 0}
+    resp = {n: (True if n.startswith("contiene_alineamiento") else False) if f.annotation is bool else dict(vacio)
+            for n, f in ali.ExtraccionAlineamiento.model_fields.items()}
+    resp["numero_oficial"] = {"encontrado": True, "valor": "210", "normalizado": "210", "pagina": 2,
+                              "cita": "NÚMERO OFICIAL: 210", "confianza": 0.9}
+    ruta.parent.mkdir(parents=True)
+    ruta.write_text(__import__("json").dumps({"huella": huella, "respuesta": resp}), encoding="utf-8")
+    monkeypatch.setattr(ali, "get_llm", lambda **k: (_ for _ in ()).throw(AssertionError("no debe llamar a la API")))
+    ext = ali.extraer(doc)
+    assert ext.numero_oficial.valor == "210" and ext.propietario is None
+
+
+def test_riesgos_explicitos_cfe_invasion_lotes_y_restriccion():
+    ext = _ext(afectaciones=None, superficie_afectada_m2=None,
+               infraestructura=_d("LÍNEA DE ALTA TENSIÓN DE CFE CRUZA EL PREDIO"),
+               invasion_via_publica=_d("LA BARDA INVADE LA BANQUETA"),
+               lotes_sin_fusionar=_d("LOTES 12 Y 13 SIN FUSIONAR"),
+               restricciones_construccion=_d("Restricción de construcción al frente: 3.00 m"))
+    r = ali.construir(ext, _doc(), Contexto())
+    assert _regla(r, "ALI-03").estado == EstadoRegla.CUMPLE
+    assert _regla(r, "ALI-08").severidad == Severidad.BLOQUEANTE
+    assert _regla(r, "ALI-09").severidad == Severidad.BLOQUEANTE
+    assert _regla(r, "ALI-10").severidad == Severidad.REVISION
+    assert _regla(r, "ALI-11").severidad == Severidad.INFO   # restricción no es afectación vial
+    assert all(_regla(r, i).evidencias for i in ("ALI-08", "ALI-09", "ALI-10"))
+
+
+def test_restriccion_cero_no_genera_ali11():
+    r = ali.construir(_ext(restricciones_construccion=_d("Restricción de construcción al frente: 0.00 m")), _doc(), Contexto())
+    assert not [h for h in r.hallazgos if h.id_regla == "ALI-11"]

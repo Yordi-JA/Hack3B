@@ -78,3 +78,27 @@ def test_normalizacion():
     assert str(nz.fecha("Tepeji del Rio, a 21 de ABRIL de 2025")) == "2025-04-21"
     assert cruce._dir_equiv("JOSEFA ORTIZ DE DOMINGUEZ, NUMERO 24, COL. LAZARO CARDENAS",
                             "JOSEFA ORTIZ DE DOMINGEZ, SIN NUMERO, LOTE 7, COLONIA LÁZARO CÁRDENAS")
+
+
+def test_llm_de_direcciones_tiene_tope_y_usa_disco(tmp_path, monkeypatch):
+    """Zona gris: como mucho MAX_LLM_POR_EXPEDIENTE llamadas; lo guardado en disco no cuesta."""
+    monkeypatch.setattr(cruce, "USAR_LLM", True)
+    monkeypatch.setattr(cruce, "_ruta_veredictos", lambda: tmp_path / "v.json")
+    llamadas = []
+
+    class FalsoLLM:
+        def with_structured_output(self, *a, **k):
+            return self
+
+        def invoke(self, *a, **k):
+            llamadas.append(1)
+            return cruce._Veredicto(misma_direccion=True, razon="x")
+
+    import expedientes.config as config
+    monkeypatch.setattr(config, "get_llm", lambda **k: FalsoLLM())
+    cruce._llamadas_restantes = 1
+    assert cruce._direcciones_llm("A 1", "B 2") is True
+    assert cruce._direcciones_llm("C 3", "D 4") is None       # tope agotado: sin llamada
+    cruce._direcciones_llm.cache_clear()
+    assert cruce._direcciones_llm("A 1", "B 2") is True       # sale del disco
+    assert len(llamadas) == 1

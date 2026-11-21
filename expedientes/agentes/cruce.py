@@ -20,6 +20,7 @@ Prefijo de reglas: CRU-.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -107,13 +108,40 @@ class _Veredicto(BaseModel):
     razon: str
 
 
+# Reglas de créditos del README: el LLM solo decide la zona gris, con tope por expediente
+# y respuestas guardadas en disco (misma pareja de direcciones = cero llamadas nuevas).
+MAX_LLM_POR_EXPEDIENTE = 3
+_llamadas_restantes = MAX_LLM_POR_EXPEDIENTE
+
+
+def _ruta_veredictos():
+    from ..config import CACHE_DIR
+    return CACHE_DIR / "analisis" / "cruce_direcciones.json"
+
+
+def _leer_veredictos() -> dict:
+    p = _ruta_veredictos()
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except (OSError, ValueError):
+        return {}
+
+
 @lru_cache(maxsize=256)
 def _direcciones_llm(a: str, b: str) -> Optional[bool]:
+    global _llamadas_restantes
     if not USAR_LLM:
         return None
+    clave = f"{a} || {b}"
+    guardados = _leer_veredictos()
+    if clave in guardados:
+        return guardados[clave]
+    if _llamadas_restantes <= 0:
+        return None
+    _llamadas_restantes -= 1
     try:
         from ..config import get_callbacks, get_llm
-        llm = get_llm().with_structured_output(_Veredicto, method="json_schema")
+        llm = get_llm(effort="low", max_tokens=300).with_structured_output(_Veredicto, method="json_schema")
         r = llm.invoke(
             [("system", "Eres el agente de validación cruzada de un expediente inmobiliario en México. "
                         "Decide si dos direcciones, escritas por documentos distintos, describen el mismo predio. "
@@ -122,6 +150,10 @@ def _direcciones_llm(a: str, b: str) -> Optional[bool]:
              ("human", f"Dirección A: {a}\nDirección B: {b}")],
             config={"callbacks": get_callbacks(), "run_name": "cruce:direccion"},
         )
+        guardados[clave] = r.misma_direccion
+        p = _ruta_veredictos()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(guardados, ensure_ascii=False, indent=1), encoding="utf-8")
         return r.misma_direccion
     except Exception:
         log.warning("No se pudo consultar al LLM para comparar direcciones", exc_info=True)
@@ -210,6 +242,8 @@ def _describir(campo: str, grupos: list[list[_Item]]) -> str:
 # ---------------------------------------------------------------- agente
 
 def validar_cruzado(documentos: list[DocumentoAnalizado], ctx: Contexto) -> list[Inconsistencia]:
+    global _llamadas_restantes
+    _llamadas_restantes = MAX_LLM_POR_EXPEDIENTE
     inconsistencias: list[Inconsistencia] = []
     discrepa: dict[str, set[str]] = {}  # archivo -> campos en los que está fuera del grupo mayoritario
 

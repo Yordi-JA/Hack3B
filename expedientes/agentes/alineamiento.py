@@ -15,20 +15,25 @@ afectaciones, superficie_afectada_m2, vigencia_texto, administracion.
 Alineamiento y Número Oficial pueden venir en dos archivos separados: a cada uno le faltan los
 datos del otro y esas reglas salen NO_EVALUABLE (el dictamen consolida por tipo).
 
-Prefijo de reglas: ALI-.
+Reglas: ALI-01 número oficial, 02 vigencia, 03 afectación vial (bloqueante), 04 alineamiento,
+05 identificación, 06 autoridad, 07 fechas, 08 CFE/Pemex/Conagua, 09 invasión de vía pública,
+10 lotes sin fusionar, 11 restricción de construcción (info), EVI citas, LEG legibilidad.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
 import sys
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from ..config import get_callbacks, get_llm
+from ..cache import nombre_archivo
+from ..config import CACHE_DIR, LLM_MODEL, get_callbacks, get_llm
 from ..schemas import (
     Campo,
     Contexto,
@@ -49,8 +54,13 @@ log = logging.getLogger(__name__)
 # Severidades configurables. El reto castiga descartar expedientes que sí podían continuar,
 # así que lo que se resuelve con un trámite (renovar la constancia) es REVISION, no BLOQUEANTE.
 SEVERIDAD_VENCIDA = Severidad.REVISION
-SEVERIDAD_AFECTACION = Severidad.REVISION
 SEVERIDAD_SIN_NUMERO = Severidad.REVISION
+# Criterio del equipo: afectación vial = rechazo directo. Pendiente confirmar con las guías oficiales
+# la severidad de infraestructura, invasión de vía pública y lotes sin fusionar.
+SEVERIDAD_AFECTACION = Severidad.BLOQUEANTE
+SEVERIDAD_INFRAESTRUCTURA = Severidad.BLOQUEANTE
+SEVERIDAD_INVASION = Severidad.BLOQUEANTE
+SEVERIDAD_LOTES_SIN_FUSIONAR = Severidad.REVISION
 
 
 # ---------------------------------------------------------------- salida estructurada del LLM
@@ -82,8 +92,11 @@ class ExtraccionAlineamiento(BaseModel):
     alineamiento: Optional[DatoExtraido] = Field(default=None, description="Alineamiento determinado: metros de frente, a qué vialidad, o 'correctamente alineado'")
     restricciones_construccion: Optional[DatoExtraido] = Field(default=None, description="Restricción de construcción al frente, derecho de vía, etc.")
     seccion_vial: Optional[DatoExtraido] = None
-    afectaciones: Optional[DatoExtraido] = Field(default=None, description="Afectaciones al predio (ampliación de vialidad, derecho de vía, franja no construible). null si no hay")
+    afectaciones: Optional[DatoExtraido] = Field(default=None, description="Afectación VIAL: parte del predio tomada o destinada a una vialidad (ampliación de calle, alineamiento que corta el predio). null si no hay")
     superficie_afectada_m2: Optional[DatoExtraido] = Field(default=None, description="normalizado: solo el número en m²")
+    infraestructura: Optional[DatoExtraido] = Field(default=None, description="Líneas de CFE / alta tensión, ductos de Pemex, cauces, ríos, canales o zona federal de Conagua, vías férreas, que crucen, afecten o restrinjan el predio. null si no se mencionan")
+    invasion_via_publica: Optional[DatoExtraido] = Field(default=None, description="El documento señala que el predio o la construcción invade la vía pública, banqueta o derecho de vía. null si no")
+    lotes_sin_fusionar: Optional[DatoExtraido] = Field(default=None, description="El predio está formado por varios lotes o fracciones que no están fusionados, o el documento pide fusionarlos. null si no")
 
 
 INSTRUCCIONES = """Eres el agente extractor de Constancias de Alineamiento y Número Oficial de inmuebles en México \
@@ -97,11 +110,20 @@ Reglas estrictas:
 - El documento puede ser solo de Alineamiento, solo de Número Oficial, o ambos.
 - `propietario`: la persona o empresa a cuyo favor se expide. Suele aparecer como "C. NOMBRE" justo antes de \
 "Esta Dirección en contestación a su solicitud", o en un campo "Nombre del propietario / poseedor".
-- `afectaciones`: solo si el documento dice que una parte del predio queda afectada o no se puede construir en ella: \
-"el predio presenta afectación", ampliación de calle sobre el predio, o una restricción de construcción con metros \
-MAYORES a 0 ("la restricción para este predio es de 3.00 m"). NO son afectaciones: mencionar el derecho de vía o su \
-ancho, el frente del predio al derecho de vía, una restricción de 0.00 m, títulos genéricos como "restricción por \
-derecho de vía" sin medida aplicada al predio, ni la frase "no constituye autorización".
+- `afectaciones` (afectación VIAL): solo si una parte del predio queda tomada o destinada a una vialidad: "el predio \
+presenta afectación", ampliación de calle o avenida sobre el predio, alineamiento que corta el predio. NO es afectación \
+vial: una restricción de construcción al frente ("la restricción para este predio es de 3.00 m": eso va en \
+`restricciones_construccion`), mencionar el derecho de vía o su ancho, el frente al derecho de vía, ni la frase \
+"no constituye autorización".
+- `restricciones_construccion`: los metros al frente (o laterales) donde no se puede construir, aunque vengan en \
+notas o en el croquis: "Restricción de construcción al frente: 0.00 m", "LA RESTRICCIÓN PARA ESTE PREDIO ES DE \
+3.00 MTS". Cópialo siempre que aparezca.
+- `infraestructura`: busca de forma explícita líneas de CFE o de alta tensión, ductos de Pemex, cauces, ríos, \
+canales, barrancas o zona federal de Conagua, y vías férreas que crucen, colinden o restrinjan el predio.
+- `invasion_via_publica`: solo si el documento dice que el predio o la construcción invade la vía pública, banqueta o \
+derecho de vía.
+- `lotes_sin_fusionar`: si el predio se compone de varios lotes o fracciones sin fusionar, o si el documento \
+condiciona o pide la fusión.
 - `numero_oficial`: el número asignado al predio. Si el documento no asigna número pero la dirección del predio trae \
 uno ("Josefa Ortiz de Domínguez, número 24"), usa ese con confianza menor. Si dice "sin número", "S/N" o "SN", normalizado = "SN".
 - `clave_catastral`: la clave catastral; si no hay, la cuenta predial o el número de boleta predial (ej. "U-04817").
@@ -110,7 +132,8 @@ uno ("Josefa Ortiz de Domínguez, número 24"), usa ese con confianza menor. Si 
 
 
 def _paginas_como_texto(doc: DocumentoLeido) -> str:
-    return "\n\n".join(f"=== PÁGINA {p.numero} ===\n{p.texto}" for p in doc.paginas)
+    # Regla 8 del README: solo páginas con texto (la ingesta vacía las borrosas).
+    return "\n\n".join(f"=== PÁGINA {p.numero} ===\n{p.texto}" for p in doc.paginas if p.texto.strip())
 
 
 # La salida estructurada de Claude admite como máximo 16 campos anulables por esquema. Al LLM se le
@@ -153,15 +176,31 @@ def _desde_llm(r: BaseModel) -> ExtraccionAlineamiento:
     return ExtraccionAlineamiento(**datos)
 
 
+def _ruta_respuesta(doc: DocumentoLeido, entrada: str) -> tuple[Path, str]:
+    """Caché de respuestas del LLM (regla 5 del README): misma entrada, mismo modelo, mismo prompt
+    y mismo esquema -> se reutiliza la respuesta guardada sin llamar a la API."""
+    huella = hashlib.sha256("\n".join([
+        LLM_MODEL, INSTRUCCIONES, json.dumps(_ExtraccionLLM.model_json_schema(), sort_keys=True), entrada,
+    ]).encode("utf-8")).hexdigest()[:16]
+    return CACHE_DIR / "analisis" / "alineamiento" / f"{nombre_archivo(doc.archivo)}.json", huella
+
+
 def extraer(doc: DocumentoLeido) -> ExtraccionAlineamiento:
+    entrada = f"Archivo: {doc.archivo}\n\n{_paginas_como_texto(doc)}"
+    ruta, huella = _ruta_respuesta(doc, entrada)
+    if ruta.exists():
+        guardado = json.loads(ruta.read_text(encoding="utf-8"))
+        if guardado.get("huella") == huella:
+            return _desde_llm(_ExtraccionLLM.model_validate(guardado["respuesta"]))
+
     # json_schema = salida estructurada nativa de Claude: el JSON siempre cumple el esquema.
     # El modo por defecto (tool calling) no puede forzarse en Opus 5.5 / Sonnet 5.5.
-    llm = get_llm(max_tokens=8000).with_structured_output(_ExtraccionLLM, method="json_schema")
-    mensajes = [
-        ("system", INSTRUCCIONES),
-        ("human", f"Archivo: {doc.archivo}\n\n{_paginas_como_texto(doc)}"),
-    ]
-    r = llm.invoke(mensajes, config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
+    llm = get_llm(effort="low", max_tokens=4000).with_structured_output(_ExtraccionLLM, method="json_schema")
+    r = llm.invoke([("system", INSTRUCCIONES), ("human", entrada)],
+                   config={"callbacks": get_callbacks(), "run_name": f"alineamiento:{doc.archivo}"})
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(json.dumps({"huella": huella, "modelo": LLM_MODEL, "respuesta": r.model_dump()},
+                               ensure_ascii=False, indent=2), encoding="utf-8")
     return _desde_llm(r)
 
 
@@ -297,21 +336,35 @@ def evaluar(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto) -> 
                      "El documento no indica vigencia; la del alineamiento depende de la normativa municipal.",
                      _ev(doc, ext.fecha_emision)))
 
-    # ALI-03 afectaciones
-    if ext.afectaciones:
-        sup = ext.superficie_afectada_m2
-        extra = f" Superficie afectada: {sup.valor}." if sup else ""
-        hs.append(_h("ALI-03", "El predio no tiene afectaciones", NC, SEVERIDAD_AFECTACION,
-                     f"La autoridad señala una afectación al predio: «{ext.afectaciones.valor}».{extra} "
-                     "Reduce la superficie aprovechable; revisar si la tienda cabe en la superficie restante.",
-                     _ev(doc, ext.afectaciones) + _ev(doc, sup)))
-    elif ext.contiene_alineamiento and ext.alineamiento:
-        hs.append(_h("ALI-03", "El predio no tiene afectaciones", C, Severidad.INFO,
-                     "La constancia determina el alineamiento sin señalar afectaciones.",
-                     _ev(doc, ext.alineamiento)))
-    else:
-        hs.append(_h("ALI-03", "El predio no tiene afectaciones", NE, Severidad.INFO,
-                     "Este archivo no determina alineamiento, así que no informa sobre afectaciones."))
+    # ALI-03 afectación vial (rechazo directo) y ALI-08..10: búsquedas explícitas de riesgos del predio
+    sup = ext.superficie_afectada_m2
+    extra = f" Superficie afectada: {sup.valor}." if sup else ""
+    riesgos = [
+        ("ALI-03", "El predio no tiene afectación vial", ext.afectaciones, SEVERIDAD_AFECTACION,
+         "La autoridad señala una afectación vial al predio: «{v}».%s Parte del predio queda destinada a vialidad." % extra,
+         _ev(doc, sup)),
+        ("ALI-08", "Sin líneas de CFE, ductos de Pemex, cauces de Conagua ni vías férreas", ext.infraestructura,
+         SEVERIDAD_INFRAESTRUCTURA,
+         "El documento señala infraestructura o zona federal que afecta o restringe el predio: «{v}». "
+         "Implica franjas no construibles y permisos federales.", []),
+        ("ALI-09", "El predio no invade la vía pública", ext.invasion_via_publica, SEVERIDAD_INVASION,
+         "El documento señala invasión de la vía pública: «{v}».", []),
+        ("ALI-10", "El predio no se compone de lotes sin fusionar", ext.lotes_sin_fusionar, SEVERIDAD_LOTES_SIN_FUSIONAR,
+         "El predio se compone de lotes o fracciones sin fusionar: «{v}». Se requiere el trámite de fusión.", []),
+    ]
+    for id_regla, desc, dato, severidad, plantilla, ev_extra in riesgos:
+        if dato:
+            hs.append(_h(id_regla, desc, NC, severidad, plantilla.format(v=dato.valor), _ev(doc, dato) + ev_extra))
+        elif ext.contiene_alineamiento and ext.alineamiento:
+            hs.append(_h(id_regla, desc, C, Severidad.INFO,
+                         "La constancia de alineamiento no lo señala.", _ev(doc, ext.alineamiento)))
+        else:
+            hs.append(_h(id_regla, desc, NE, Severidad.INFO,
+                         "Este archivo no determina alineamiento, así que no informa sobre esto."))
+    if ext.restricciones_construccion and (m := nz.superficie(ext.restricciones_construccion.valor)) and m > 0:
+        hs.append(_h("ALI-11", "Restricción de construcción al frente", C, Severidad.INFO,
+                     f"Restricción de construcción: «{ext.restricciones_construccion.valor}». No es afectación vial, "
+                     "pero reduce el área construible.", _ev(doc, ext.restricciones_construccion)))
 
     # ALI-04 alineamiento determinado
     if ext.alineamiento:
@@ -410,16 +463,27 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
         especificos={
             k: _campo(doc, getattr(ext, k))
             for k in ("folio", "alineamiento", "restricciones_construccion", "seccion_vial", "afectaciones",
-                      "superficie_afectada_m2", "vigencia_texto", "administracion")
+                      "superficie_afectada_m2", "infraestructura", "invasion_via_publica", "lotes_sin_fusionar",
+                      "vigencia_texto", "administracion")
             if getattr(ext, k) is not None
         },
     )
+    # Dato con cita no verificada: se conserva para mostrarlo, pero sin `normalizado`, así cruce
+    # no compara datos posiblemente inventados (contrato: cruce ignora normalizado vacío).
+    for n in no_verificados or []:
+        c = getattr(datos, n, None) if n in DatosInmueble.model_fields else datos.especificos.get(n)
+        if c is None and n in ("vigencia_hasta", "vigencia_texto"):
+            c = datos.vigencia_hasta
+        if isinstance(c, Campo):
+            c.normalizado = None
+
     hallazgos = evaluar(ext, doc, ctx)
     if no_verificados:
-        hallazgos.append(_h("ALI-EVI", "Las citas de los datos extraídos están en el documento", EstadoRegla.NO_CUMPLE,
+        hallazgos.append(_h("ALI-EVI", "Las citas de los datos extraídos están en el documento", EstadoRegla.NO_EVALUABLE,
                             Severidad.REVISION,
                             f"No se encontró en el texto la cita de: {', '.join(no_verificados)}. "
-                            "Esos datos tienen confianza reducida; confirmarlos contra el original."))
+                            "Esos datos tienen confianza reducida y no se usan en la validación cruzada; "
+                            "confirmarlos contra el original."))
     if doc.legibilidad == Legibilidad.PARCIAL:
         # Solo pide revisión si la ilegibilidad se comió datos clave; si no, es una nota (evita falsas alarmas).
         faltan = [n for n, d in (("propietario", ext.propietario), ("dirección", ext.direccion),
@@ -427,7 +491,7 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
         if not (ext.numero_oficial or ext.alineamiento):
             faltan.append("número oficial o alineamiento")
         if faltan:
-            hallazgos.append(_h("ALI-LEG", "Documento legible", EstadoRegla.NO_CUMPLE, Severidad.REVISION,
+            hallazgos.append(_h("ALI-LEG", "Documento legible", EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                                 f"El documento es parcialmente legible y no se pudo extraer: {', '.join(faltan)}."))
         else:
             hallazgos.append(_h("ALI-LEG", "Documento legible", EstadoRegla.CUMPLE, Severidad.INFO,
@@ -446,7 +510,7 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
 
 
 def analizar(doc: DocumentoLeido, ctx: Contexto) -> DocumentoAnalizado:
-    if doc.legibilidad == Legibilidad.ILEGIBLE:
+    if doc.legibilidad == Legibilidad.ILEGIBLE or not any(p.texto.strip() for p in doc.paginas):
         return _vacio(doc, [_h("ALI-LEG", "Documento legible", EstadoRegla.NO_EVALUABLE, Severidad.REVISION,
                                "La constancia es ilegible: no se extrajo ningún dato para no inventar información. "
                                "Solicitar una copia legible.")])
