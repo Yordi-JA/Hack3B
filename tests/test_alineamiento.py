@@ -124,3 +124,13 @@ def test_evaluador_compara_campos():
     verdad["numero_oficial"] = "28"
     res = comparar(verdad, r)
     assert res["superficie_m2"]["estado"] == "distinto" and res["numero_oficial"]["estado"] == "faltó"
+
+
+def test_entidad_y_municipio():
+    assert ali.entidad("Edo. Méx.") == "MEXICO"
+    assert ali.entidad("Estado Libre y Soberano de Hidalgo") == "HIDALGO"
+    assert ali.entidad("Hgo.") == "HIDALGO"
+    ext = _ext(municipio=_d("Ocotlán de las Torres"), entidad_federativa=_d("Estado de México"))
+    r = ali.construir(ext, _doc(), Contexto())
+    assert r.datos.municipio.normalizado == "OCOTLAN DE LAS TORRES"
+    assert r.datos.entidad_federativa.normalizado == "MEXICO"

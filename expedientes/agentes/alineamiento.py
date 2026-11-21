@@ -68,6 +68,8 @@ class ExtraccionAlineamiento(BaseModel):
     contiene_numero_oficial: bool = Field(description="El documento asigna o consigna un número oficial")
     propietario: Optional[DatoExtraido] = Field(default=None, description="Propietario, poseedor o solicitante a cuyo favor se expide")
     direccion: Optional[DatoExtraido] = Field(default=None, description="Calle, número, colonia, municipio y estado del predio")
+    municipio: Optional[DatoExtraido] = Field(default=None, description="Municipio del predio. Si no viene en la dirección, el del ayuntamiento que expide. normalizado: mayúsculas sin acentos")
+    entidad_federativa: Optional[DatoExtraido] = Field(default=None, description="Estado del predio. Puede venir solo en encabezado, sello, lugar y fecha o texto legal: búscalo en todo el documento. normalizado: 'HIDALGO', 'MEXICO' (Estado de México), etc.")
     superficie_terreno_m2: Optional[DatoExtraido] = Field(default=None, description="Superficie del predio. normalizado: solo el número en m², punto decimal")
     clave_catastral: Optional[DatoExtraido] = Field(default=None, description="Clave catastral o cuenta predial. normalizado: solo dígitos")
     numero_oficial: Optional[DatoExtraido] = Field(default=None, description="Número oficial asignado. normalizado: '28', '104A' o 'SN' si dice sin número")
@@ -308,6 +310,20 @@ def evaluar(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto) -> 
 
 # ---------------------------------------------------------------- agente
 
+def entidad(s: Optional[str]) -> Optional[str]:
+    """'Edo. Méx.', 'Estado de México' -> 'MEXICO'; 'Hgo.' -> 'HIDALGO' (formato del contrato)."""
+    t = nz.texto(s)
+    if not t:
+        return None
+    if re.search(r"\bHGO\b|HIDALGO", t):
+        return "HIDALGO"
+    if re.search(r"CIUDAD DE MEXICO|\bCDMX\b", t):
+        return "CIUDAD DE MEXICO"
+    if re.search(r"\bMEX\b|MEXICO", t):
+        return "MEXICO"
+    return re.sub(r"^(ESTADO|EDO)( LIBRE Y SOBERANO)? DE ", "", t)
+
+
 def _vacio(doc: DocumentoLeido, hallazgos: list[Hallazgo]) -> DocumentoAnalizado:
     return DocumentoAnalizado(
         archivo=doc.archivo, tipo=TipoDocumento.ALINEAMIENTO, confianza_tipo=doc.confianza_tipo,
@@ -329,6 +345,9 @@ def construir(ext: ExtraccionAlineamiento, doc: DocumentoLeido, ctx: Contexto,
     datos = DatosInmueble(
         propietario=_campo(doc, ext.propietario, ext.propietario and nz.texto(ext.propietario.valor)),
         direccion=_campo(doc, ext.direccion, ext.direccion and nz.texto(ext.direccion.normalizado or ext.direccion.valor)),
+        municipio=_campo(doc, ext.municipio, ext.municipio and nz.texto(ext.municipio.normalizado or ext.municipio.valor)),
+        entidad_federativa=_campo(doc, ext.entidad_federativa, ext.entidad_federativa and entidad(
+            ext.entidad_federativa.normalizado or ext.entidad_federativa.valor)),
         superficie_terreno_m2=_campo(doc, ext.superficie_terreno_m2, f"{sup:.2f}" if sup else None),
         clave_catastral=_campo(doc, ext.clave_catastral, clave or None),
         numero_oficial=_campo(doc, ext.numero_oficial, ext.numero_oficial and nz.numero_oficial(
