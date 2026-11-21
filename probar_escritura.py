@@ -1,17 +1,18 @@
-"""Script de prueba del agente escritura.py contra un PDF real.
+"""Script de prueba del agente escritura.py contra un PDF o un caché OCR.
 
 Uso:
-    python probar_escritura.py <ruta_al_pdf>
+    python probar_escritura.py <ruta_al_pdf_o_json>
 
-Ejemplo:
-    python probar_escritura.py "..\Escrituras\Escritura\01 Escritura.pdf"
+Si el argumento es un PDF:
+    1. Si existe el JSON cacheado por la ingesta de Julián, lo usa (ideal
+       porque trae el OCR por visión de todas las páginas).
+    2. Si no, cae a pymupdf con la capa de texto nativa (solo sirve para
+       los 5 PDFs del set que tienen texto seleccionable).
 
-Lee el PDF con pymupdf, construye un DocumentoLeido sintético (lo que
-normalmente hace la ingesta de Julián) y llama al agente para ver:
+Si el argumento es un .json: lo carga directo como DocumentoLeido.
 
-- Datos extraídos con sus citas y páginas
-- 7 hallazgos ESC-01..ESC-07
-- Confianza global del análisis
+Imprime datos extraídos con evidencias, los 7 hallazgos ESC-01..ESC-07
+y la confianza global. Flag --json vuelca el objeto completo.
 
 Requiere ANTHROPIC_API_KEY en .env y `pip install -r requirements.txt`.
 """
@@ -22,10 +23,11 @@ import json
 import sys
 from pathlib import Path
 
-import fitz  # pymupdf
+import pymupdf  # el nombre moderno del antiguo `fitz`
 
 from expedientes.agentes import escritura
-from expedientes.cache import nombre_archivo
+from expedientes.cache import leer_cache, nombre_archivo
+from expedientes.config import CACHE_DIR
 from expedientes.schemas import (
     Contexto,
     DocumentoLeido,
@@ -35,6 +37,11 @@ from expedientes.schemas import (
 )
 
 
+def cargar_json(ruta: Path) -> DocumentoLeido:
+    """Carga un DocumentoLeido desde un JSON (cache o export manual)."""
+    return DocumentoLeido.model_validate_json(ruta.read_text(encoding="utf-8"))
+
+
 def leer_pdf_a_documento(ruta: Path) -> DocumentoLeido:
     """Mini ingesta sin OCR: usa solo la capa de texto del PDF.
 
@@ -42,7 +49,7 @@ def leer_pdf_a_documento(ruta: Path) -> DocumentoLeido:
     (unos 5 de 62 del set). Para los escaneos habrá que esperar la
     ingesta real de Julián con visión + OCR.
     """
-    doc = fitz.open(ruta)
+    doc = pymupdf.open(ruta)
     paginas: list[Pagina] = []
     for i, pagina in enumerate(doc, start=1):
         texto = pagina.get_text() or ""
@@ -62,6 +69,24 @@ def leer_pdf_a_documento(ruta: Path) -> DocumentoLeido:
         paginas_totales=total,
         notas=None if hay_texto else "Sin capa de texto; se marcó ILEGIBLE (necesita OCR real)",
     )
+
+
+def resolver_documento(ruta: Path) -> tuple[DocumentoLeido, str]:
+    """Devuelve (doc, origen) donde origen es 'cache', 'cache-json' o 'pdf-local'.
+
+    Prioridad:
+      1. Si la ruta es un .json -> cargarlo directo.
+      2. Si la ruta es un .pdf y existe su JSON en CACHE_DIR -> usar el caché.
+      3. Caer a pymupdf sobre la capa de texto nativa del PDF.
+    """
+    if ruta.suffix.lower() == ".json":
+        return cargar_json(ruta), "cache-json"
+
+    doc = leer_cache(ruta.name)
+    if doc is not None:
+        return doc, "cache"
+
+    return leer_pdf_a_documento(ruta), "pdf-local"
 
 
 def imprimir_resultado(resultado) -> None:
@@ -122,16 +147,22 @@ def main() -> int:
         print(f"[ERROR] No existe el archivo: {args.pdf}", file=sys.stderr)
         return 2
 
-    print(f"Leyendo PDF: {args.pdf}")
-    doc = leer_pdf_a_documento(args.pdf)
+    print(f"Leyendo: {args.pdf}")
+    print(f"CACHE_DIR configurado: {CACHE_DIR}")
+    doc, origen = resolver_documento(args.pdf)
+    etiqueta = {
+        "cache": "caché OCR del equipo (recomendado)",
+        "cache-json": "JSON directo",
+        "pdf-local": "pymupdf con capa de texto nativa del PDF",
+    }[origen]
+    print(f"  fuente: {etiqueta}")
     print(f"  {doc.paginas_totales} páginas, legibilidad {doc.legibilidad.value}")
     if doc.notas:
         print(f"  ⚠ {doc.notas}")
 
     if doc.legibilidad == Legibilidad.ILEGIBLE:
-        print("\n[AVISO] El PDF no tiene capa de texto. Este script sin OCR no puede extraer nada.")
-        print("        Espera la ingesta de Julián con visión + OCR, o adapta este script.")
-        return 1
+        print("\n[AVISO] Documento ILEGIBLE. El agente no intentará extraer para no inventar.")
+        print("        Se emitirá un único hallazgo ESC-ILEG.")
 
     print("\nLlamando al agente (requiere ANTHROPIC_API_KEY en .env)...")
     resultado = escritura.analizar(doc, Contexto())

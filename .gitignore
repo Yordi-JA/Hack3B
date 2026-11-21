@@ -6,6 +6,9 @@ reto/
 __MACOSX/
 # Texto OCR cacheado: es contenido de los documentos, tampoco se sube.
 cache/
+# Respuestas crudas del LLM por archivo (debug): contienen datos extraídos de los
+# documentos del reto, no se suben (regla 06).
+cache_respuestas/
 *.pdf
 *.docx
 *.doc
