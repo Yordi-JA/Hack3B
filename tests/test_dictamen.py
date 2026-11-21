@@ -47,11 +47,26 @@ def test_todo_cumple():
     assert d.confianza == 0.9
 
 
-def test_un_bloqueante_no_cumple():
+def test_un_bloqueante_pide_revision_y_no_rechaza():
+    """Criterio del equipo: solo la abogada rechaza. Un bloqueante queda primero como posible motivo."""
     docs = _expediente(_doc(T.USO_SUELO, _h("USO-02", E.NO_CUMPLE, S.BLOQUEANTE), archivo="uso2.pdf"))
     d = _dictaminar(docs)
-    assert d.recomendacion == Recomendacion.NO_CUMPLE
-    assert "bloqueante" in d.razones[0]
+    assert d.recomendacion == Recomendacion.REQUIERE_REVISION
+    assert "posible motivo de rechazo" in d.razones[0]
+    assert "La decisión de rechazar es del equipo legal" in d.resumen
+
+
+def test_rechazo_automatico_solo_si_se_habilita(monkeypatch):
+    monkeypatch.setattr(dt, "PERMITIR_RECHAZO_AUTOMATICO", True)
+    docs = _expediente(_doc(T.USO_SUELO, _h("USO-02", E.NO_CUMPLE, S.BLOQUEANTE), archivo="uso2.pdf"))
+    d = _dictaminar(docs)
+    assert d.recomendacion == Recomendacion.NO_CUMPLE and "bloqueante" in d.razones[0]
+
+
+def test_el_sistema_nunca_recomienda_no_cumple():
+    docs = _expediente(_doc(T.USO_SUELO, _h("USO-01", E.NO_CUMPLE, S.BLOQUEANTE), _h("USO-02", E.NO_CUMPLE, S.BLOQUEANTE),
+                            archivo="uso2.pdf"))
+    assert _dictaminar(docs, faltantes=[T.PREDIAL]).recomendacion != Recomendacion.NO_CUMPLE
 
 
 def test_revision_y_faltante_piden_revision():
@@ -74,7 +89,7 @@ def test_consolida_por_tipo_alineamiento_en_dos_archivos():
 def test_bloqueante_de_un_archivo_no_lo_tapa_otro_tipo():
     docs = _expediente(_doc(T.PREDIAL, _h("USO-02"), archivo="otro.pdf"),
                        _doc(T.USO_SUELO, _h("USO-02", E.NO_CUMPLE, S.BLOQUEANTE), archivo="uso2.pdf"))
-    assert _dictaminar(docs).recomendacion == Recomendacion.NO_CUMPLE
+    assert _dictaminar(docs).recomendacion == Recomendacion.REQUIERE_REVISION  # el bloqueante no se pierde
 
 
 def test_ilegible_genera_exp02():

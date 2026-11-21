@@ -8,7 +8,10 @@ Decisión:
 1. Consolidar por tipo (contrato): si un archivo de un tipo CUMPLE una regla, los NO_CUMPLE /
    NO_EVALUABLE de esa misma regla en otros archivos del mismo tipo no cuentan. Caso típico:
    Alineamiento y Número Oficial en dos archivos, a cada uno le faltan los datos del otro.
-2. Cualquier hallazgo o inconsistencia BLOQUEANTE que no se cumple -> No cumple.
+2. El sistema NO rechaza: solo la abogada puede marcar un expediente como rechazado. Un hallazgo o
+   inconsistencia BLOQUEANTE se reporta como "posible motivo de rechazo" (primero en las razones) y
+   el expediente queda en Requiere revisión. `PERMITIR_RECHAZO_AUTOMATICO = True` devuelve el
+   comportamiento anterior (BLOQUEANTE -> No cumple).
 3. Faltantes, ilegibles o cualquier hallazgo / inconsistencia de severidad REVISION -> Requiere revisión.
 4. Todo lo demás -> Cumple.
 
@@ -59,6 +62,10 @@ _RANGO_ESTADO = {EstadoRegla.CUMPLE: 0, EstadoRegla.NO_EVALUABLE: 1, EstadoRegla
 
 
 # ---------------------------------------------------------------- consolidación
+
+# Criterio del equipo: solo la persona usuaria rechaza. El sistema, como mucho, pide revisión.
+PERMITIR_RECHAZO_AUTOMATICO = False
+
 
 def consolidar(documentos: list[DocumentoAnalizado]) -> list[tuple[DocumentoAnalizado, Hallazgo]]:
     """Hallazgos que cuentan para la decisión, con el documento de donde salen.
@@ -192,16 +199,17 @@ def dictaminar(
     revision = [(d, h) for d, h in vigentes if _cuenta_para_revision(h)]
     rev_cruce = [i for i in inconsistencias if i.severidad == Severidad.REVISION]
 
-    if bloqueantes or bloq_cruce:
+    if (bloqueantes or bloq_cruce) and PERMITIR_RECHAZO_AUTOMATICO:
         recomendacion = Recomendacion.NO_CUMPLE
-    elif revision or rev_cruce or faltantes:
+    elif bloqueantes or bloq_cruce or revision or rev_cruce or faltantes:
         recomendacion = Recomendacion.REQUIERE_REVISION
     else:
         recomendacion = Recomendacion.CUMPLE
 
     razones: list[str] = []
-    razones += [f"{_razon(d, h)} (bloqueante)" for d, h in bloqueantes]
-    razones += [f"{i.descripcion} (bloqueante)" for i in bloq_cruce]
+    etiqueta = "bloqueante" if PERMITIR_RECHAZO_AUTOMATICO else "posible motivo de rechazo"
+    razones += [f"{_razon(d, h)} ({etiqueta})" for d, h in bloqueantes]
+    razones += [f"{i.descripcion} ({etiqueta})" for i in bloq_cruce]
     razones += [_razon(d, h) for d, h in revision]
     for i in rev_cruce:
         accion = accion_inconsistencia(i)
@@ -218,8 +226,14 @@ def dictaminar(
     if recomendacion == Recomendacion.NO_CUMPLE:
         partes.append(f"No cumple por {len(bloqueantes) + len(bloq_cruce)} motivo(s) de rechazo directo: "
                       + "; ".join(h.descripcion.lower() for _, h in bloqueantes[:3]) + ".")
+    elif bloqueantes or bloq_cruce:
+        n_bloq, n_rev = len(bloqueantes) + len(bloq_cruce), len(revision) + len(rev_cruce)
+        partes.append(f"Requiere revisión: hay {n_bloq} posible(s) motivo(s) de rechazo que la abogada debe "
+                      "confirmar: " + "; ".join(h.descripcion.lower() for _, h in bloqueantes[:3])
+                      + (f"; además, {n_rev} punto(s) más por revisar." if n_rev else ".")
+                      + " La decisión de rechazar es del equipo legal.")
     elif recomendacion == Recomendacion.REQUIERE_REVISION:
-        partes.append("No hay motivos de rechazo directo, pero el equipo legal debe revisar "
+        partes.append("No hay posibles motivos de rechazo, pero el equipo legal debe revisar "
                       f"{len(revision) + len(rev_cruce)} punto(s) antes de continuar.")
     else:
         partes.append("Cumple todos los requisitos evaluados y los documentos corresponden al mismo inmueble.")
