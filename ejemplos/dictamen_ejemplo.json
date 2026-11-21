@@ -21,6 +21,18 @@
           "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "inmueble ubicado en Calle Nogal de los Olmos No. 214, Col. Jardines del Lago"},
           "confianza": 0.93
         },
+        "entidad_federativa": {
+          "valor": "Estado de México",
+          "normalizado": "MEXICO",
+          "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "ESTADO DE MÉXICO"},
+          "confianza": 0.9
+        },
+        "municipio": {
+          "valor": "Tlalmanalco",
+          "normalizado": "TLALMANALCO",
+          "evidencia": {"archivo": "01 Escritura DEMO.pdf", "pagina": 1, "cita": "en el Municipio de San Andrés Tlalmanalco, Estado de México"},
+          "confianza": 0.9
+        },
         "superficie_terreno_m2": {
           "valor": "450.00 metros cuadrados",
           "normalizado": "450.00",
@@ -62,6 +74,8 @@
       "datos": {
         "propietario": {"valor": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "PROPIETARIO / POSEEDOR MENDEZ SALAZAR CLAUDIA ALEJANDRA"}, "confianza": 0.97},
         "direccion": {"valor": "NOGAL DE LOS OLMOS 214, COL. JARDINES DEL LAGO", "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "UBICACIÓN NOGAL DE LOS OLMOS 214, COL. JARDINES DEL LAGO"}, "confianza": 0.95},
+        "entidad_federativa": {"valor": "Estado de México", "normalizado": "MEXICO", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "GOBIERNO DEL ESTADO DE MÉXICO"}, "confianza": 0.9},
+        "municipio": {"valor": "Tlalmanalco", "normalizado": "TLALMANALCO", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "TESORERÍA MUNICIPAL DE SAN ANDRÉS TLALMANALCO"}, "confianza": 0.9},
         "superficie_terreno_m2": {"valor": "432.00", "normalizado": "432.00", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "SUPERFICIE TERRENO (M²) 432.00"}, "confianza": 0.96},
         "clave_catastral": {"valor": "061 18 134 09 00 0000", "normalizado": "0611813409000000", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "CLAVE CATASTRAL 061 18 134 09 00 0000"}, "confianza": 0.98},
         "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "02 Predial DEMO.pdf", "pagina": 1, "cita": "NOGAL DE LOS OLMOS 214"}, "confianza": 0.9},
@@ -93,6 +107,8 @@
       "datos": {
         "propietario": {"valor": "C. CLAUDIA ALEJANDRA MÉNDEZ SALAZAR", "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "C. CLAUDIA ALEJANDRA MÉNDEZ SALAZAR: Esta Dirección"}, "confianza": 0.9},
         "direccion": {"valor": "Calle Nogal de los Olmos No. 214, Col. Jardines del Lago", "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "con ubicación en Calle Nogal de los Olmos No. 214"}, "confianza": 0.9},
+        "entidad_federativa": {"valor": "Estado de México", "normalizado": "MEXICO", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "ESTADO DE MÉXICO"}, "confianza": 0.9},
+        "municipio": {"valor": "Tlalmanalco", "normalizado": "TLALMANALCO", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "H. AYUNTAMIENTO DE SAN ANDRÉS TLALMANALCO"}, "confianza": 0.9},
         "superficie_terreno_m2": {"valor": "450.00 m²", "normalizado": "450.00", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "SUP. 450.00 m²"}, "confianza": 0.85},
         "clave_catastral": {"valor": "061 18 134 09 00 0000", "normalizado": "0611813409000000", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "CLAVE CATASTRAL: 061 18 134 09 00 0000"}, "confianza": 0.88},
         "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "03 Alineamiento DEMO.pdf", "pagina": 1, "cita": "NÚMERO OFICIAL ASIGNADO: 214"}, "confianza": 0.9},
@@ -131,6 +147,8 @@
       "datos": {
         "propietario": {"valor": "CLAUDIA ALEJANDRA MÉNDEZ SALAZAR", "normalizado": "MENDEZ SALAZAR CLAUDIA ALEJANDRA", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "NOMBRE CLAUDIA ALEJANDRA MÉNDEZ SALAZAR"}, "confianza": 0.96},
         "direccion": {"valor": "Calle Nogal de los Olmos No. 214, Col. Jardines del Lago", "normalizado": "CALLE NOGAL DE LOS OLMOS 214, JARDINES DEL LAGO, SAN ANDRES TLALMANALCO, MEX", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "DOMICILIO Calle Nogal de los Olmos No. 214, Col. Jardines del Lago"}, "confianza": 0.95},
+        "entidad_federativa": {"valor": "Estado de México", "normalizado": "MEXICO", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "ESTADO DE MÉXICO"}, "confianza": 0.9},
+        "municipio": {"valor": "Tlalmanalco", "normalizado": "TLALMANALCO", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "MUNICIPIO DE SAN ANDRÉS TLALMANALCO"}, "confianza": 0.9},
         "superficie_terreno_m2": {"valor": "450.00 m²", "normalizado": "450.00", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "SUPERFICIE DEL PREDIO 450.00 m²"}, "confianza": 0.96},
         "clave_catastral": {"valor": "061 18 134 09 00 0000", "normalizado": "0611813409000000", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "CLAVE CATASTRAL 061 18 134 09 00 0000"}, "confianza": 0.97},
         "numero_oficial": {"valor": "214", "normalizado": "214", "evidencia": {"archivo": "04 Uso de Suelo DEMO.pdf", "pagina": 1, "cita": "No. 214"}, "confianza": 0.9},
