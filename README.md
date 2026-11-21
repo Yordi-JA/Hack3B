@@ -16,7 +16,7 @@ Que cada responsable la resuelva, la anote aquí y avise en el grupo.
 | 4 | UI en Streamlit (llama directo a `analizar_expediente`, sin API). | Yordi | 10:15 | Propuesto |
 | 5 | Guías y criterios oficiales por tipo: ¿dónde están? Sin ellas las reglas son suposiciones. | Todos | Ya | Pendiente |
 | 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | Pendiente |
-| 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | Pendiente |
+| 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | **Resuelta**: 2 % o 1 m², la mayor (`cruce.TOLERANCIA_SUP_*`). Más que eso es `CRU-SUP` con severidad revisión. |
 
 Nota sobre el LLM: 57 de 62 PDFs son escaneos, así que el modelo tiene que tener visión. Cambiar de proveedor es cambiar `LLM_PROVIDER` y `LLM_MODEL` en el `.env` (`expedientes/config.py`). Una key nueva tiene límites bajos por minuto: el OCR masivo debe correr con 5-10 llamadas en paralelo como máximo.
 
