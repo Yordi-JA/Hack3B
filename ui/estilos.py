@@ -422,7 +422,21 @@ h2.lista-titulo small {{ font-family: var(--f-texto); font-size: 13px; font-weig
 .tour-texto {{ font-size: 15px; line-height: 1.5; color: var(--texto); margin: 0 0 6px; }}
 .tour-ir {{ display: inline-block; font-size: 14px; font-weight: 700; color: var(--rojo-osc); text-decoration: none; margin: 0 0 8px; }}
 
+/* Vista de un estado: indicadores 2 x 2 a la izquierda y su ubicación a la derecha. */
+.estado-resumen {{ display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 24px; align-items: stretch;
+  margin: 26px 0 10px; }}
+.estado-kpis .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; height: 100%; }}
+a.kpi.kpi-activo {{ border-color: var(--rojo-osc); box-shadow: inset 0 0 0 2px var(--rojo-osc); }}
+.estado-mapa {{ position: relative; margin: 0; border: 2px solid var(--tinta); border-radius: 6px; padding: 26px 16px 14px;
+  display: flex; align-items: center; justify-content: center; }}
+.estado-mapa figcaption {{ position: absolute; top: 0; left: 14px; transform: translateY(-55%); background: var(--panel);
+  padding: 0 10px; font-family: var(--f-titular); font-weight: 900; font-size: 18px; line-height: 1; color: var(--tinta);
+  text-transform: uppercase; }}
+.estado-mapa svg {{ width: 100%; max-height: 300px; }}
+.st-key-estado-volver button {{ border: 2px solid var(--tinta); border-radius: 6px; }}
+
 @media (max-width: 1100px) {{
+  .estado-resumen {{ grid-template-columns: 1fr; }}
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
   .mx-ventana {{ width: 220px; }}
 }}

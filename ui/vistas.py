@@ -100,7 +100,7 @@ def barra_lateral(vista: str, abierto: Optional[store.Entrada]) -> None:
         html('<div class="lateral-grupo">Principal</div>')
         st.button(
             "Inicio", key="nav-bandeja", on_click=ir, args=("bandeja",), icon=":material/home:",
-            type="primary" if vista == "bandeja" else "secondary", width="stretch",
+            type="primary" if vista in ("bandeja", "estado") else "secondary", width="stretch",
         )
         st.button(
             "Subir expediente", key="nav-nuevo", on_click=ir, args=("nuevo",), icon=":material/upload_file:",
@@ -220,6 +220,57 @@ def vista_bandeja(entradas: list[store.Entrada], invalidos: list[store.ArchivoIn
             html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
 
     tour.mostrar(html)
+
+
+# ------------------------------------------------------------------ vista de un estado
+#
+# Se llega desde "Ver expedientes del estado" en la ventana del mapa: todo lo del estado en una
+# sola pantalla (indicadores, ubicación y expedientes), sin bajar por el inicio.
+
+def vista_estado(entradas: list[store.Entrada], clave: Optional[str]) -> None:
+    ej = st.query_params.get("ej") != "0"
+    del_estado = [e for e in entradas if (ej or not e.es_ejemplo) and L.coincide(e.dictamen, clave or None, None, "")]
+    nombre = mapa.nombre_entidad(clave) if clave else "Sin estado"
+
+    st.button("Volver al inicio", key="estado-volver", on_click=_volver_inicio, args=(clave,), icon=":material/arrow_back:")
+    html(C.encabezado(f"Expedientes en {nombre}", "Todo lo del estado en una sola vista: indicadores, ubicación y expedientes."))
+    if not del_estado:
+        st.info("Este estado no tiene expedientes.")
+        return
+
+    ind = L.indicadores([(e.dictamen, e.es_ejemplo) for e in del_estado])
+    rec = st.query_params.get("rec")
+    rec = rec if rec in {r.value for r in Recomendacion} else None
+    params = {"vista": "estado", "entidad": clave or "", "ej": st.query_params.get("ej", "")}
+    conteo = L.conteo_por_entidad(e.dictamen for e in del_estado).get(clave)
+    color = t_estado(conteo.predominante if conteo else None)
+
+    with st.container(key="estado-resumen"):
+        html(C.resumen_estado(ind, params, mapa.svg_detalle(clave, color), nombre, rec))
+
+    filtrados = [e for e in del_estado if not rec or e.dictamen.recomendacion == Recomendacion(rec)]
+    filtrados.sort(key=lambda e: L.orden_bandeja(e.dictamen))
+    filtro = f" · {rec}" if rec else ""
+    html(f'<h2 class="lista-titulo">Expedientes{C.txt(filtro)} <small>{len(filtrados)}</small></h2>')
+    if filtrados:
+        html(C.lista_expedientes((e.clave, e.dictamen, e.es_ejemplo) for e in filtrados))
+    else:
+        st.info("Ningún expediente de este estado con esa recomendación.")
+
+
+def t_estado(rec: Optional[Recomendacion]) -> str:
+    from . import tokens
+    return tokens.ESTADO[rec].mapa if rec else tokens.MAPA_VACIO
+
+
+def _volver_inicio(clave: Optional[str]) -> None:
+    """Regresa al inicio con el estado seleccionado, para que su ventana siga abierta en el mapa."""
+    params = {k: st.query_params[k] for k in ("ej",) if k in st.query_params}
+    params["vista"] = "bandeja"
+    if clave:
+        params["entidad"] = clave
+        st.session_state["f_entidad"] = clave
+    st.query_params.from_dict(params)
 
 
 def _quitar_filtros() -> None:
@@ -497,7 +548,7 @@ def main() -> None:
     trabajos.motor()  # deja listos el ejecutor y el log a consola desde la primera visita
     entradas, invalidos = cargar()
     vista = st.query_params.get("vista", "bandeja")
-    if vista not in ("bandeja", "nuevo", "detalle"):
+    if vista not in ("bandeja", "nuevo", "detalle", "estado"):
         vista = "bandeja"
     abierto = store.buscar(entradas, st.query_params.get("exp"))
     barra_lateral(vista, abierto)
@@ -505,5 +556,7 @@ def main() -> None:
         vista_nuevo()
     elif vista == "detalle":
         vista_detalle(abierto)
+    elif vista == "estado":
+        vista_estado(entradas, st.query_params.get("entidad"))
     else:
         vista_bandeja(entradas, invalidos)

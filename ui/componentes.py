@@ -182,8 +182,9 @@ def _pct_entero(parte: int, total: int) -> str:
     return f"{round(100 * parte / total)} %" if total else "0 %"
 
 
-def kpis_bandeja(ind: L.Indicadores, params: dict[str, str]) -> str:
-    """4 tarjetas: total y una por recomendación. Cada una filtra la bandeja al hacer clic."""
+def kpis_bandeja(ind: L.Indicadores, params: dict[str, str], activo: Optional[str] = None) -> str:
+    """4 tarjetas: total y una por recomendación. Cada una filtra la bandeja al hacer clic.
+    `activo`: valor de la recomendación filtrada, para marcar su tarjeta."""
     base = {k: v for k, v in params.items() if k != "rec"}
     sub_total = []
     if ind.confianza_promedio is not None:
@@ -199,7 +200,8 @@ def kpis_bandeja(ind: L.Indicadores, params: dict[str, str]) -> str:
         n = ind.por_recomendacion.get(r, 0)
         tono = clase_tono(t.ESTADO[r])
         tarjetas.append(
-            f'<a class="kpi kpi-{tono}" href="{escape(url(**dict(base, rec=r.value)))}" target="_self">'
+            f'<a class="kpi kpi-{tono}{" kpi-activo" if activo == r.value else ""}" '
+            f'href="{escape(url(**dict(base, rec=r.value)))}" target="_self">'
             f'<span class="kpi-etq"><i class="kpi-punto" style="background:{t.ESTADO[r].mapa}"></i>'
             f'{txt(ETIQUETA_KPI[r])}</span><b class="kpi-num est-{tono}">{n}</b>'
             f'<small class="kpi-sub est-{tono}">{_pct_entero(n, ind.total)} del total</small></a>'
@@ -228,6 +230,7 @@ def ventana_entidad(clave: str, conteo: "mapa.ConteoEntidad", params: dict[str, 
         )
     plural = "expediente" if conteo.total == 1 else "expedientes"
     cerrar = url(**{k: v for k, v in params.items() if k != "entidad"})
+    ver = url(vista="estado", entidad=clave, ej=params.get("ej"))
     predo = conteo.predominante
     return (
         f'<div class="mx-ventana {lado}" style="left:{x / 10:.1f}%;top:{top:.1f}%" role="dialog" '
@@ -237,7 +240,16 @@ def ventana_entidad(clave: str, conteo: "mapa.ConteoEntidad", params: dict[str, 
         f'<p class="v-total">{conteo.total} {plural} · predomina '
         f'<b class="est-{clase_tono(t.ESTADO[predo])}">{txt(predo.value) if predo else "-"}</b></p>'
         + "".join(filas)
-        + '<a class="v-ver" href="#expedientes">Ver expedientes del estado ↓</a></div>'
+        + f'<a class="v-ver" href="{escape(ver)}" target="_self">Ver expedientes del estado →</a></div>'
+    )
+
+
+def resumen_estado(ind: L.Indicadores, params: dict[str, str], svg: str, nombre: str, activo: Optional[str]) -> str:
+    """Vista del estado: indicadores del estado (2 x 2) y su ubicación resaltada en el mapa."""
+    return (
+        '<div class="estado-resumen">'
+        f'<div class="estado-kpis">{kpis_bandeja(ind, params, activo)}</div>'
+        f'<figure class="estado-mapa"><figcaption>{txt(nombre)}</figcaption>{svg}</figure></div>'
     )
 
 

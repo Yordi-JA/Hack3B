@@ -44,7 +44,7 @@ def test_ventana_del_estado_con_porcentajes_y_cerrar():
     assert re.findall(r">(\d+) %<", html) == ["25", "25", "50"]
     cerrar = re.search(r'class="v-cerrar" href="([^"]+)"', html).group(1)
     assert "entidad" not in cerrar and "q=x" in cerrar
-    assert 'href="#expedientes"' in html
+    assert "vista=estado" in html and "entidad=SONORA" in html  # "Ver expedientes" abre la vista del estado
     assert C.ventana_entidad("SONORA", ConteoEntidad(), {}) == ""
 
 
@@ -67,3 +67,10 @@ def test_recorrido_css_solo_style_y_objetivos_existen():
         if paso.objetivo:
             assert f'"{paso.objetivo}"' in fuente, paso.objetivo  # el contenedor con esa key existe
         assert "\n" not in tour.tarjeta(tour.PASOS.index(paso))
+
+
+def test_resumen_del_estado_marca_el_filtro_activo():
+    ind = _ind()
+    html = C.resumen_estado(ind, {"vista": "estado", "entidad": "HIDALGO"}, "<svg></svg>", "Hidalgo", "No cumple")
+    assert "\n" not in html and "Hidalgo" in html
+    assert html.count("kpi-activo") == 1 and "vista=estado" in html and "entidad=HIDALGO" in html
