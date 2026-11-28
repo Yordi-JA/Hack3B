@@ -1,5 +1,5 @@
-"""Validación cruzada sobre los expedientes sintéticos del reto, con los datos tal como vienen
-en los documentos (transcritos a mano, sin LLM). Esperado:
+"""Validación cruzada sobre los expedientes sintéticos del reto, con datos transcritos a mano
+de esos expedientes (una clave se cambió por un valor ficticio), sin LLM. Esperado:
 
 - ""  (San Jerónimo Atlaco): los 4 documentos coinciden -> sin inconsistencias.
 - "!!" (Ocotlán de las Torres): mismo inmueble, pero la constancia de número oficial asigna el 210

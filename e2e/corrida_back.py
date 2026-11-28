@@ -6,6 +6,7 @@ analizados no gastan; uno nuevo sí.
 
     LANGFUSE_PUBLIC_KEY= LANGFUSE_SECRET_KEY= python e2e/corrida_back.py
 """
+import json
 import logging
 import shutil
 import sys
@@ -46,19 +47,20 @@ def sintetico(sufijo: str) -> list[Path]:
 
 
 EXPEDIENTES = {
-    "SINT-normal": sintetico(""), "SINT-!!": sintetico("!!"), "SINT-borroso": sintetico(".."), "SINT-v": sintetico("v"),
-    "REAL-ejemplo-3": [D / "Escritura/Escritura Ejemplo 3.pdf", D / "Predial/Predial Ejemplo 3.pdf",
-                      D / "Alineamiento_y_Numero_Oficial/Alineamiento Ejemplo 3.pdf",
-                      D / "Uso_de_suelo/Uso de Suelo Ejemplo 3.pdf"],
-    "REAL-ejemplo-1": [D / "Escritura/Escritura Ejemplo 1.pdf",
-                                  D / "Predial/Predial Ejemplo 1.pdf",
-                                  D / "Alineamiento_y_Numero_Oficial/Alineamiento Ejemplo 1.pdf",
-                                  D / "Uso_de_suelo/Uso de Suelo Ejemplo 1.pdf"],
-    "REAL-ejemplo-2": [D / "Predial/Predial Ejemplo 2.pdf",
-                       D / "Alineamiento_y_Numero_Oficial/Constancia de Alineamiento Ejemplo 2.pdf",
-                       D / "Alineamiento_y_Numero_Oficial/Numero Oficial Ejemplo 2.pdf",
-                       D / "Uso_de_suelo/Uso de Suelo Ejemplo 2.pdf"],
+    "SINT-normal": sintetico(""), "SINT-!!": sintetico("!!"), "SINT-borroso": sintetico(".."), "SINT-v": sintetico("v")
 }
+
+
+LOCALES = Path(__file__).resolve().parent / "expedientes.local.json"
+
+
+def cargar_locales(ruta: Path = LOCALES) -> dict[str, list[Path]]:
+    """Expedientes reales de Documentos/ (fuera del repo, regla 06): {nombre: [rutas relativas a Documentos/]}."""
+    if not ruta.exists():
+        print(f"Sin {ruta.name}: solo se corren los sintéticos. Para añadir expedientes reales, copia "
+              "e2e/expedientes.local.example.json a e2e/expedientes.local.json y ajusta los nombres.")
+        return {}
+    return {eid: [D / r for r in rutas] for eid, rutas in json.loads(ruta.read_text(encoding="utf-8")).items()}
 
 
 def alertas(d) -> str:
@@ -69,7 +71,7 @@ def alertas(d) -> str:
 
 def main() -> int:
     fallas = 0
-    for eid, rutas in EXPEDIENTES.items():
+    for eid, rutas in {**EXPEDIENTES, **cargar_locales()}.items():
         faltan = [r for r in rutas if not r.exists()]
         if faltan:
             print(f"{eid}: faltan archivos en Documentos/: {[r.name for r in faltan]}")

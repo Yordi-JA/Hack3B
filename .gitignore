@@ -64,3 +64,6 @@ REFERENCIA/
 
 # Capturas de las pruebas end to end: muestran datos de los documentos (regla 06).
 e2e/capturas/
+
+# Lista local de expedientes reales para e2e/corrida_back.py (nombres de archivos del reto, regla 06).
+e2e/expedientes.local.json
