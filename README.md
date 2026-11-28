@@ -1,42 +1,30 @@
 # Hack3B · Reto 1 Expedientes
 
-Sistema multiagente en LangChain que revisa el expediente legal de un inmueble, detecta faltantes e inconsistencias y emite una recomendación con evidencia: **Cumple / Requiere revisión / No cumple**. El enunciado está en [CONTEXT.md](CONTEXT.md).
+Sistema multiagente en LangChain y LangGraph que revisa el expediente legal de un inmueble, detecta faltantes e inconsistencias y emite una recomendación con evidencia. Lo construimos en un día, el 21 de noviembre de 2026, en el hackathon de Tiendas 3B (Reto 1 · Expedientes), un equipo de 5 personas. El enunciado está en [CONTEXT.md](CONTEXT.md).
 
-**Entrega: hoy a las 17:00.**
+## Contenido
 
-## Decisiones pendientes
+- [Qué hace](#qué-hace)
+- [Arquitectura](#arquitectura)
+- [Cómo correrlo](#cómo-correrlo)
+- [Contrato de datos](#contrato-de-datos)
+- [Equipo](#equipo)
+- [Notas del hackathon](#notas-del-hackathon)
 
-Que cada responsable la resuelva, la anote aquí y avise en el grupo.
+## Qué hace
 
-| # | Decisión | Responsable | Para | Estado |
-| :- | :--- | :--- | :--- | :--- |
-| 1 | Proveedor y modelo del LLM, y de quién es la API key con créditos. | Carlos | 10:15 | **Resuelto:** Anthropic `claude-haiku-5-5` (~40 veces más barato que Opus, ~$2 USD el día) con `effort="low"` y `max_tokens=4000`. Key de Julián con $5 prepagados, sin recarga automática. Ver [Uso de la API](#uso-de-la-api-créditos). |
-| 2 | Langfuse: instancia de la organización, cloud propia o local con Docker. Una cuenta cloud propia recibiría el contenido de los documentos (regla 06). | Juan Pablo | 10:30 | Pendiente |
-| 3 | Orquestador con LangGraph o con LangChain puro. | Carlos → Julián | 11:00 | **Resuelto**: **LangGraph** (`StateGraph`), con los agentes por tipo en paralelo (`Send`) y un **agente auditor** que contrasta lo reportado contra el documento original; si corrige datos, se repite el cruce. Ver [Arquitectura](#arquitectura-langgraph). |
-| 4 | UI en Streamlit (llama directo a `analizar_expediente`, sin API). | Yordi | 10:15 | Propuesto |
-| 5 | Guías y criterios oficiales por tipo: ¿dónde están? Sin ellas las reglas son suposiciones. | Todos | Ya | Pendiente |
-| 6 | Tope de páginas por escritura (hay de 50 páginas). | Carlos + Julián | 11:00 | **Parcial**: escritura.py manda al modelo máx. 15 páginas (primeras 5 + hasta 10 con palabras clave), pero la ingesta solo leyó las primeras 15 de cada archivo. Las 4 escrituras de 16, 25, 33 y 50 páginas necesitan releerse completas (`--max-paginas 60`, ~$0.05) para que la selección por palabras clave sirva. |
-| 7 | Tolerancia de superficie para la validación cruzada. | Diego | 12:00 | **Resuelta**: 2 % o 1 m², la mayor (`cruce.TOLERANCIA_SUP_*`). Más que eso es `CRU-SUP` con severidad revisión. |
+La entrada es el expediente de un inmueble con 4 tipos de documento: escritura, predial, alineamiento y número oficial, y uso de suelo. Acepta PDF e imágenes (`png`, `jpg`, `tif`), escaneados o con texto.
 
-Nota sobre el LLM: 57 de 62 PDFs son escaneos, así que el modelo tiene que tener visión. Cambiar de proveedor es cambiar `LLM_PROVIDER` y `LLM_MODEL` en el `.env` (`expedientes/config.py`). Una key nueva tiene límites bajos por minuto: el OCR masivo debe correr con 5-10 llamadas en paralelo como máximo.
+La salida es un dictamen con una de dos recomendaciones, una confianza, un resumen, las razones y los hallazgos. Cada dato y cada hallazgo lleva su evidencia: archivo, página y cita literal.
 
-## Equipo y ramas
+- **Cumple**: se cumplen todos los requisitos evaluados y los documentos coinciden entre sí.
+- **Requiere revisión**: falta un tipo de documento, hay documentos ilegibles, o hay hallazgos o inconsistencias que alguien debe revisar.
 
-Cada quien trabaja en su rama y hace push directo. Para traer cambios del contrato: `git merge main`.
+El sistema recomienda y la abogada decide. El dictamen no emite "No cumple": `PERMITIR_RECHAZO_AUTOMATICO` está en `False` en `expedientes/agentes/dictamen.py`, así que un hallazgo bloqueante se reporta como "posible motivo de rechazo", va primero en las razones y deja el expediente en Requiere revisión. En la interfaz, la abogada registra su propia decisión (Aprobado, En revisión o Rechazado) con un comentario obligatorio, independiente de la recomendación del sistema (`ui/decisiones.py`).
 
-| Persona | Rama | Archivos |
-| :--- | :--- | :--- |
-| Juan Pablo | `juanpablo/uso-suelo` | `agentes/uso_suelo.py`, `agentes/dictamen.py`, Langfuse |
-| Julián | `julian/predial` | `agentes/predial.py`, `agentes/ingesta.py`, `agentes/escritura.py`, `agentes/auditor.py`, `orquestador.py`, `cache.py`, caché OCR |
-| Diego | `diego/alineamiento` | `agentes/alineamiento.py`, `agentes/cruce.py` |
-| Carlos | `carlos/escrituras` | UI (con Yordi), `config.py` |
-| Yordi | `yordi/ui` | `app.py` |
+## Arquitectura
 
-Cada quien toca solo sus archivos. `schemas.py` es de todos: si hay que cambiarlo, se avisa, se cambia en `main` y todos hacen `git merge main`.
-
-## Arquitectura (LangGraph)
-
-`expedientes/orquestador.py` arma un `StateGraph` (`python -c "from expedientes import orquestador as o; print(o.diagrama())"`):
+`expedientes/orquestador.py` arma un `StateGraph` de LangGraph (`python -c "from expedientes import orquestador as o; print(o.diagrama())"`):
 
 ```mermaid
 graph TD
@@ -47,14 +35,51 @@ graph TD
   auditor -.-> dictamen --> FIN([fin])
 ```
 
-- **Agentes por tipo** (LLM): extraen con cita literal y evalúan sus reglas; corren en paralelo (máx. `MAX_AGENTES_PARALELO=5`).
-- **Cruce** (Diego): compara propietario, dirección, superficie, clave y número oficial entre documentos.
-- **Auditor** (`agentes/auditor.py`, sin LLM): revisa lo que reportó cada agente contra el texto original. AUD-01 la cita existe en la página (dirección y propietario solo pasan por aquí: los agentes los redactan o los juntan de varias páginas); AUD-02 solo en datos literales (`CAMPOS_VALOR_LITERAL`: superficie, clave catastral, número oficial) el valor aparece en la página, comparado por valor normalizado (miles, hectáreas, separadores de la clave, 'S/N'), para atrapar una cita real con valor inventado; AUD-03 un rechazo bloqueante sin evidencia baja a revisión. Si descarta datos que se cruzan, el cruce se repite. En los 6 expedientes analizados (24 documentos) revisó 350 datos sin falsos positivos.
-- **Dictamen** (Juan Pablo): consolida por tipo y decide con reglas fijas.
+- **Agentes por tipo** (LLM): extraen los datos con cita literal y evalúan las reglas de su tipo. Corren en paralelo, un documento por agente (máximo `MAX_AGENTES_PARALELO`, 5 por defecto).
+- **Cruce**: compara propietario, dirección, superficie, clave catastral y número oficial entre documentos. También detecta documentos que parecen de otro inmueble (`CRU-INM`).
+- **Auditor** (`expedientes/agentes/auditor.py`, sin LLM): contrasta lo que reportó cada agente contra el texto original del documento. AUD-01 comprueba que la cita exista en la página indicada. AUD-02 comprueba que el valor aparezca en la página, solo para superficie, clave catastral y número oficial. AUD-03 baja a revisión un hallazgo bloqueante cuya evidencia no aparece en el documento. Cada intervención queda como hallazgo `EXP-AUD`. Si descarta datos que se cruzan, el cruce se repite (máximo 2 rondas de auditoría). En los 6 expedientes analizados (24 documentos) revisó 350 datos sin falsos positivos.
+- **Dictamen**: consolida por tipo y decide con reglas fijas, sin LLM, para que el resultado sea repetible. Un agente o una lectura que fallan no tumban el expediente: el documento sale con un hallazgo `EXP-ERROR` o `EXP-INGESTA`.
 
-## Contrato
+## Cómo correrlo
 
-`expedientes/schemas.py` es la fuente de verdad. Resumen del flujo:
+El análisis llama a la API de Anthropic, así que necesita tu propia `ANTHROPIC_API_KEY`. Los documentos del reto no están en el repositorio.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # en Windows: .\.venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env             # en Windows: copy .env.example .env
+python -m pytest -q
+python -m streamlit run app.py
+```
+
+`python configurar.py` hace los mismos pasos de preparación (entorno virtual, dependencias, `.env` y pruebas).
+
+Pega tu `ANTHROPIC_API_KEY` en `.env`. El proveedor y el modelo se cambian con `LLM_PROVIDER` y `LLM_MODEL` (`expedientes/config.py`); `.env.example` usa `claude-haiku-5-5`. Las pruebas (`pytest`) no llaman a la API.
+
+> **Ojo con el modelo:** si `.env` no define `LLM_MODEL`, `expedientes/config.py` usa `claude-opus-5-5`, que cuesta unas 40 veces más que Haiku. Copiar `.env.example` tal cual evita el problema.
+
+### Probarlo sin gastar créditos
+
+La interfaz carga los dictámenes de `ejemplos/` al abrir, marcados como "Ejemplo", y no necesita API key para mostrarlos. En la pantalla de nuevo análisis, "Abrir dictamen de ejemplo" abre el de `ejemplos/dictamen_ejemplo.json`. El interruptor "Incluir ejemplos" los muestra u oculta. Son datos inventados.
+
+### Analizar un expediente propio
+
+En el menú lateral, sube los archivos del expediente desde la pantalla de nuevo análisis. Cada análisis llama a la API: los agentes usan el modelo configurado y, si un archivo no está en el caché OCR (`cache/`, que no se versiona), la ingesta lo lee con el modelo con visión.
+
+También puedes llamarlo desde Python:
+
+```python
+from pathlib import Path
+from expedientes.orquestador import analizar_expediente
+
+dictamen = analizar_expediente([Path("escritura.pdf"), Path("predial.pdf")])
+print(dictamen.recomendacion, dictamen.resumen)
+```
+
+## Contrato de datos
+
+`expedientes/schemas.py` es la fuente de verdad. Los agentes, el cruce, el dictamen y la interfaz se hablan solo con estos objetos:
 
 ```
 archivo ─► ingesta.leer_documento()      ─► DocumentoLeido       (texto por página, tipo, legibilidad)
@@ -64,107 +89,18 @@ archivo ─► ingesta.leer_documento()      ─► DocumentoLeido       (texto 
 orquestador.analizar_expediente(rutas) encadena todo. La UI solo consume Dictamen.
 ```
 
-Reglas del contrato:
+Todo dato y todo hallazgo lleva `Evidencia`; sin evidencia no hay hallazgo. Un documento `ILEGIBLE` no extrae datos y sus reglas salen `NO_EVALUABLE`. Las reglas completas del contrato están en las [notas del hackathon](docs/notas-del-hackathon.md#contrato).
 
-- **Todo dato y todo hallazgo lleva `Evidencia`** (archivo, página, cita literal). Sin evidencia no hay hallazgo.
-- **Los campos comunes** (`propietario`, `direccion`, `superficie_terreno_m2`, `clave_catastral`, `numero_oficial`, fechas y autoridad) se llaman igual en los 4 tipos y se llenan con `valor` y `normalizado`. La validación cruzada compara `normalizado`.
-- **Lo específico de un tipo** va en `datos.especificos` con claves en snake_case (sugerencias en el docstring de cada agente).
-- **Las vigencias se evalúan contra `ctx.fecha_referencia`**, nunca contra `date.today()` dentro de un agente.
-- **Prefijos de reglas:** `ESC-`, `PRE-`, `ALI-`, `USO-`, `CRU-`, `EXP-`.
-- Un documento `ILEGIBLE` no extrae datos inventados: sus reglas salen `NO_EVALUABLE`.
+## Equipo
 
-`ejemplos/dictamen_ejemplo.json` es un dictamen completo con datos inventados. La UI se construye sobre él con `analizar_expediente([], usar_ejemplo=True)`.
-
-## Uso de la API (créditos)
-
-Hay **$5 USD prepagados para todo el equipo** y no se recargan solos: si se acaban, la API deja de responder para los 5. Con estas reglas el día completo cuesta ~$2.
-
-**Modelo**
-
-1. **`claude-haiku-5-5` para todo** (`LLM_MODEL` en el `.env`). Subir un agente a Sonnet u Opus solo si se demuestra que Haiku falla en ese caso, y avisando antes en el grupo: Opus cuesta 40 veces más.
-2. **`effort="low"` y `max_tokens` acotado** (≈4000 para extracción) al pedir el modelo: `get_llm(effort="low", max_tokens=4000)`.
-
-**No repetir trabajo**
-
-3. **Nadie corre OCR.** El texto de los 63 documentos ya está en `cache/` (se comparte por Drive). Las imágenes nunca se vuelven a mandar al modelo; los agentes trabajan sobre el texto.
-4. **Desarrollar contra un solo expediente** (los sintéticos `01–04` son ideales). Correr los 63 documentos solo en la integración de las 13:00 y en la demo.
-5. **Guardar en disco lo que ya respondió el modelo** mientras se desarrolla (ej. `cache/analisis/<archivo>.json`) y leerlo de ahí si el documento y el prompt no cambiaron. Cambiar código que no toca el prompt no debe costar llamadas.
-6. **`pytest` nunca llama a la API**: las pruebas usan `cache/` o `ejemplos/`.
-
-**Llamadas eficientes**
-
-7. **Una llamada por documento** con todos los campos juntos (`with_structured_output(..., method="json_schema")`), no una por campo.
-8. **Mandar solo el texto necesario**: las páginas que tienen datos del inmueble, no anexos, planos ni hojas en blanco (`notas` del caché dice qué páginas son de otro tipo o ilegibles).
-9. **Lo que se resuelve con código no va al LLM**: fechas, vigencias, aritmética de superficies, normalización de nombres y direcciones, comparaciones exactas. El LLM solo extrae y juzga casos ambiguos.
-10. **Máximo 6 llamadas en paralelo y sin bucles de reintento propios** (LangChain ya reintenta los 429). Un bucle sin tope es la forma más rápida de vaciar el saldo.
-
-**Vigilar**
-
-11. Antes de una corrida grande, avisar en el grupo. El saldo y el gasto se ven en la consola (`Spending & usage`); si se pasa de **$3**, Julián avisa y se para todo lo que no sea demo.
-
-## Arranque
-
-**Un solo comando, Windows o Mac** (crea `.venv`, instala dependencias, crea `.env`, descomprime los zip con los nombres bien y corre la prueba):
-
-```bash
-python configurar.py --zips RUTA/A/LA/CARPETA/DE/LOS/ZIP     # en Windows, si no hay "python": py configurar.py ...
-```
-
-Luego: pegar la `ANTHROPIC_API_KEY` en `.env` y copiar la carpeta `cache/` compartida. Pasos manuales equivalentes:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env      # y llenar las llaves
-python -m pytest -q         # valida que el ejemplo cumple el contrato
-```
-
-En macOS:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # y llenar ANTHROPIC_API_KEY
-python -m pytest -q
-```
-
-## Caché OCR (Julián)
-
-Nadie necesita correr el OCR: se comparte la carpeta `cache/` por USB o Drive y se copia en la raíz del repo. `leer_documento()` la usa sola.
-
-Para regenerarlo (solo quien lo genera):
-
-```bash
-python -m expedientes.agentes.ingesta                     # Claude con visión, llena cache/
-python -m expedientes.agentes.ingesta --motor tesseract   # respaldo local sin API key (brew install tesseract tesseract-lang; pip install pytesseract)
-```
-
-- Se puede interrumpir y volver a correr: solo procesa lo que falta.
-- Tope de 15 páginas por documento (`--max-paginas`, decisión 6), anotado en `notas` del `DocumentoLeido`.
-- Páginas borrosas: se mide la nitidez de cada página localmente; bajo el umbral (5.0, calibrado con el set) la página queda `ILEGIBLE` y su texto se descarta, porque el modelo "lee" páginas borrosas inventando datos. Así los 3 sintéticos `...` salen `ILEGIBLE`.
-- `notas` también dice qué páginas son de otro tipo (ej. un predial con la escritura anexa en p2-p4).
-- Resultado con `claude-haiku-5-5`: 63/63 tipos correctos, ~4 min, ~$0.15 USD.
-- Las llamadas del OCR no se mandan a Langfuse salvo con `OCR_LANGFUSE=1` (la traza llevaría la imagen del documento).
-- Para descomprimir los zip en Mac usar doble clic o `ditto -x -k archivo.zip Documentos/`: así los nombres con acento coinciden con las llaves del caché.
-
-## Documentos (regla 06)
-
-Los documentos del reto van en `Documentos/` (subcarpetas por tipo) y el texto OCR en `cache/`. Ambos están en `.gitignore`: **no se suben al repo ni a ningún servicio fuera del equipo**. El caché se comparte por USB o Drive del equipo.
-
-Datos útiles del set:
-
-- 62 PDFs + 1 JPEG, 249 páginas. Solo 5 PDFs tienen capa de texto.
-- Los archivos `01–04` con sufijo vacío, `!!`, `...` y `v` son 4 expedientes sintéticos completos con errores plantados (vigencias vencidas, adeudos de predial, afectaciones en alineamiento, encabezado que no cuadra con la fecha). El de `...` está borroso a propósito. Son el mejor set de prueba y de demo.
-- Los demás son expedientes reales parciales.
-
-## Plan del día
-
-| Hora | Hito |
+| Persona | Área |
 | :--- | :--- |
-| 10:30 | Caché OCR listo (Julián) y decisiones 1, 2 y 4 resueltas |
-| 13:00 | **Integración**: un expediente real de punta a punta hasta la UI, aunque sea feo |
-| 15:30 | Se congelan funcionalidades |
-| 16:30 | Demo grabada de respaldo |
-| 17:00 | Entrega y pitch |
+| Juan Pablo | Uso de suelo, dictamen, Langfuse |
+| Julián | Predial, ingesta, escritura, auditor, orquestador, caché OCR |
+| Diego | Alineamiento, cruce |
+| Carlos | Configuración (`config.py`) e interfaz, con Yordi |
+| Yordi | Interfaz en Streamlit (`app.py`, `ui/`): bandeja de expedientes con mapa por entidad, nuevo análisis, detalle del dictamen y recorrido guiado |
+
+## Notas del hackathon
+
+[`docs/notas-del-hackathon.md`](docs/notas-del-hackathon.md) es la bitácora de trabajo del equipo durante el día: decisiones, presupuesto de la API, caché OCR y plan por horas.
